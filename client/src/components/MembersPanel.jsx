@@ -20,7 +20,7 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
       const result = await onAddMember(form);
       if (form.send_invite) {
         if (result?.invite?.sent) {
-          setNotice(`Member added. Outlook invitation sent to ${form.email}.`);
+          setNotice(`Member added. Invitation email sent to ${form.email}.`);
         } else if (result?.invite?.warning) {
           setNotice(result.invite.warning);
         } else {
@@ -64,9 +64,9 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
             type="checkbox"
             onChange={(event) => setForm((current) => ({ ...current, send_invite: event.target.checked }))}
           />
-          <span>Send Outlook invitation email</span>
+          <span>Send invitation email</span>
         </label>
-        <p className="form-help">The user must already have a registered account. Email sending requires Outlook settings in Render.</p>
+        <p className="form-help">The user must already have a registered account. Email sending requires general email settings in Render.</p>
         {error && <p className="error-box">{error}</p>}
         {notice && <p className="notice-box">{notice}</p>}
         <button className="primary-button compact" disabled={!canManage || saving}>{saving ? 'Adding...' : 'Add / update member'}</button>

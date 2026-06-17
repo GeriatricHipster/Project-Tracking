@@ -46,19 +46,20 @@ CLIENT_ORIGIN     *
 NODE_ENV          production
 PGSSLMODE         require
 APP_NAME          BuildTrack Cloud
+EMAIL_PROVIDER    none
 ```
 
-## Optional Outlook invitation email settings
+## Optional invitation email settings
 
-After the app is live, you can add Outlook email settings in Render so project invitations are emailed when users are assigned.
+After the app is live, you can add general email settings in Render so project invitations are emailed when users are assigned.
 
 Open:
 
 ```text
-OUTLOOK_EMAIL_SETUP.md
+EMAIL_INVITATION_SETUP.md
 ```
 
-The app works without those settings. Project members can still be assigned, but invitation emails will not send until Outlook email is configured.
+The app works without those settings. Project members can still be assigned, but invitation emails will not send until email is configured.
 
 ## First live test
 

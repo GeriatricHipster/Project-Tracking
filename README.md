@@ -1,6 +1,6 @@
 # BuildTrack Cloud
 
-BuildTrack Cloud is a construction project timeline tracking web app with multi-user project access, task tracking, dependencies, audit history, real-time project refreshes, Outlook invitation emails, dashboard tabs, active/completed project filing, delete controls, an all-project calendar/status overview, visibility controls, and a Gantt-style schedule view.
+BuildTrack Cloud is a construction project timeline tracking web app with multi-user project access, task tracking, dependencies, audit history, real-time project refreshes, general invitation emails, dashboard tabs, active/completed project filing, delete controls, an all-project calendar/status overview, visibility controls, and a Gantt-style schedule view.
 
 ## Start here if you do not code
 
@@ -12,10 +12,10 @@ START_HERE_GITHUB.md
 
 That guide explains how to upload the app to GitHub through the GitHub website and deploy it from GitHub using Render. You do not need to use your local terminal.
 
-Optional Outlook email setup is documented here:
+Optional general email setup is documented here:
 
 ```text
-OUTLOOK_EMAIL_SETUP.md
+EMAIL_INVITATION_SETUP.md
 ```
 
 ## Important hosting note
@@ -27,7 +27,7 @@ GitHub stores the project files and tracks updates. The live application also ne
 - Multi-user registration and login
 - Projects with name, location, description, planned start, and planned finish
 - Project member roles: owner, manager, editor, viewer
-- Optional Outlook invitation email when assigning a registered user to a project
+- Optional invitation email when assigning a registered user to a project
 - Visibility rule: viewers and editors see assigned projects; owners and managers can view the full project portfolio
 - Task tracking with trade, assignee, dates, status, priority, percent complete, and color
 - Task dependencies with cycle prevention
@@ -39,7 +39,7 @@ GitHub stores the project files and tracks updates. The live application also ne
 - Owner-only project delete button with confirmation
 - Project status badges: Not started, In progress, Blocked, Complete, Completed
 - Real-time update notifications through Socket.IO
-- Microsoft Graph or Outlook SMTP email sending options
+- General SMTP email sending option
 - Audit log showing project changes
 - PostgreSQL database schema and migrations
 - One-service production deployment using Render Blueprint

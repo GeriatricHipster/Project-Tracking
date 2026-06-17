@@ -112,19 +112,18 @@ function escapeHtml(value) {
 
 function emailProvider() {
   const configured = String(process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
-  if (configured === 'graph' || configured === 'microsoft_graph') return 'graph';
-  if (configured === 'smtp' || configured === 'outlook_smtp') return 'smtp';
+  if (['none', 'off', 'disabled', 'false', '0'].includes(configured)) return 'none';
+  if (['smtp', 'email', 'generic', 'generic_smtp'].includes(configured)) return 'smtp';
 
   if (
-    process.env.MICROSOFT_TENANT_ID &&
-    process.env.MICROSOFT_CLIENT_ID &&
-    process.env.MICROSOFT_CLIENT_SECRET &&
-    (process.env.OUTLOOK_FROM_EMAIL || process.env.MICROSOFT_FROM_EMAIL)
+    process.env.SMTP_HOST ||
+    process.env.SMTP_USER ||
+    process.env.SMTP_PASS ||
+    process.env.EMAIL_FROM
   ) {
-    return 'graph';
+    return 'smtp';
   }
 
-  if (process.env.OUTLOOK_SMTP_USER && process.env.OUTLOOK_SMTP_PASS) return 'smtp';
   return 'none';
 }
 
@@ -144,6 +143,7 @@ function buildInvitationMessage({ recipient, sender, project, role, projectUrl }
   const subject = `${APP_NAME}: ${sender.name} invited you to ${project.name}`;
   const locationLine = project.location ? `Location: ${project.location}` : 'Location: Not listed';
   const dateLine = `Schedule: ${project.start_date} to ${project.end_date}`;
+  const linkLine = projectUrl ? `Open the project: ${projectUrl}` : 'Open BuildTrack Cloud to view the project.';
   const text = [
     `Hello ${recipient.name},`,
     '',
@@ -152,10 +152,14 @@ function buildInvitationMessage({ recipient, sender, project, role, projectUrl }
     locationLine,
     dateLine,
     '',
-    `Open the project: ${projectUrl}`,
+    linkLine,
     '',
-    'If you have not created your BuildTrack Cloud account yet, register with this same email address first, then open the link again.'
+    'If you have not created your BuildTrack Cloud account yet, register with this same email address first, then open the project again.'
   ].join('\n');
+
+  const buttonHtml = projectUrl
+    ? `<p><a href="${escapeHtml(projectUrl)}" style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 10px 14px; border-radius: 10px; font-weight: bold;">Open project</a></p>`
+    : `<p>Open ${escapeHtml(APP_NAME)} to view the project.</p>`;
 
   const html = `
     <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.5; max-width: 640px;">
@@ -167,94 +171,52 @@ function buildInvitationMessage({ recipient, sender, project, role, projectUrl }
         <tr><td style="padding: 6px 0; font-weight: bold;">Location</td><td style="padding: 6px 0;">${escapeHtml(project.location || 'Not listed')}</td></tr>
         <tr><td style="padding: 6px 0; font-weight: bold;">Schedule</td><td style="padding: 6px 0;">${escapeHtml(project.start_date)} to ${escapeHtml(project.end_date)}</td></tr>
       </table>
-      <p><a href="${escapeHtml(projectUrl)}" style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 10px 14px; border-radius: 10px; font-weight: bold;">Open project</a></p>
-      <p style="color: #6b7280; font-size: 13px;">If you have not created your account yet, register with this same email address first, then open the link again.</p>
+      ${buttonHtml}
+      <p style="color: #6b7280; font-size: 13px;">If you have not created your account yet, register with this same email address first, then open the project again.</p>
     </div>`;
 
   return { subject, text, html };
 }
 
-async function getMicrosoftGraphAccessToken() {
-  const tenantId = cleanText(process.env.MICROSOFT_TENANT_ID);
-  const clientId = cleanText(process.env.MICROSOFT_CLIENT_ID);
-  const clientSecret = cleanText(process.env.MICROSOFT_CLIENT_SECRET);
-  if (!tenantId || !clientId || !clientSecret) {
-    throw new Error('Microsoft Graph email is missing MICROSOFT_TENANT_ID, MICROSOFT_CLIENT_ID, or MICROSOFT_CLIENT_SECRET.');
+async function sendViaSmtp({ to, subject, text, html }) {
+  const host = cleanText(process.env.SMTP_HOST);
+  if (!host) throw new Error('Email is missing SMTP_HOST. Add your email provider SMTP settings in Render.');
+
+  const port = Number(process.env.SMTP_PORT || 587);
+  if (!Number.isInteger(port) || port <= 0) {
+    throw new Error('SMTP_PORT must be a positive number. Common values are 587 or 465.');
   }
 
-  const body = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    scope: 'https://graph.microsoft.com/.default',
-    grant_type: 'client_credentials'
-  });
+  const secure = normalizeBoolean(process.env.SMTP_SECURE, port === 465);
+  const smtpUser = cleanText(process.env.SMTP_USER || process.env.EMAIL_USER);
+  const smtpPass = cleanText(process.env.SMTP_PASS || process.env.EMAIL_PASSWORD);
+  const fromAddress = cleanText(process.env.EMAIL_FROM || process.env.MAIL_FROM || smtpUser);
+  const fromName = cleanText(process.env.EMAIL_FROM_NAME || APP_NAME);
 
-  const response = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body
-  });
-
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`Microsoft Graph token request failed: ${message.slice(0, 240)}`);
+  if (!fromAddress) {
+    throw new Error('Email is missing EMAIL_FROM. Add a sender email address in Render.');
+  }
+  if ((smtpUser && !smtpPass) || (!smtpUser && smtpPass)) {
+    throw new Error('Email SMTP login is incomplete. Add both SMTP_USER and SMTP_PASS, or leave both blank for a no-auth SMTP relay.');
   }
 
-  const payload = await response.json();
-  if (!payload.access_token) throw new Error('Microsoft Graph did not return an access token.');
-  return payload.access_token;
-}
-
-async function sendViaMicrosoftGraph({ to, subject, text, html }) {
-  const from = cleanText(process.env.OUTLOOK_FROM_EMAIL || process.env.MICROSOFT_FROM_EMAIL);
-  if (!from) throw new Error('Microsoft Graph email is missing OUTLOOK_FROM_EMAIL.');
-
-  const token = await getMicrosoftGraphAccessToken();
-  const response = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(from)}/sendMail`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      message: {
-        subject,
-        body: {
-          contentType: 'HTML',
-          content: html || escapeHtml(text).replace(/\n/g, '<br>')
-        },
-        toRecipients: [{ emailAddress: { address: to } }]
-      },
-      saveToSentItems: true
-    })
-  });
-
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`Microsoft Graph sendMail failed: ${message.slice(0, 240)}`);
-  }
-}
-
-async function sendViaOutlookSmtp({ to, subject, text, html }) {
-  const smtpUser = cleanText(process.env.OUTLOOK_SMTP_USER || process.env.OUTLOOK_FROM_EMAIL);
-  const smtpPass = cleanText(process.env.OUTLOOK_SMTP_PASS);
-  if (!smtpUser || !smtpPass) throw new Error('Outlook SMTP email is missing OUTLOOK_SMTP_USER or OUTLOOK_SMTP_PASS.');
-
-  const port = Number(process.env.OUTLOOK_SMTP_PORT || 587);
-  const secure = normalizeBoolean(process.env.OUTLOOK_SMTP_SECURE, false);
-  const transporter = nodemailer.createTransport({
-    host: process.env.OUTLOOK_SMTP_HOST || 'smtp.office365.com',
+  const transportOptions = {
+    host,
     port,
     secure,
-    requireTLS: !secure,
-    auth: {
+    requireTLS: normalizeBoolean(process.env.SMTP_REQUIRE_TLS, !secure)
+  };
+
+  if (smtpUser && smtpPass) {
+    transportOptions.auth = {
       user: smtpUser,
       pass: smtpPass
-    }
-  });
+    };
+  }
 
+  const transporter = nodemailer.createTransport(transportOptions);
   await transporter.sendMail({
-    from: process.env.OUTLOOK_FROM_EMAIL || smtpUser,
+    from: fromName ? { name: fromName, address: fromAddress } : fromAddress,
     to,
     subject,
     text,
@@ -268,7 +230,7 @@ async function sendProjectInvitationEmail({ req, sender, recipient, project, rol
     return {
       sent: false,
       provider,
-      warning: 'Member was added, but email is not configured yet. Add Outlook email settings in Render to send invitations.'
+      warning: 'Member was added, but invitation email is not configured yet. Add general email settings in Render to send invitations.'
     };
   }
 
@@ -276,11 +238,7 @@ async function sendProjectInvitationEmail({ req, sender, recipient, project, rol
   const projectUrl = appBaseUrl ? `${appBaseUrl}/?project=${project.id}` : '';
   const message = buildInvitationMessage({ recipient, sender, project, role, projectUrl });
 
-  if (provider === 'graph') {
-    await sendViaMicrosoftGraph({ to: recipient.email, ...message });
-  } else {
-    await sendViaOutlookSmtp({ to: recipient.email, ...message });
-  }
+  await sendViaSmtp({ to: recipient.email, ...message });
 
   return { sent: true, provider, to: recipient.email };
 }
@@ -1003,7 +961,7 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
       invite = {
         sent: false,
         requested: true,
-        warning: `Member was added, but the Outlook invitation email could not be sent. ${error.message}`
+        warning: `Member was added, but the invitation email could not be sent. ${error.message}`
       };
       await writeAudit({ query }, {
         projectId,
