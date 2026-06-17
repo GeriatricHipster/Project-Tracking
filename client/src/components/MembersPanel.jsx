@@ -4,8 +4,9 @@ const allRoles = ['owner', 'manager', 'editor', 'viewer'];
 
 export default function MembersPanel({ currentUser, projectRole, members, canManage, onAddMember, onUpdateMember, onRemoveMember }) {
   const canOwner = projectRole === 'owner';
-  const [form, setForm] = useState({ email: '', role: 'editor' });
+  const [form, setForm] = useState({ email: '', role: 'editor', send_invite: true });
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
 
   const roleOptions = canOwner ? allRoles : allRoles.filter((role) => role !== 'owner');
@@ -13,10 +14,22 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
   async function submit(event) {
     event.preventDefault();
     setError('');
+    setNotice('');
     setSaving(true);
     try {
-      await onAddMember(form);
-      setForm({ email: '', role: 'editor' });
+      const result = await onAddMember(form);
+      if (form.send_invite) {
+        if (result?.invite?.sent) {
+          setNotice(`Member added. Outlook invitation sent to ${form.email}.`);
+        } else if (result?.invite?.warning) {
+          setNotice(result.invite.warning);
+        } else {
+          setNotice('Member added.');
+        }
+      } else {
+        setNotice('Member added without sending an email invitation.');
+      }
+      setForm({ email: '', role: 'editor', send_invite: true });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -44,7 +57,18 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
             {roleOptions.map((role) => <option key={role} value={role}>{role}</option>)}
           </select>
         </label>
+        <label className="checkbox-row">
+          <input
+            checked={form.send_invite}
+            disabled={!canManage}
+            type="checkbox"
+            onChange={(event) => setForm((current) => ({ ...current, send_invite: event.target.checked }))}
+          />
+          <span>Send Outlook invitation email</span>
+        </label>
+        <p className="form-help">The user must already have a registered account. Email sending requires Outlook settings in Render.</p>
         {error && <p className="error-box">{error}</p>}
+        {notice && <p className="notice-box">{notice}</p>}
         <button className="primary-button compact" disabled={!canManage || saving}>{saving ? 'Adding...' : 'Add / update member'}</button>
       </form>
 

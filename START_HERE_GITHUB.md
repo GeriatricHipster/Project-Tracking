@@ -160,9 +160,36 @@ After registering:
 9. Use **Move to completed** on a finished project to file it under Completed.
 10. Use **Delete** only when you want to permanently remove a project.
 
-The app supports project members, task edits, dependencies, audit history, live update notifications, Active Projects, Completed, Assignments, and Calendar dashboard tabs, project-level Gantt charts, and owner-only project deletion.
+The app supports project members, optional Outlook invitation emails, task edits, dependencies, audit history, live update notifications, Active Projects, Completed, Assignments, and Calendar dashboard tabs, project-level Gantt charts, visibility controls, and owner-only project deletion.
 
 ---
+
+---
+
+---
+
+## Visibility rule in this version
+
+Project visibility now works like this:
+
+```text
+Viewer/editor users: see only projects they are assigned to
+Manager/owner users: can view the full project portfolio
+```
+
+A user is treated as a manager/owner for portfolio viewing when they have a **manager** or **owner** role on at least one project. If they open a project they are not directly assigned to, they can view it, but they cannot edit it unless they are added as a member of that specific project with edit/manage rights.
+
+## Optional: turn on Outlook invitation emails
+
+The app can send an Outlook invitation email when you assign a registered user to a project. This is optional and requires email settings in Render.
+
+Open this file in the project for the simple setup steps:
+
+```text
+OUTLOOK_EMAIL_SETUP.md
+```
+
+Without those email settings, project assignments still work; the app will simply tell you the email was not sent.
 
 ## Common problems
 

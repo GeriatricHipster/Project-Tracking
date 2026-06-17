@@ -10,11 +10,18 @@ import TaskForm from './TaskForm';
 import TaskTable from './TaskTable';
 
 const roleRank = {
+  portfolio_viewer: 0,
   viewer: 0,
   editor: 1,
   manager: 2,
   owner: 3
 };
+
+function titleCase(value) {
+  return String(value || '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 export default function ProjectView({ projectId, user, onBack }) {
   const [data, setData] = useState(null);
@@ -109,8 +116,9 @@ export default function ProjectView({ projectId, user, onBack }) {
   }
 
   async function addMember(payload) {
-    await api(`/projects/${projectId}/members`, { method: 'POST', body: payload });
+    const result = await api(`/projects/${projectId}/members`, { method: 'POST', body: payload });
     await loadProject({ quiet: true });
+    return result;
   }
 
   async function updateMember(member, role) {
@@ -152,7 +160,7 @@ export default function ProjectView({ projectId, user, onBack }) {
         <div className="project-title-block">
           <div className="project-title-row">
             <h1>{project.name}</h1>
-            <span className={`role-pill role-${project.role}`}>{project.role}</span>
+            <span className={`role-pill role-${project.role}`}>{titleCase(project.role)}</span>
             {project.project_status === 'completed' && <span className="status-pill status-completed">Completed</span>}
           </div>
           <p>{project.location || 'No location set'} · {formatDate(project.start_date)} to {formatDate(project.end_date)}</p>

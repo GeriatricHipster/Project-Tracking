@@ -12,11 +12,27 @@ export default function App() {
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [booting, setBooting] = useState(Boolean(getToken()));
 
+  function projectIdFromUrl() {
+    const value = new URLSearchParams(window.location.search).get('project');
+    const id = Number(value);
+    return Number.isInteger(id) && id > 0 ? id : null;
+  }
+
+  function openProjectFromUrl(nextProjects) {
+    const requestedProjectId = projectIdFromUrl();
+    if (!requestedProjectId) return;
+    if (nextProjects.some((project) => project.id === requestedProjectId)) {
+      setSelectedProjectId(requestedProjectId);
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }
+
   async function loadProjects() {
     setLoadingProjects(true);
     try {
       const data = await api('/projects');
       setProjects(data.projects);
+      return data.projects;
     } finally {
       setLoadingProjects(false);
     }
@@ -33,7 +49,8 @@ export default function App() {
       try {
         const me = await api('/me');
         setUser(me.user);
-        await loadProjects();
+        const nextProjects = await loadProjects();
+        openProjectFromUrl(nextProjects);
       } catch (error) {
         setToken(null);
         setTokenState(null);
@@ -48,7 +65,8 @@ export default function App() {
     setToken(data.token);
     setTokenState(data.token);
     setUser(data.user);
-    await loadProjects();
+    const nextProjects = await loadProjects();
+    openProjectFromUrl(nextProjects);
   }
 
   async function createProject(payload) {

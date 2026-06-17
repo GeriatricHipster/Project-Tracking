@@ -1,6 +1,6 @@
 # BuildTrack Cloud
 
-BuildTrack Cloud is a construction project timeline tracking web app with multi-user project access, task tracking, dependencies, audit history, real-time project refreshes, dashboard tabs, active/completed project filing, delete controls, an all-project calendar/status overview, and a Gantt-style schedule view.
+BuildTrack Cloud is a construction project timeline tracking web app with multi-user project access, task tracking, dependencies, audit history, real-time project refreshes, Outlook invitation emails, dashboard tabs, active/completed project filing, delete controls, an all-project calendar/status overview, visibility controls, and a Gantt-style schedule view.
 
 ## Start here if you do not code
 
@@ -12,6 +12,12 @@ START_HERE_GITHUB.md
 
 That guide explains how to upload the app to GitHub through the GitHub website and deploy it from GitHub using Render. You do not need to use your local terminal.
 
+Optional Outlook email setup is documented here:
+
+```text
+OUTLOOK_EMAIL_SETUP.md
+```
+
 ## Important hosting note
 
 GitHub stores the project files and tracks updates. The live application also needs a backend server and PostgreSQL database, so it cannot be hosted by GitHub Pages alone. This project includes `render.yaml`, which lets Render create the live app and database directly from your GitHub repository.
@@ -21,6 +27,8 @@ GitHub stores the project files and tracks updates. The live application also ne
 - Multi-user registration and login
 - Projects with name, location, description, planned start, and planned finish
 - Project member roles: owner, manager, editor, viewer
+- Optional Outlook invitation email when assigning a registered user to a project
+- Visibility rule: viewers and editors see assigned projects; owners and managers can view the full project portfolio
 - Task tracking with trade, assignee, dates, status, priority, percent complete, and color
 - Task dependencies with cycle prevention
 - Gantt-style project schedule chart
@@ -31,6 +39,7 @@ GitHub stores the project files and tracks updates. The live application also ne
 - Owner-only project delete button with confirmation
 - Project status badges: Not started, In progress, Blocked, Complete, Completed
 - Real-time update notifications through Socket.IO
+- Microsoft Graph or Outlook SMTP email sending options
 - Audit log showing project changes
 - PostgreSQL database schema and migrations
 - One-service production deployment using Render Blueprint
@@ -49,6 +58,10 @@ START_HERE_GITHUB.md
 ```
 
 The `render.yaml` file must be at the top level of the repository. Render uses this file to create the web service and database.
+
+## Project visibility rule
+
+Viewer and editor users see only projects they are assigned to. A user with a manager or owner role on at least one project can view the full project portfolio. If that manager/owner opens a project they are not directly assigned to, the project opens in read-only portfolio view unless they are also a member of that project with a higher role.
 
 ## Production deployment
 
@@ -84,7 +97,6 @@ For the live cloud app, create your own real account using the Register screen.
 
 ## Suggested future upgrades
 
-- Email invitations for new project users
 - File attachments for schedules, photos, RFIs, and submittals
 - Microsoft Project or Primavera P6 import/export
 - Baseline schedule tracking

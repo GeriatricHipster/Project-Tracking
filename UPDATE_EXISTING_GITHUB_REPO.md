@@ -13,6 +13,9 @@ Use these steps if you already uploaded an earlier version of BuildTrack Cloud t
 - An owner-only **Delete** button for permanently removing projects
 - Assignment cards showing project users and roles
 - A calendar month view showing all visible active and completed projects and their current status
+- Optional Outlook invitation emails when assigning a registered user to a project
+- Viewer/editor visibility limited to assigned projects
+- Owner/manager portfolio visibility across all projects
 
 ## Simple update steps
 
@@ -26,7 +29,7 @@ Use these steps if you already uploaded an earlier version of BuildTrack Cloud t
 8. Use this commit message:
 
 ```text
-Add completed projects, delete, assignments, and calendar tabs
+Add Outlook invites and project visibility controls
 ```
 
 9. Click **Commit changes**.
@@ -58,4 +61,4 @@ Project assignments
 Calendar overview
 ```
 
-The Assignments tab uses the project members you add inside each project. The Calendar tab uses each project's start date, finish date, task progress, blocked tasks, and completed/active filing status. Finished projects can be moved to the Completed tab, restored to Active, or permanently deleted by an owner.
+The Assignments tab uses the project members you add inside each project. The Calendar tab uses each project's start date, finish date, task progress, blocked tasks, and completed/active filing status. Finished projects can be moved to the Completed tab, restored to Active, or permanently deleted by an owner. When you add a registered user to a project, you can check **Send Outlook invitation email**. To turn that on, follow `OUTLOOK_EMAIL_SETUP.md` after Render redeploys.

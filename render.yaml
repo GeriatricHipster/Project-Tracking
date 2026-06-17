@@ -17,6 +17,8 @@ services:
         value: "*"
       - key: NODE_ENV
         value: production
+      - key: APP_NAME
+        value: BuildTrack Cloud
       - key: PGSSLMODE
         value: require
 

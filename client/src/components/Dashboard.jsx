@@ -266,7 +266,7 @@ export default function Dashboard({
               <div>
                 <div className="project-card-title-row">
                   <h3>{project.name}</h3>
-                  <span className={`role-pill role-${project.role}`}>{project.role}</span>
+                  <span className={`role-pill role-${project.role}`}>{titleCase(project.role)}</span>
                   <span className={`status-pill status-${status}`}>{titleCase(status)}</span>
                   {lifecycle === 'completed' && <span className="archive-pill">Completed tab</span>}
                 </div>

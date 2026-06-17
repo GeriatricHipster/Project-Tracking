@@ -9,17 +9,20 @@ const express = require('express');
 const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
 const morgan = require('morgan');
+const nodemailer = require('nodemailer');
 const { Server } = require('socket.io');
 const { pool, query, tx } = require('./db');
 
 const PORT = Number(process.env.PORT || 4000);
 const JWT_SECRET = process.env.JWT_SECRET || 'local-development-secret-change-me';
+const APP_NAME = process.env.APP_NAME || 'BuildTrack Cloud';
 const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
 const roleRank = {
+  portfolio_viewer: 0,
   viewer: 0,
   editor: 1,
   manager: 2,
@@ -33,6 +36,7 @@ const roles = new Set(['owner', 'manager', 'editor', 'viewer']);
 const dependencyTypes = new Set(['FS', 'SS', 'FF', 'SF']);
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -86,6 +90,199 @@ function requireText(value, label) {
   const text = cleanText(value);
   if (!text) throw httpError(400, `${label} is required.`);
   return text;
+}
+
+function normalizeBoolean(value, defaultValue = false) {
+  if (value === undefined || value === null || value === '') return defaultValue;
+  if (typeof value === 'boolean') return value;
+  const text = String(value).trim().toLowerCase();
+  if (['true', '1', 'yes', 'y', 'on'].includes(text)) return true;
+  if (['false', '0', 'no', 'n', 'off'].includes(text)) return false;
+  throw httpError(400, 'Boolean value expected.');
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function emailProvider() {
+  const configured = String(process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
+  if (configured === 'graph' || configured === 'microsoft_graph') return 'graph';
+  if (configured === 'smtp' || configured === 'outlook_smtp') return 'smtp';
+
+  if (
+    process.env.MICROSOFT_TENANT_ID &&
+    process.env.MICROSOFT_CLIENT_ID &&
+    process.env.MICROSOFT_CLIENT_SECRET &&
+    (process.env.OUTLOOK_FROM_EMAIL || process.env.MICROSOFT_FROM_EMAIL)
+  ) {
+    return 'graph';
+  }
+
+  if (process.env.OUTLOOK_SMTP_USER && process.env.OUTLOOK_SMTP_PASS) return 'smtp';
+  return 'none';
+}
+
+function getAppBaseUrl(req) {
+  const configured = cleanText(process.env.APP_URL || process.env.PUBLIC_APP_URL);
+  if (configured) return configured.replace(/\/$/, '');
+
+  const origin = cleanText(req.get('origin'));
+  if (origin && origin !== 'null') return origin.replace(/\/$/, '');
+
+  const host = req.get('host');
+  if (!host) return '';
+  return `${req.protocol}://${host}`.replace(/\/$/, '');
+}
+
+function buildInvitationMessage({ recipient, sender, project, role, projectUrl }) {
+  const subject = `${APP_NAME}: ${sender.name} invited you to ${project.name}`;
+  const locationLine = project.location ? `Location: ${project.location}` : 'Location: Not listed';
+  const dateLine = `Schedule: ${project.start_date} to ${project.end_date}`;
+  const text = [
+    `Hello ${recipient.name},`,
+    '',
+    `${sender.name} has added you to the project "${project.name}" in ${APP_NAME}.`,
+    `Your role: ${role}`,
+    locationLine,
+    dateLine,
+    '',
+    `Open the project: ${projectUrl}`,
+    '',
+    'If you have not created your BuildTrack Cloud account yet, register with this same email address first, then open the link again.'
+  ].join('\n');
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.5; max-width: 640px;">
+      <h2 style="margin: 0 0 12px;">You have been invited to a project</h2>
+      <p>Hello ${escapeHtml(recipient.name)},</p>
+      <p><strong>${escapeHtml(sender.name)}</strong> has added you to <strong>${escapeHtml(project.name)}</strong> in ${escapeHtml(APP_NAME)}.</p>
+      <table style="border-collapse: collapse; margin: 16px 0; width: 100%;">
+        <tr><td style="padding: 6px 0; font-weight: bold;">Role</td><td style="padding: 6px 0;">${escapeHtml(role)}</td></tr>
+        <tr><td style="padding: 6px 0; font-weight: bold;">Location</td><td style="padding: 6px 0;">${escapeHtml(project.location || 'Not listed')}</td></tr>
+        <tr><td style="padding: 6px 0; font-weight: bold;">Schedule</td><td style="padding: 6px 0;">${escapeHtml(project.start_date)} to ${escapeHtml(project.end_date)}</td></tr>
+      </table>
+      <p><a href="${escapeHtml(projectUrl)}" style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 10px 14px; border-radius: 10px; font-weight: bold;">Open project</a></p>
+      <p style="color: #6b7280; font-size: 13px;">If you have not created your account yet, register with this same email address first, then open the link again.</p>
+    </div>`;
+
+  return { subject, text, html };
+}
+
+async function getMicrosoftGraphAccessToken() {
+  const tenantId = cleanText(process.env.MICROSOFT_TENANT_ID);
+  const clientId = cleanText(process.env.MICROSOFT_CLIENT_ID);
+  const clientSecret = cleanText(process.env.MICROSOFT_CLIENT_SECRET);
+  if (!tenantId || !clientId || !clientSecret) {
+    throw new Error('Microsoft Graph email is missing MICROSOFT_TENANT_ID, MICROSOFT_CLIENT_ID, or MICROSOFT_CLIENT_SECRET.');
+  }
+
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    scope: 'https://graph.microsoft.com/.default',
+    grant_type: 'client_credentials'
+  });
+
+  const response = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`Microsoft Graph token request failed: ${message.slice(0, 240)}`);
+  }
+
+  const payload = await response.json();
+  if (!payload.access_token) throw new Error('Microsoft Graph did not return an access token.');
+  return payload.access_token;
+}
+
+async function sendViaMicrosoftGraph({ to, subject, text, html }) {
+  const from = cleanText(process.env.OUTLOOK_FROM_EMAIL || process.env.MICROSOFT_FROM_EMAIL);
+  if (!from) throw new Error('Microsoft Graph email is missing OUTLOOK_FROM_EMAIL.');
+
+  const token = await getMicrosoftGraphAccessToken();
+  const response = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(from)}/sendMail`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      message: {
+        subject,
+        body: {
+          contentType: 'HTML',
+          content: html || escapeHtml(text).replace(/\n/g, '<br>')
+        },
+        toRecipients: [{ emailAddress: { address: to } }]
+      },
+      saveToSentItems: true
+    })
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`Microsoft Graph sendMail failed: ${message.slice(0, 240)}`);
+  }
+}
+
+async function sendViaOutlookSmtp({ to, subject, text, html }) {
+  const smtpUser = cleanText(process.env.OUTLOOK_SMTP_USER || process.env.OUTLOOK_FROM_EMAIL);
+  const smtpPass = cleanText(process.env.OUTLOOK_SMTP_PASS);
+  if (!smtpUser || !smtpPass) throw new Error('Outlook SMTP email is missing OUTLOOK_SMTP_USER or OUTLOOK_SMTP_PASS.');
+
+  const port = Number(process.env.OUTLOOK_SMTP_PORT || 587);
+  const secure = normalizeBoolean(process.env.OUTLOOK_SMTP_SECURE, false);
+  const transporter = nodemailer.createTransport({
+    host: process.env.OUTLOOK_SMTP_HOST || 'smtp.office365.com',
+    port,
+    secure,
+    requireTLS: !secure,
+    auth: {
+      user: smtpUser,
+      pass: smtpPass
+    }
+  });
+
+  await transporter.sendMail({
+    from: process.env.OUTLOOK_FROM_EMAIL || smtpUser,
+    to,
+    subject,
+    text,
+    html
+  });
+}
+
+async function sendProjectInvitationEmail({ req, sender, recipient, project, role }) {
+  const provider = emailProvider();
+  if (provider === 'none') {
+    return {
+      sent: false,
+      provider,
+      warning: 'Member was added, but email is not configured yet. Add Outlook email settings in Render to send invitations.'
+    };
+  }
+
+  const appBaseUrl = getAppBaseUrl(req);
+  const projectUrl = appBaseUrl ? `${appBaseUrl}/?project=${project.id}` : '';
+  const message = buildInvitationMessage({ recipient, sender, project, role, projectUrl });
+
+  if (provider === 'graph') {
+    await sendViaMicrosoftGraph({ to: recipient.email, ...message });
+  } else {
+    await sendViaOutlookSmtp({ to: recipient.email, ...message });
+  }
+
+  return { sent: true, provider, to: recipient.email };
 }
 
 function normalizeDate(value, label) {
@@ -175,9 +372,30 @@ async function getMembership(projectId, userId, db = { query }) {
   return result.rows[0] || null;
 }
 
+async function hasPortfolioViewAccess(userId, db = { query }) {
+  const result = await db.query(
+    "SELECT 1 FROM project_members WHERE user_id = $1 AND role IN ('owner', 'manager') LIMIT 1",
+    [userId]
+  );
+  return result.rowCount > 0;
+}
+
+async function requireProjectAccess(projectId, userId, db = { query }) {
+  const membership = await getMembership(projectId, userId, db);
+  if (membership) return { role: membership.role, membership, portfolio: false };
+
+  if (await hasPortfolioViewAccess(userId, db)) {
+    const exists = await db.query('SELECT 1 FROM projects WHERE id = $1', [projectId]);
+    if (!exists.rowCount) throw httpError(404, 'Project not found.');
+    return { role: 'portfolio_viewer', membership: null, portfolio: true };
+  }
+
+  throw httpError(403, 'You are not assigned to this project.');
+}
+
 async function requireProjectMembership(projectId, userId, minimumRole = 'viewer', db = { query }) {
   const membership = await getMembership(projectId, userId, db);
-  if (!membership) throw httpError(403, 'You are not a member of this project.');
+  if (!membership) throw httpError(403, 'You are not assigned to this project.');
   if (roleRank[membership.role] < roleRank[minimumRole]) {
     throw httpError(403, `This action requires ${minimumRole} access or higher.`);
   }
@@ -259,7 +477,7 @@ async function verifyParentTask(db, projectId, parentTaskId, taskId = null) {
 }
 
 async function loadProjectPayload(projectId, userId) {
-  const membership = await requireProjectMembership(projectId, userId);
+  const access = await requireProjectAccess(projectId, userId);
 
   const projectResult = await query(
     `SELECT
@@ -349,7 +567,7 @@ async function loadProjectPayload(projectId, userId) {
   );
 
   return {
-    project: { ...projectResult.rows[0], role: membership.role },
+    project: { ...projectResult.rows[0], role: access.role },
     tasks: tasksResult.rows,
     dependencies: dependenciesResult.rows,
     members: membersResult.rows,
@@ -473,7 +691,14 @@ app.get('/api/me', requireAuth, asyncHandler(async (req, res) => {
 
 app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
   const result = await query(
-    `WITH accessible_projects AS (
+    `WITH portfolio_access AS (
+       SELECT EXISTS (
+         SELECT 1
+         FROM project_members
+         WHERE user_id = $1 AND role IN ('owner', 'manager')
+       ) AS can_view_all
+     ),
+     accessible_projects AS (
        SELECT
          p.id,
          p.name,
@@ -484,10 +709,11 @@ app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
          to_char(p.end_date, 'YYYY-MM-DD') AS end_date,
          p.created_at,
          p.updated_at,
-         pm.role
+         coalesce(pm.role, 'portfolio_viewer') AS role
        FROM projects p
-       JOIN project_members pm ON pm.project_id = p.id
-       WHERE pm.user_id = $1
+       CROSS JOIN portfolio_access pa
+       LEFT JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = $1
+       WHERE pa.can_view_all = true OR pm.user_id = $1
      ),
      task_stats AS (
        SELECT
@@ -717,8 +943,9 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
   const projectId = parseId(req.params.projectId, 'projectId');
   const email = normalizeEmail(req.body.email);
   const role = requireEnum(req.body.role || 'editor', roles, 'role');
+  const sendInvite = normalizeBoolean(req.body.send_invite ?? req.body.sendInvite, false);
 
-  const member = await tx(async (client) => {
+  const { member, project } = await tx(async (client) => {
     const membership = await requireProjectMembership(projectId, req.user.id, 'manager', client);
     if (role === 'owner' && membership.role !== 'owner') {
       throw httpError(403, 'Only project owners can add another owner.');
@@ -726,9 +953,18 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
 
     const userResult = await client.query('SELECT id, name, email FROM users WHERE email = $1', [email]);
     if (!userResult.rowCount) {
-      throw httpError(404, 'That user has not registered yet. Ask them to create an account first.');
+      throw httpError(404, 'That user has not registered yet. Ask them to create an account first, then add them again.');
     }
     const user = userResult.rows[0];
+
+    const projectResult = await client.query(
+      `SELECT id, name, location, description, project_status,
+        to_char(start_date, 'YYYY-MM-DD') AS start_date,
+        to_char(end_date, 'YYYY-MM-DD') AS end_date
+       FROM projects WHERE id = $1`,
+      [projectId]
+    );
+    if (!projectResult.rowCount) throw httpError(404, 'Project not found.');
 
     await client.query(
       `INSERT INTO project_members (project_id, user_id, role)
@@ -747,11 +983,41 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
       after: row
     });
 
-    return row;
+    return { member: row, project: projectResult.rows[0] };
   });
 
+  let invite = { sent: false, requested: sendInvite };
+  if (sendInvite) {
+    try {
+      invite = await sendProjectInvitationEmail({ req, sender: req.user, recipient: member, project, role });
+      await writeAudit({ query }, {
+        projectId,
+        userId: req.user.id,
+        action: invite.sent ? 'member_invite_email_sent' : 'member_invite_email_not_sent',
+        entityType: 'project_member',
+        entityId: member.user_id,
+        after: { to: member.email, provider: invite.provider, sent: invite.sent, warning: invite.warning || null }
+      });
+    } catch (error) {
+      console.error('Invitation email failed:', error);
+      invite = {
+        sent: false,
+        requested: true,
+        warning: `Member was added, but the Outlook invitation email could not be sent. ${error.message}`
+      };
+      await writeAudit({ query }, {
+        projectId,
+        userId: req.user.id,
+        action: 'member_invite_email_failed',
+        entityType: 'project_member',
+        entityId: member.user_id,
+        after: { to: member.email, error: error.message }
+      });
+    }
+  }
+
   emitProjectChange(projectId, { actorId: req.user.id, message: 'Project member updated.' });
-  res.status(201).json({ member });
+  res.status(201).json({ member, invite });
 }));
 
 app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(async (req, res) => {
@@ -1044,7 +1310,7 @@ app.get('/api/tasks/:taskId/comments', requireAuth, asyncHandler(async (req, res
   const taskId = parseId(req.params.taskId, 'taskId');
   const task = await selectTaskById({ query }, taskId);
   if (!task) throw httpError(404, 'Task not found.');
-  await requireProjectMembership(task.project_id, req.user.id);
+  await requireProjectAccess(task.project_id, req.user.id);
 
   const result = await query(
     `SELECT c.id, c.task_id, c.user_id, c.body, c.created_at, u.name AS user_name
@@ -1109,13 +1375,9 @@ io.on('connection', (socket) => {
   socket.on('joinProject', async (projectId, callback) => {
     try {
       const id = parseId(projectId, 'projectId');
-      const membership = await getMembership(id, socket.user.id);
-      if (!membership) {
-        if (callback) callback({ ok: false, error: 'Not a project member.' });
-        return;
-      }
+      const access = await requireProjectAccess(id, socket.user.id);
       socket.join(`project:${id}`);
-      if (callback) callback({ ok: true, role: membership.role });
+      if (callback) callback({ ok: true, role: access.role });
     } catch (error) {
       if (callback) callback({ ok: false, error: error.message });
     }
