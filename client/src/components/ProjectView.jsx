@@ -153,6 +153,7 @@ export default function ProjectView({ projectId, user, onBack }) {
           <div className="project-title-row">
             <h1>{project.name}</h1>
             <span className={`role-pill role-${project.role}`}>{project.role}</span>
+            {project.project_status === 'completed' && <span className="status-pill status-completed">Completed</span>}
           </div>
           <p>{project.location || 'No location set'} · {formatDate(project.start_date)} to {formatDate(project.end_date)}</p>
           {project.description && <p className="project-description">{project.description}</p>}

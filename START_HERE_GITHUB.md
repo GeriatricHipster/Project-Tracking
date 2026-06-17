@@ -155,9 +155,12 @@ After registering:
 4. Open the Gantt chart.
 5. Register a second user.
 6. Add the second user as a project member.
-7. Test editing from two browsers.
+7. Check the Assignments tab to see who is assigned to each project.
+8. Check the Calendar tab to see project dates and status.
+9. Use **Move to completed** on a finished project to file it under Completed.
+10. Use **Delete** only when you want to permanently remove a project.
 
-The app supports project members, task edits, dependencies, audit history, and live update notifications.
+The app supports project members, task edits, dependencies, audit history, live update notifications, Active Projects, Completed, Assignments, and Calendar dashboard tabs, project-level Gantt charts, and owner-only project deletion.
 
 ---
 

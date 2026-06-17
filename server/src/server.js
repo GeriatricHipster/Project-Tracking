@@ -27,6 +27,7 @@ const roleRank = {
 };
 
 const statuses = new Set(['not_started', 'in_progress', 'blocked', 'complete']);
+const projectLifecycleStatuses = new Set(['active', 'completed']);
 const priorities = new Set(['low', 'normal', 'high', 'critical']);
 const roles = new Set(['owner', 'manager', 'editor', 'viewer']);
 const dependencyTypes = new Set(['FS', 'SS', 'FF', 'SF']);
@@ -266,6 +267,7 @@ async function loadProjectPayload(projectId, userId) {
        p.name,
        p.location,
        p.description,
+       p.project_status,
        to_char(p.start_date, 'YYYY-MM-DD') AS start_date,
        to_char(p.end_date, 'YYYY-MM-DD') AS end_date,
        p.created_by,
@@ -471,24 +473,95 @@ app.get('/api/me', requireAuth, asyncHandler(async (req, res) => {
 
 app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
   const result = await query(
-    `SELECT
-       p.id,
-       p.name,
-       p.location,
-       p.description,
-       to_char(p.start_date, 'YYYY-MM-DD') AS start_date,
-       to_char(p.end_date, 'YYYY-MM-DD') AS end_date,
-       p.created_at,
-       p.updated_at,
-       pm.role,
-       count(t.id)::int AS task_count,
-       coalesce(round(avg(t.percent_complete))::int, 0) AS average_progress
-     FROM projects p
-     JOIN project_members pm ON pm.project_id = p.id
-     LEFT JOIN tasks t ON t.project_id = p.id
-     WHERE pm.user_id = $1
-     GROUP BY p.id, pm.role
-     ORDER BY p.updated_at DESC`,
+    `WITH accessible_projects AS (
+       SELECT
+         p.id,
+         p.name,
+         p.location,
+         p.description,
+         p.project_status,
+         to_char(p.start_date, 'YYYY-MM-DD') AS start_date,
+         to_char(p.end_date, 'YYYY-MM-DD') AS end_date,
+         p.created_at,
+         p.updated_at,
+         pm.role
+       FROM projects p
+       JOIN project_members pm ON pm.project_id = p.id
+       WHERE pm.user_id = $1
+     ),
+     task_stats AS (
+       SELECT
+         project_id,
+         count(*)::int AS task_count,
+         coalesce(round(avg(percent_complete))::int, 0) AS average_progress,
+         count(*) FILTER (WHERE status = 'not_started')::int AS not_started_task_count,
+         count(*) FILTER (WHERE status = 'in_progress')::int AS in_progress_task_count,
+         count(*) FILTER (WHERE status = 'blocked')::int AS blocked_task_count,
+         count(*) FILTER (WHERE status = 'complete')::int AS complete_task_count
+       FROM tasks
+       WHERE project_id IN (SELECT id FROM accessible_projects)
+       GROUP BY project_id
+     ),
+     member_stats AS (
+       SELECT
+         pm.project_id,
+         count(*)::int AS member_count,
+         coalesce(
+           json_agg(
+             json_build_object(
+               'user_id', u.id,
+               'name', u.name,
+               'email', u.email,
+               'role', pm.role
+             )
+             ORDER BY CASE pm.role WHEN 'owner' THEN 1 WHEN 'manager' THEN 2 WHEN 'editor' THEN 3 ELSE 4 END, u.name
+           ) FILTER (WHERE u.id IS NOT NULL),
+           '[]'::json
+         ) AS members
+       FROM project_members pm
+       JOIN users u ON u.id = pm.user_id
+       WHERE pm.project_id IN (SELECT id FROM accessible_projects)
+       GROUP BY pm.project_id
+     ),
+     project_rows AS (
+       SELECT
+         ap.id,
+         ap.name,
+         ap.location,
+         ap.description,
+         ap.project_status,
+         ap.start_date,
+         ap.end_date,
+         ap.created_at,
+         ap.updated_at,
+         ap.role,
+         coalesce(ts.task_count, 0) AS task_count,
+         coalesce(ts.average_progress, 0) AS average_progress,
+         coalesce(ts.not_started_task_count, 0) AS not_started_task_count,
+         coalesce(ts.in_progress_task_count, 0) AS in_progress_task_count,
+         coalesce(ts.blocked_task_count, 0) AS blocked_task_count,
+         coalesce(ts.complete_task_count, 0) AS complete_task_count,
+         coalesce(ms.member_count, 0) AS member_count,
+         coalesce(ms.members, '[]'::json) AS members,
+         CASE
+           WHEN coalesce(ts.blocked_task_count, 0) > 0 THEN 'blocked'
+           WHEN coalesce(ts.task_count, 0) = 0 THEN 'not_started'
+           WHEN coalesce(ts.complete_task_count, 0) = coalesce(ts.task_count, 0) THEN 'complete'
+           WHEN coalesce(ts.in_progress_task_count, 0) > 0 OR coalesce(ts.average_progress, 0) > 0 THEN 'in_progress'
+           ELSE 'not_started'
+         END AS schedule_status
+       FROM accessible_projects ap
+       LEFT JOIN task_stats ts ON ts.project_id = ap.id
+       LEFT JOIN member_stats ms ON ms.project_id = ap.id
+     )
+     SELECT
+       project_rows.*,
+       CASE
+         WHEN project_status = 'completed' THEN 'completed'
+         ELSE schedule_status
+       END AS status
+     FROM project_rows
+     ORDER BY updated_at DESC`,
     [req.user.id]
   );
 
@@ -507,7 +580,7 @@ app.post('/api/projects', requireAuth, asyncHandler(async (req, res) => {
     const result = await client.query(
       `INSERT INTO projects (name, location, description, start_date, end_date, created_by)
        VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, name, location, description, to_char(start_date, 'YYYY-MM-DD') AS start_date,
+       RETURNING id, name, location, description, project_status, to_char(start_date, 'YYYY-MM-DD') AS start_date,
          to_char(end_date, 'YYYY-MM-DD') AS end_date, created_by, created_at, updated_at`,
       [name, location, description, startDate, endDate, req.user.id]
     );
@@ -528,7 +601,7 @@ app.post('/api/projects', requireAuth, asyncHandler(async (req, res) => {
       after: inserted
     });
 
-    return { ...inserted, role: 'owner', task_count: 0, average_progress: 0 };
+    return { ...inserted, role: 'owner', task_count: 0, average_progress: 0, member_count: 1, members: [{ user_id: req.user.id, name: req.user.name, email: req.user.email, role: 'owner' }] };
   });
 
   emitProjectChange(project.id, { actorId: req.user.id, message: 'Project created.' });
@@ -548,7 +621,7 @@ app.patch('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res)
     await requireProjectMembership(projectId, req.user.id, 'manager', client);
 
     const beforeResult = await client.query(
-      `SELECT id, name, location, description, to_char(start_date, 'YYYY-MM-DD') AS start_date,
+      `SELECT id, name, location, description, project_status, to_char(start_date, 'YYYY-MM-DD') AS start_date,
         to_char(end_date, 'YYYY-MM-DD') AS end_date, created_by, created_at, updated_at
        FROM projects WHERE id = $1`,
       [projectId]
@@ -574,6 +647,11 @@ app.patch('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res)
       values.push(cleanText(req.body.description));
       sets.push(`description = $${values.length}`);
     }
+    if (req.body.project_status !== undefined || req.body.lifecycle_status !== undefined) {
+      const requestedStatus = req.body.project_status !== undefined ? req.body.project_status : req.body.lifecycle_status;
+      values.push(requireEnum(requestedStatus, projectLifecycleStatuses, 'project_status'));
+      sets.push(`project_status = $${values.length}`);
+    }
     if (req.body.start_date !== undefined) {
       values.push(nextStart);
       sets.push(`start_date = $${values.length}`);
@@ -590,7 +668,7 @@ app.patch('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res)
       `UPDATE projects
        SET ${sets.join(', ')}
        WHERE id = $${values.length}
-       RETURNING id, name, location, description, to_char(start_date, 'YYYY-MM-DD') AS start_date,
+       RETURNING id, name, location, description, project_status, to_char(start_date, 'YYYY-MM-DD') AS start_date,
          to_char(end_date, 'YYYY-MM-DD') AS end_date, created_by, created_at, updated_at`,
       values
     );

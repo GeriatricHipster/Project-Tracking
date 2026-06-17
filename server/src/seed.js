@@ -1,6 +1,13 @@
 const bcrypt = require('bcryptjs');
 const { pool, tx } = require('./db');
 
+const demoTeam = [
+  { name: 'Site Superintendent', email: 'superintendent@demo.com', role: 'manager' },
+  { name: 'Electrical Foreman', email: 'electrical@demo.com', role: 'editor' },
+  { name: 'Plumbing Foreman', email: 'plumbing@demo.com', role: 'editor' },
+  { name: 'Owner Representative', email: 'owner@demo.com', role: 'viewer' }
+];
+
 const demoTasks = [
   {
     name: 'Mobilization and site setup',
@@ -131,6 +138,23 @@ async function seed() {
       userId = insertedUser.rows[0].id;
     }
 
+    const teamMembers = [{ id: userId, role: 'owner', name: 'Demo Project Manager', email }];
+    for (const member of demoTeam) {
+      const existingMember = await client.query('SELECT id FROM users WHERE email = $1', [member.email]);
+      let memberId;
+      if (existingMember.rowCount) {
+        memberId = existingMember.rows[0].id;
+      } else {
+        const memberPasswordHash = await bcrypt.hash('Construction123!', 12);
+        const insertedMember = await client.query(
+          'INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id',
+          [member.name, member.email, memberPasswordHash]
+        );
+        memberId = insertedMember.rows[0].id;
+      }
+      teamMembers.push({ id: memberId, role: member.role, name: member.name, email: member.email });
+    }
+
     const existingProject = await client.query('SELECT id FROM projects WHERE name = $1 AND created_by = $2', [
       'Demo Commercial Buildout',
       userId
@@ -156,12 +180,27 @@ async function seed() {
       projectId = insertedProject.rows[0].id;
     }
 
-    await client.query(
-      `INSERT INTO project_members (project_id, user_id, role)
-       VALUES ($1, $2, 'owner')
-       ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
-      [projectId, userId]
-    );
+    for (const member of teamMembers) {
+      await client.query(
+        `INSERT INTO project_members (project_id, user_id, role)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+        [projectId, member.id, member.role]
+      );
+    }
+
+    const taskAssigneeIds = [
+      teamMembers[0].id,
+      teamMembers[1].id,
+      teamMembers[3].id,
+      teamMembers[2].id,
+      teamMembers[1].id,
+      teamMembers[0].id,
+      teamMembers[2].id,
+      teamMembers[0].id,
+      teamMembers[1].id,
+      teamMembers[0].id
+    ];
 
     const taskCount = await client.query('SELECT count(*)::int AS count FROM tasks WHERE project_id = $1', [projectId]);
     if (taskCount.rows[0].count === 0) {
@@ -178,7 +217,7 @@ async function seed() {
             task.name,
             task.description,
             task.trade,
-            userId,
+            taskAssigneeIds[index] || userId,
             task.status,
             task.priority,
             task.start_date,
@@ -218,6 +257,79 @@ async function seed() {
         `INSERT INTO audit_log (project_id, user_id, action, entity_type, entity_id, after_data)
          VALUES ($1, $2, 'seeded', 'project', $1, $3::jsonb)`,
         [projectId, userId, JSON.stringify({ message: 'Seeded demo project with schedule tasks.' })]
+      );
+    }
+
+    const completedProjectName = 'Completed Lobby Renovation';
+    const existingCompletedProject = await client.query('SELECT id FROM projects WHERE name = $1 AND created_by = $2', [
+      completedProjectName,
+      userId
+    ]);
+
+    let completedProjectId;
+    if (existingCompletedProject.rowCount) {
+      completedProjectId = existingCompletedProject.rows[0].id;
+      await client.query('UPDATE projects SET project_status = $1 WHERE id = $2', ['completed', completedProjectId]);
+    } else {
+      const insertedCompletedProject = await client.query(
+        `INSERT INTO projects
+          (name, location, description, project_status, start_date, end_date, created_by)
+         VALUES ($1, $2, $3, 'completed', $4, $5, $6)
+         RETURNING id`,
+        [
+          completedProjectName,
+          'Denver, CO',
+          'Completed sample project used to demonstrate the Completed tab and calendar status view.',
+          '2026-03-02',
+          '2026-04-24',
+          userId
+        ]
+      );
+      completedProjectId = insertedCompletedProject.rows[0].id;
+    }
+
+    for (const member of teamMembers.slice(0, 3)) {
+      await client.query(
+        `INSERT INTO project_members (project_id, user_id, role)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+        [completedProjectId, member.id, member.role]
+      );
+    }
+
+    const completedTaskCount = await client.query('SELECT count(*)::int AS count FROM tasks WHERE project_id = $1', [completedProjectId]);
+    if (completedTaskCount.rows[0].count === 0) {
+      const completedTasks = [
+        ['Closeout punch walk', 'Closeout', '2026-04-06', '2026-04-10', '#0f766e'],
+        ['Final inspections', 'Inspections', '2026-04-13', '2026-04-17', '#2563eb'],
+        ['Owner turnover package', 'Closeout', '2026-04-20', '2026-04-24', '#16a34a']
+      ];
+
+      for (let index = 0; index < completedTasks.length; index += 1) {
+        const [name, trade, startDate, endDate, color] = completedTasks[index];
+        await client.query(
+          `INSERT INTO tasks
+            (project_id, name, description, trade, assigned_to, status, priority, start_date, end_date, percent_complete, color, sort_order, created_by)
+           VALUES ($1, $2, $3, $4, $5, 'complete', 'normal', $6, $7, 100, $8, $9, $10)`,
+          [
+            completedProjectId,
+            name,
+            'Completed demo closeout task.',
+            trade,
+            teamMembers[index % teamMembers.length].id,
+            startDate,
+            endDate,
+            color,
+            index + 1,
+            userId
+          ]
+        );
+      }
+
+      await client.query(
+        `INSERT INTO audit_log (project_id, user_id, action, entity_type, entity_id, after_data)
+         VALUES ($1, $2, 'completed', 'project', $1, $3::jsonb)`,
+        [completedProjectId, userId, JSON.stringify({ message: 'Seeded completed demo project.' })]
       );
     }
   });

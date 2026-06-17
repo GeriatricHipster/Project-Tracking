@@ -11,13 +11,26 @@ CREATE TABLE IF NOT EXISTS projects (
   name text NOT NULL,
   location text,
   description text,
+  project_status text NOT NULL DEFAULT 'active',
   start_date date NOT NULL,
   end_date date NOT NULL,
   created_by integer REFERENCES users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT projects_date_order CHECK (end_date >= start_date)
+  CONSTRAINT projects_date_order CHECK (end_date >= start_date),
+  CONSTRAINT projects_project_status_check CHECK (project_status IN ('active', 'completed'))
 );
+
+
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS project_status text NOT NULL DEFAULT 'active';
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'projects_project_status_check'
+  ) THEN
+    ALTER TABLE projects ADD CONSTRAINT projects_project_status_check CHECK (project_status IN ('active', 'completed'));
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS project_members (
   project_id integer NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -86,6 +99,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(project_status);
 CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id, sort_order, start_date);
 CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);

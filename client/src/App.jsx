@@ -56,6 +56,16 @@ export default function App() {
     await loadProjects();
   }
 
+  async function updateProject(projectId, payload) {
+    await api(`/projects/${projectId}`, { method: 'PATCH', body: payload });
+    await loadProjects();
+  }
+
+  async function deleteProject(projectId) {
+    await api(`/projects/${projectId}`, { method: 'DELETE' });
+    await loadProjects();
+  }
+
   function logout() {
     setToken(null);
     setTokenState(null);
@@ -83,6 +93,8 @@ export default function App() {
       loading={loadingProjects}
       onOpenProject={setSelectedProjectId}
       onCreateProject={createProject}
+      onUpdateProject={updateProject}
+      onDeleteProject={deleteProject}
       onRefresh={loadProjects}
       onLogout={logout}
     />

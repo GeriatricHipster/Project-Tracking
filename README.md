@@ -1,6 +1,6 @@
 # BuildTrack Cloud
 
-BuildTrack Cloud is a construction project timeline tracking web app with multi-user project access, task tracking, dependencies, audit history, real-time project refreshes, and a Gantt-style schedule view.
+BuildTrack Cloud is a construction project timeline tracking web app with multi-user project access, task tracking, dependencies, audit history, real-time project refreshes, dashboard tabs, active/completed project filing, delete controls, an all-project calendar/status overview, and a Gantt-style schedule view.
 
 ## Start here if you do not code
 
@@ -23,7 +23,13 @@ GitHub stores the project files and tracks updates. The live application also ne
 - Project member roles: owner, manager, editor, viewer
 - Task tracking with trade, assignee, dates, status, priority, percent complete, and color
 - Task dependencies with cycle prevention
-- Gantt-style schedule chart
+- Gantt-style project schedule chart
+- Dashboard tabs for Active Projects, Completed, Assignments, and Calendar
+- Assignment overview showing project members and roles by project
+- Calendar overview showing all visible active and completed projects by date and status
+- Manual project filing: move finished jobs to Completed or restore them to Active
+- Owner-only project delete button with confirmation
+- Project status badges: Not started, In progress, Blocked, Complete, Completed
 - Real-time update notifications through Socket.IO
 - Audit log showing project changes
 - PostgreSQL database schema and migrations
