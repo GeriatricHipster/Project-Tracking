@@ -367,6 +367,23 @@ CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_task_dependencies_project ON task_dependencies(project_id);
 CREATE INDEX IF NOT EXISTS idx_checklist_project ON project_checklist_items(project_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_blueprints_project ON project_blueprints(project_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS owner_cms_work_orders (
+  sheet_key text PRIMARY KEY,
+  sheet_name text NOT NULL,
+  cells jsonb NOT NULL DEFAULT '[]'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+INSERT INTO owner_cms_work_orders (sheet_key, sheet_name, cells)
+VALUES
+  ('kurts_cms_wos', 'Kurts CMS WOs', '[]'::jsonb),
+  ('austins_cms_wos', 'Austins CMS WOs', '[]'::jsonb)
+ON CONFLICT (sheet_key) DO UPDATE SET
+  sheet_name = EXCLUDED.sheet_name;
+
+CREATE INDEX IF NOT EXISTS idx_owner_cms_work_orders_sheet_key ON owner_cms_work_orders(sheet_key);
 CREATE INDEX IF NOT EXISTS idx_audit_log_project ON audit_log(project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_task_comments_task ON task_comments(task_id, created_at DESC);
 
@@ -400,6 +417,12 @@ DROP TRIGGER IF EXISTS trg_project_checklist_items_updated_at ON project_checkli
 DROP TRIGGER IF EXISTS trg_project_checklist_updated_at ON project_checklist_items;
 CREATE TRIGGER trg_project_checklist_updated_at
 BEFORE UPDATE ON project_checklist_items
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_owner_cms_work_orders_updated_at ON owner_cms_work_orders;
+CREATE TRIGGER trg_owner_cms_work_orders_updated_at
+BEFORE UPDATE ON owner_cms_work_orders
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 

@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { addDays, formatDate, todayIso } from '../lib/dates';
 import { buildingOptions } from '../lib/buildings';
 import SiteMembersPanel from './SiteMembersPanel';
+import OwnerCmsWosPanel from './OwnerCmsWosPanel';
 import SiteBanner from './SiteBanner';
 
 const dashboardTabs = [
@@ -9,7 +10,8 @@ const dashboardTabs = [
   { id: 'completed', label: 'Completed' },
   { id: 'assignments', label: 'Projects' },
   { id: 'calendar', label: 'Calendar overview' },
-  { id: 'site-members', label: 'Site members', managersOnly: true }
+  { id: 'site-members', label: 'Site members', managersOnly: true },
+  { id: 'owner-cms', label: 'CMS WOs', ownersOnly: true }
 ];
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -158,7 +160,17 @@ export default function Dashboard({
   const [actionProjectId, setActionProjectId] = useState(null);
 
   const canManageSite = Boolean(user?.can_manage_site || ['owner', 'manager'].includes(user?.site_role));
-  const visibleTabs = dashboardTabs.filter((tab) => !tab.managersOnly || canManageSite);
+  const canAccessOwnerCms = user?.site_role === 'owner' && !user?.access_revoked;
+  const visibleTabs = useMemo(
+    () => dashboardTabs.filter((tab) => (!tab.managersOnly || canManageSite) && (!tab.ownersOnly || canAccessOwnerCms)),
+    [canManageSite, canAccessOwnerCms]
+  );
+
+  useEffect(() => {
+    if (!visibleTabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab(visibleTabs[0]?.id || 'projects');
+    }
+  }, [activeTab, visibleTabs]);
 
   const visibleProjects = useMemo(
     () => projects.filter((project) => matchesProjectSearch(project, searchTerm)),
@@ -694,6 +706,7 @@ export default function Dashboard({
       {activeTab === 'assignments' && renderAssignmentsTab()}
       {activeTab === 'calendar' && renderCalendarTab()}
       {activeTab === 'site-members' && canManageSite && <SiteMembersPanel currentUser={user} onOpenProject={onOpenProject} />}
+      {activeTab === 'owner-cms' && canAccessOwnerCms && <OwnerCmsWosPanel user={user} />}
     </main>
   );
 }

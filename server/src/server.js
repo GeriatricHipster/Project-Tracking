@@ -44,6 +44,11 @@ const projectManagers = new Set(['Kurt', 'Austin']);
 const siteRoles = new Set(['owner', 'manager', 'member']);
 const dependencyTypes = new Set(['FS', 'SS', 'FF', 'SF']);
 const managerSiteRoles = new Set(['owner', 'manager']);
+const ownerCmsWorkOrderSheets = [
+  { sheet_key: 'kurts_cms_wos', sheet_name: 'Kurts CMS WOs' },
+  { sheet_key: 'austins_cms_wos', sheet_name: 'Austins CMS WOs' }
+];
+const ownerCmsWorkOrderSheetMap = new Map(ownerCmsWorkOrderSheets.map((sheet) => [sheet.sheet_key, sheet]));
 const configuredBlueprintBytes = Number(process.env.MAX_BLUEPRINT_BYTES || 25 * 1024 * 1024);
 const MAX_BLUEPRINT_BYTES = Number.isFinite(configuredBlueprintBytes) && configuredBlueprintBytes > 0
   ? configuredBlueprintBytes
@@ -544,6 +549,42 @@ function requireSiteManagement(user) {
   return siteRole;
 }
 
+function requireSiteOwner(user) {
+  const siteRole = user?.site_role || 'member';
+  if (siteRole !== 'owner') {
+    throw httpError(403, 'This area is only available to site owners.');
+  }
+  return siteRole;
+}
+
+function buildBlankOwnerCmsGrid() {
+  return Array.from({ length: 60 }, () => Array.from({ length: 60 }, () => ''));
+}
+
+function normalizeOwnerCmsGrid(cells) {
+  const blank = buildBlankOwnerCmsGrid();
+  if (!Array.isArray(cells)) return blank;
+
+  for (let rowIndex = 0; rowIndex < Math.min(cells.length, 60); rowIndex += 1) {
+    const row = cells[rowIndex];
+    if (!Array.isArray(row)) continue;
+    for (let colIndex = 0; colIndex < Math.min(row.length, 60); colIndex += 1) {
+      const value = row[colIndex];
+      blank[rowIndex][colIndex] = value === null || value === undefined ? '' : String(value);
+    }
+  }
+
+  return blank;
+}
+
+function requireOwnerCmsSheet(sheetKey) {
+  const sheet = ownerCmsWorkOrderSheetMap.get(String(sheetKey || '').trim());
+  if (!sheet) {
+    throw httpError(404, 'CMS work order sheet not found.');
+  }
+  return sheet;
+}
+
 function ensureSiteActorCanManageTarget(actorRole, targetUser, requestedRole = null) {
   if (actorRole === 'owner') return;
   if (targetUser.site_role === 'owner' || requestedRole === 'owner') {
@@ -1002,6 +1043,79 @@ app.post('/api/auth/login', asyncHandler(async (req, res) => {
 
 app.get('/api/me', requireAuth, asyncHandler(async (req, res) => {
   res.json({ user: publicUser(req.user) });
+}));
+
+
+app.get('/api/owner/cms-wos', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+
+  const result = await tx(async (client) => {
+    await client.query(
+      `INSERT INTO owner_cms_work_orders (sheet_key, sheet_name, cells)
+       VALUES
+         ('kurts_cms_wos', 'Kurts CMS WOs', '[]'::jsonb),
+         ('austins_cms_wos', 'Austins CMS WOs', '[]'::jsonb)
+       ON CONFLICT (sheet_key) DO UPDATE SET
+         sheet_name = EXCLUDED.sheet_name`
+    );
+
+    const rows = await client.query(
+      `SELECT sheet_key, sheet_name, cells, created_at, updated_at
+       FROM owner_cms_work_orders
+       ORDER BY sheet_name ASC`
+    );
+
+    return rows.rows.map((sheet) => ({
+      ...sheet,
+      cells: normalizeOwnerCmsGrid(sheet.cells)
+    }));
+  });
+
+  res.json({ sheets: result });
+}));
+
+app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
+  const rowIndex = clampInteger(req.body.row_index ?? req.body.rowIndex, {
+    label: 'row_index',
+    defaultValue: 0,
+    min: 0,
+    max: 59
+  });
+  const colIndex = clampInteger(req.body.col_index ?? req.body.colIndex, {
+    label: 'col_index',
+    defaultValue: 0,
+    min: 0,
+    max: 59
+  });
+  const cellValue = String(req.body.value ?? '');
+
+  const updated = await tx(async (client) => {
+    const current = await client.query(
+      'SELECT sheet_key, sheet_name, cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      [sheet.sheet_key]
+    );
+    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
+
+    const normalized = normalizeOwnerCmsGrid(current.rows[0].cells);
+    normalized[rowIndex][colIndex] = cellValue;
+
+    const saveResult = await client.query(
+      `UPDATE owner_cms_work_orders
+       SET cells = $1
+       WHERE sheet_key = $2
+       RETURNING sheet_key, sheet_name, cells, created_at, updated_at`,
+      [JSON.stringify(normalized), sheet.sheet_key]
+    );
+
+    return {
+      ...saveResult.rows[0],
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells)
+    };
+  });
+
+  res.json({ sheet: updated });
 }));
 
 app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
