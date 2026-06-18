@@ -15,7 +15,7 @@ PSG and SS Tracking is a construction project timeline tracking web app with mul
 - Trade dropdown options: CCure, Cameras, CCure & Cameras
 - Security Team Member dropdown options: Derick, Eric, James, Justin, Kenna, Kyra, Ryan, Suvam
 - PM dropdown options: Kurt, Austin
-- Gantt checklist with IPs requested, Panel ordered, Clearances programmed, Doors programmed, and CCure Operator established
+- Project Milestones with IPs requested, Panel ordered, Clearances programmed, Doors programmed, and CCure Operator established
 - Drag-and-drop blueprint upload inside each project
 - Project members panel with project roles: owner, manager, editor, viewer
 - Slack channel invite codes are sent automatically when a project manager or owner adds/updates a non-owner project member
