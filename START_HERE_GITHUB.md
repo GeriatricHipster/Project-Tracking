@@ -160,7 +160,7 @@ After registering:
 9. Use **Move to completed** on a finished project to file it under Completed.
 10. Use **Delete** only when you want to permanently remove a project.
 
-The app supports project members, optional general invitation emails, task edits, dependencies, audit history, live update notifications, Active Projects, Completed, Assignments, and Calendar dashboard tabs, project-level Gantt charts, visibility controls, and owner-only project deletion.
+The app supports project members, optional Resend or SMTP invitation emails, task edits, dependencies, audit history, live update notifications, Active Projects, Completed, Assignments, and Calendar dashboard tabs, project-level Gantt charts, visibility controls, and owner-only project deletion.
 
 ---
 
@@ -179,14 +179,15 @@ Manager/owner users: can view the full project portfolio
 
 A user is treated as a manager/owner for portfolio viewing when they have a **manager** or **owner** role on at least one project. If they open a project they are not directly assigned to, they can view it, but they cannot edit it unless they are added as a member of that specific project with edit/manage rights.
 
-## Optional: turn on general invitation emails
+## Optional: turn on invitation emails with Resend or SMTP
 
-The app can send an invitation email when you assign a registered user to a project. This is optional and requires general email settings in Render.
+The app can send an invitation email when you assign a registered user to a project. This is optional and requires Resend or SMTP email settings in Render.
 
 Open this file in the project for the simple setup steps:
 
 ```text
 EMAIL_INVITATION_SETUP.md
+RESEND_EMAIL_SETUP.md
 ```
 
 Without those email settings, project assignments still work; the app will simply tell you the email was not sent.

@@ -51,12 +51,13 @@ EMAIL_PROVIDER    none
 
 ## Optional invitation email settings
 
-After the app is live, you can add general email settings in Render so project invitations are emailed when users are assigned.
+After the app is live, you can add Resend or SMTP email settings in Render so project invitations are emailed when users are assigned.
 
 Open:
 
 ```text
 EMAIL_INVITATION_SETUP.md
+RESEND_EMAIL_SETUP.md
 ```
 
 The app works without those settings. Project members can still be assigned, but invitation emails will not send until email is configured.

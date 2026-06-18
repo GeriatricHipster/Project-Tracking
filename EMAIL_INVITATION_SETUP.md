@@ -1,18 +1,15 @@
-# Optional general email invitation setup
+# Optional email invitation setup
 
 BuildTrack can send an invitation email when a manager or owner assigns a registered user to a project.
 
-This version does **not** require Outlook. It sends email through standard SMTP, which many email providers and company email systems support.
-
-Important: the app still needs a sending email account or email service. A website cannot send real email from nowhere. Your email provider or IT person should give you these SMTP details:
+This version supports two email options:
 
 ```text
-SMTP host
-SMTP port
-SMTP username
-SMTP password, app password, or API key
-Sender email address
+Resend email API   recommended for most simple cloud setups
+Standard SMTP      useful if your company already gives you SMTP settings
 ```
+
+Project assignments still work even if email is not configured. The app will add the user to the project and show a warning that the email was not sent.
 
 ## What the invitation email includes
 
@@ -30,7 +27,51 @@ The user must already have a BuildTrack account using the same email address you
 
 ---
 
-## Render setup steps
+# Option A: Resend setup
+
+Use this option if you want a simple email API provider instead of company SMTP.
+
+Open this file for the step-by-step setup:
+
+```text
+RESEND_EMAIL_SETUP.md
+```
+
+The Render environment variables are:
+
+```text
+EMAIL_PROVIDER=resend
+APP_URL=https://YOUR-BUILDTRACK-APP.onrender.com
+RESEND_API_KEY=your-resend-api-key
+RESEND_FROM=schedule@yourcompany.com
+RESEND_FROM_NAME=BuildTrack Cloud
+```
+
+Optional:
+
+```text
+RESEND_REPLY_TO=office@yourcompany.com
+```
+
+Important: keep `RESEND_API_KEY` private. Add it only in Render. Do not upload it to GitHub.
+
+---
+
+# Option B: Standard SMTP setup
+
+Use this option if your company email provider or IT team gives you SMTP settings.
+
+Your email provider or IT person should give you these SMTP details:
+
+```text
+SMTP host
+SMTP port
+SMTP username
+SMTP password, app password, or API key
+Sender email address
+```
+
+## Render setup steps for SMTP
 
 1. Open Render.
 2. Open your `buildtrack-cloud` web service.
@@ -54,8 +95,6 @@ SMTP_USER=your-smtp-username
 SMTP_PASS=your-smtp-password-or-api-key
 ```
 
-Replace the values with your real email provider details.
-
 For many providers, port `587` with `SMTP_SECURE=false` and `SMTP_REQUIRE_TLS=true` is the normal setup. Some providers use port `465`; for that setup, use:
 
 ```text
@@ -66,7 +105,7 @@ SMTP_REQUIRE_TLS=false
 
 ---
 
-## What to ask your IT person
+## What to ask your IT person if using SMTP
 
 You can copy and send this message:
 
@@ -111,13 +150,13 @@ First, the project assignment still works. The user can still log in and see the
 Then check these common issues:
 
 ```text
-EMAIL_PROVIDER must be smtp
-SMTP_HOST must be filled in
-EMAIL_FROM must be a real sender address
-SMTP_USER and SMTP_PASS must both be correct
+EMAIL_PROVIDER must be resend or smtp
 APP_URL should be your live BuildTrack URL
-Your email provider may require an app password or API key instead of a normal password
-Your email provider may block new apps until SMTP sending is enabled
+The recipient must already have a registered BuildTrack account
+For Resend: RESEND_API_KEY and RESEND_FROM must be filled in
+For Resend: RESEND_FROM should be a verified sender/domain in Resend
+For SMTP: SMTP_HOST, SMTP_USER, and SMTP_PASS must be correct
+Your email provider may require app-specific credentials
 ```
 
 Open the Render **Logs** tab for the `buildtrack-cloud` service to see the exact email error.

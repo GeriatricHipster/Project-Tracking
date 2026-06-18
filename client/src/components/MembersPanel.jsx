@@ -66,7 +66,7 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
           />
           <span>Send invitation email</span>
         </label>
-        <p className="form-help">The user must already have a registered account. Email sending requires general email settings in Render.</p>
+        <p className="form-help">The user must already have a registered account. Email sending requires Resend or SMTP settings in Render.</p>
         {error && <p className="error-box">{error}</p>}
         {notice && <p className="notice-box">{notice}</p>}
         <button className="primary-button compact" disabled={!canManage || saving}>{saving ? 'Adding...' : 'Add / update member'}</button>
