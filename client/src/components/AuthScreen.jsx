@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
-import SiteBanner from './SiteBanner';
 
 export default function AuthScreen({ onAuth, pendingInviteCode }) {
   const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({ name: '', email: 'admin@demo.com', password: 'Construction123!' });
+  const [form, setForm] = useState({ name: '', email: 'admin@demo.com', password: 'Construction123!', rememberMe: true });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -21,7 +20,7 @@ export default function AuthScreen({ onAuth, pendingInviteCode }) {
         ? { name: form.name, email: form.email, password: form.password }
         : { email: form.email, password: form.password };
       const data = await api(`/auth/${mode}`, { method: 'POST', body: payload, token: null });
-      onAuth(data);
+      onAuth(data, form.rememberMe);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -31,7 +30,6 @@ export default function AuthScreen({ onAuth, pendingInviteCode }) {
 
   return (
     <main className="auth-page">
-      <SiteBanner compact />
       <section className="auth-card">
         <div className="brand-lockup">
           <span className="brand-mark">PSG</span>
@@ -40,7 +38,6 @@ export default function AuthScreen({ onAuth, pendingInviteCode }) {
             <p>Construction project timelines, live task tracking, and Gantt schedules.</p>
           </div>
         </div>
-
 
         {pendingInviteCode && (
           <div className="notice-box auth-invite-note">
@@ -67,6 +64,16 @@ export default function AuthScreen({ onAuth, pendingInviteCode }) {
           <label>
             Password
             <input type="password" value={form.password} onChange={(event) => updateField('password', event.target.value)} placeholder="At least 8 characters" />
+          </label>
+          <label className="remember-me-row">
+            <span>
+              <input
+                type="checkbox"
+                checked={form.rememberMe}
+                onChange={(event) => updateField('rememberMe', event.target.checked)}
+              />
+              <span> Remember me on this device</span>
+            </span>
           </label>
           {error && <p className="error-box">{error}</p>}
           <button className="primary-button" disabled={loading}>{loading ? 'Working...' : mode === 'login' ? 'Login' : 'Create account'}</button>

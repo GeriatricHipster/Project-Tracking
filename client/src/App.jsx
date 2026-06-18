@@ -120,8 +120,8 @@ export default function App() {
     boot();
   }, []);
 
-  async function handleAuth(data) {
-    setToken(data.token);
+  async function handleAuth(data, rememberMe = true) {
+    setToken(data.token, rememberMe);
     setTokenState(data.token);
     setUser(data.user);
     const nextProjects = await loadProjects();

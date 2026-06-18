@@ -76,3 +76,7 @@ SLACK_INVITE_SETUP.md
 ```
 
 You no longer need `SLACK_BOT_TOKEN`, `users:read.email`, or Slack direct-message scopes for this version.
+
+
+## Latest update
+- Login screen includes a Remember me option and a transparent banner background.

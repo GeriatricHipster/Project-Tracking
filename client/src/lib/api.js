@@ -1,13 +1,34 @@
-export const API_BASE = import.meta.env.VITE_API_URL || '/api';
-export const TOKEN_KEY = 'buildtrack_token';
+const TOKEN_KEY = 'buildtrack_token';
+const SESSION_TOKEN_KEY = 'buildtrack_session_token';
 
-export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+function getStorage() {
+  if (typeof window === 'undefined') return null;
+  try {
+    return {
+      local: window.localStorage,
+      session: window.sessionStorage,
+    };
+  } catch {
+    return null;
+  }
 }
 
-export function setToken(token) {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
+export function getToken() {
+  const storage = getStorage();
+  if (!storage) return null;
+  return storage.session.getItem(SESSION_TOKEN_KEY) || storage.local.getItem(TOKEN_KEY);
+}
+
+export function setToken(token, rememberMe = true) {
+  const storage = getStorage();
+  if (!storage) return;
+
+  storage.local.removeItem(TOKEN_KEY);
+  storage.session.removeItem(SESSION_TOKEN_KEY);
+
+  if (!token) return;
+  if (rememberMe) storage.local.setItem(TOKEN_KEY, token);
+  else storage.session.setItem(SESSION_TOKEN_KEY, token);
 }
 
 function authHeaders(options = {}) {
@@ -33,7 +54,7 @@ export async function api(path, options = {}) {
     }
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${(import.meta.env.VITE_API_URL || '/api')}${path}`, {
     method: options.method || 'GET',
     headers,
     body
@@ -50,7 +71,7 @@ export async function api(path, options = {}) {
 }
 
 export async function downloadFromApi(path, fallbackName = 'download') {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${(import.meta.env.VITE_API_URL || '/api')}${path}`, {
     method: 'GET',
     headers: authHeaders()
   });
