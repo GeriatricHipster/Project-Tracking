@@ -2613,6 +2613,30 @@ html[data-theme='dark'] .theme-toggle-button {
   background: #ffffff;
   max-height: 74vh;
 }
+.cms-grid-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+  position: sticky;
+  top: 0;
+  z-index: 7;
+}
+
+.cms-grid-toolbar .muted {
+  margin: 0;
+}
+
+.cms-grid-empty {
+  padding: 1rem;
+  text-align: center;
+  color: #6b7280;
+  background: #ffffff;
+}
+
 
 .cms-grid-table {
   border-collapse: separate;
@@ -2633,6 +2657,11 @@ html[data-theme='dark'] .theme-toggle-button {
   z-index: 5;
   background: #f8fafc;
   font-size: 0.76rem;
+}
+
+.cms-grid-table thead tr:nth-child(2) th {
+  top: 34px;
+  z-index: 6;
 }
 
 .cms-grid-corner,
@@ -2656,6 +2685,35 @@ html[data-theme='dark'] .theme-toggle-button {
   width: 90px;
   padding: 0.45rem 0.35rem;
   text-align: center;
+}
+.cms-grid-filter-cell {
+  min-width: 90px;
+  width: 90px;
+  padding: 0.3rem 0.25rem;
+  text-align: center;
+  background: #f8fafc;
+}
+
+.cms-grid-filter-corner {
+  font-size: 0.72rem;
+}
+
+.cms-grid-filter-input {
+  width: 100%;
+  min-width: 100%;
+  height: 28px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0.2rem 0.35rem;
+  background: #ffffff;
+  box-shadow: none;
+  font-size: 0.74rem;
+  box-sizing: border-box;
+}
+
+.cms-grid-filter-input:focus {
+  outline: 2px solid rgba(239, 68, 68, 0.28);
+  outline-offset: 0;
 }
 
 .cms-grid-row-header {
@@ -2706,14 +2764,16 @@ html[data-theme='dark'] .cms-sheet-tabs button {
 
 html[data-theme='dark'] .cms-grid-wrap,
 html[data-theme='dark'] .cms-grid-input,
-html[data-theme='dark'] .cms-grid-editor {
+html[data-theme='dark'] .cms-grid-editor,
+html[data-theme='dark'] .cms-grid-filter-input {
   background: #0b1220;
   color: #e5e7eb;
 }
 
 html[data-theme='dark'] .cms-grid-table thead th,
 html[data-theme='dark'] .cms-grid-corner,
-html[data-theme='dark'] .cms-grid-row-header {
+html[data-theme='dark'] .cms-grid-row-header,
+html[data-theme='dark'] .cms-grid-filter-cell {
   background: #111827;
 }
 
@@ -2729,5 +2789,10 @@ html[data-theme='dark'] .cms-grid-table td {
 
   .cms-grid-table {
     min-width: 3300px;
+  }
+
+  .cms-grid-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
