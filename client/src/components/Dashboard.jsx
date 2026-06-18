@@ -1,12 +1,6 @@
 import { useMemo, useState } from 'react';
+import SiteMembersPanel from './SiteMembersPanel';
 import { addDays, formatDate, todayIso } from '../lib/dates';
-
-const dashboardTabs = [
-  { id: 'projects', label: 'Active projects' },
-  { id: 'completed', label: 'Completed' },
-  { id: 'assignments', label: 'Project assignments' },
-  { id: 'calendar', label: 'Calendar overview' }
-];
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const managerRoles = new Set(['owner', 'manager']);
@@ -131,6 +125,18 @@ export default function Dashboard({
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionProjectId, setActionProjectId] = useState(null);
+
+  const canManageSite = Boolean(user?.can_manage_site)
+    || managerRoles.has(user?.site_role)
+    || projects.some((project) => managerRoles.has(project.role));
+
+  const dashboardTabs = [
+    { id: 'projects', label: 'Active projects' },
+    { id: 'completed', label: 'Completed' },
+    { id: 'assignments', label: 'Projects' },
+    { id: 'calendar', label: 'Calendar overview' },
+    ...(canManageSite ? [{ id: 'site-members', label: 'Site members' }] : [])
+  ];
 
   const activeProjects = useMemo(
     () => projects.filter((project) => getLifecycleStatus(project) !== 'completed'),
@@ -306,35 +312,42 @@ export default function Dashboard({
   function renderProjectsTab() {
     return (
       <section className="page-grid">
-        <aside className="panel create-panel">
-          <h2>Create project</h2>
-          <form className="stack" onSubmit={submit}>
-            <label>
-              Project name
-              <input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Medical office buildout" />
-            </label>
-            <label>
-              Location
-              <input value={form.location} onChange={(event) => updateField('location', event.target.value)} placeholder="City, state" />
-            </label>
-            <label>
-              Description
-              <textarea value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Scope, client, phase, or notes" />
-            </label>
-            <div className="two-col">
+        {canManageSite ? (
+          <aside className="panel create-panel">
+            <h2>Create project</h2>
+            <form className="stack" onSubmit={submit}>
               <label>
-                Start
-                <input type="date" value={form.start_date} onChange={(event) => updateField('start_date', event.target.value)} />
+                Project name
+                <input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Medical office buildout" />
               </label>
               <label>
-                Finish
-                <input type="date" value={form.end_date} onChange={(event) => updateField('end_date', event.target.value)} />
+                Location
+                <input value={form.location} onChange={(event) => updateField('location', event.target.value)} placeholder="City, state" />
               </label>
-            </div>
-            {error && <p className="error-box">{error}</p>}
-            <button className="primary-button" disabled={saving}>{saving ? 'Creating...' : 'Create project'}</button>
-          </form>
-        </aside>
+              <label>
+                Description
+                <textarea value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Scope, client, phase, or notes" />
+              </label>
+              <div className="two-col">
+                <label>
+                  Start
+                  <input type="date" value={form.start_date} onChange={(event) => updateField('start_date', event.target.value)} />
+                </label>
+                <label>
+                  Finish
+                  <input type="date" value={form.end_date} onChange={(event) => updateField('end_date', event.target.value)} />
+                </label>
+              </div>
+              {error && <p className="error-box">{error}</p>}
+              <button className="primary-button" disabled={saving}>{saving ? 'Creating...' : 'Create project'}</button>
+            </form>
+          </aside>
+        ) : (
+          <aside className="panel create-panel">
+            <h2>Your access</h2>
+            <p className="muted">Viewer/editor accounts can only see projects they are assigned to. Site managers and owners can create projects and view the full portfolio.</p>
+          </aside>
+        )}
 
         <section className="panel project-list-panel">
           <div className="panel-heading">
@@ -381,8 +394,8 @@ export default function Dashboard({
         <section className="panel">
           <div className="panel-heading">
             <div>
-              <h2>Project assignments</h2>
-              <p>See which users are assigned to each active or completed project you can access.</p>
+              <h2>Projects and assignments</h2>
+              <p>See who is assigned to each active or completed project you can access.</p>
             </div>
           </div>
 
@@ -607,6 +620,7 @@ export default function Dashboard({
       {activeTab === 'completed' && renderCompletedTab()}
       {activeTab === 'assignments' && renderAssignmentsTab()}
       {activeTab === 'calendar' && renderCalendarTab()}
+      {activeTab === 'site-members' && canManageSite && <SiteMembersPanel currentUser={user} />}
     </main>
   );
 }

@@ -4,7 +4,7 @@ const allRoles = ['owner', 'manager', 'editor', 'viewer'];
 
 export default function MembersPanel({ currentUser, projectRole, members, canManage, onAddMember, onUpdateMember, onRemoveMember }) {
   const canOwner = projectRole === 'owner';
-  const [form, setForm] = useState({ email: '', role: 'editor', send_invite: true });
+  const [form, setForm] = useState({ email: '', role: 'editor' });
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
@@ -17,19 +17,9 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
     setNotice('');
     setSaving(true);
     try {
-      const result = await onAddMember(form);
-      if (form.send_invite) {
-        if (result?.invite?.sent) {
-          setNotice(`Member added. Invitation email sent to ${form.email}.`);
-        } else if (result?.invite?.warning) {
-          setNotice(result.invite.warning);
-        } else {
-          setNotice('Member added.');
-        }
-      } else {
-        setNotice('Member added without sending an email invitation.');
-      }
-      setForm({ email: '', role: 'editor', send_invite: true });
+      await onAddMember(form);
+      setNotice('Member added or updated.');
+      setForm({ email: '', role: 'editor' });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -41,7 +31,7 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
     <section className="panel side-panel">
       <div className="panel-heading compact-heading">
         <div>
-          <h2>Members</h2>
+          <h2>Project members</h2>
           <p>{members.length} user{members.length === 1 ? '' : 's'}</p>
         </div>
       </div>
@@ -52,24 +42,15 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
           <input disabled={!canManage} type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="teammate@company.com" />
         </label>
         <label>
-          Role
+          Project role
           <select disabled={!canManage} value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}>
             {roleOptions.map((role) => <option key={role} value={role}>{role}</option>)}
           </select>
         </label>
-        <label className="checkbox-row">
-          <input
-            checked={form.send_invite}
-            disabled={!canManage}
-            type="checkbox"
-            onChange={(event) => setForm((current) => ({ ...current, send_invite: event.target.checked }))}
-          />
-          <span>Send invitation email</span>
-        </label>
-        <p className="form-help">The user must already have a registered account. Email sending requires Resend or SMTP settings in Render.</p>
+        <p className="form-help">The user must already have a registered BuildTrack account.</p>
         {error && <p className="error-box">{error}</p>}
         {notice && <p className="notice-box">{notice}</p>}
-        <button className="primary-button compact" disabled={!canManage || saving}>{saving ? 'Adding...' : 'Add / update member'}</button>
+        <button className="primary-button compact" disabled={!canManage || saving}>{saving ? 'Saving...' : 'Add / update member'}</button>
       </form>
 
       <div className="member-list">

@@ -2,10 +2,10 @@ const bcrypt = require('bcryptjs');
 const { pool, tx } = require('./db');
 
 const demoTeam = [
-  { name: 'Site Superintendent', email: 'superintendent@demo.com', role: 'manager' },
-  { name: 'Electrical Foreman', email: 'electrical@demo.com', role: 'editor' },
-  { name: 'Plumbing Foreman', email: 'plumbing@demo.com', role: 'editor' },
-  { name: 'Owner Representative', email: 'owner@demo.com', role: 'viewer' }
+  { name: 'Site Superintendent', email: 'superintendent@demo.com', role: 'manager', site_role: 'manager' },
+  { name: 'Electrical Foreman', email: 'electrical@demo.com', role: 'editor', site_role: 'editor' },
+  { name: 'Plumbing Foreman', email: 'plumbing@demo.com', role: 'editor', site_role: 'editor' },
+  { name: 'Owner Representative', email: 'owner@demo.com', role: 'viewer', site_role: 'viewer' }
 ];
 
 const demoTasks = [
@@ -129,11 +129,12 @@ async function seed() {
 
     if (existingUser.rowCount) {
       userId = existingUser.rows[0].id;
+      await client.query('UPDATE users SET site_role = $1, access_status = $2 WHERE id = $3', ['owner', 'active', userId]);
     } else {
       const passwordHash = await bcrypt.hash('Construction123!', 12);
       const insertedUser = await client.query(
-        'INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id',
-        ['Demo Project Manager', email, passwordHash]
+        'INSERT INTO users (name, email, password_hash, site_role) VALUES ($1, $2, $3, $4) RETURNING id',
+        ['Demo Project Manager', email, passwordHash, 'owner']
       );
       userId = insertedUser.rows[0].id;
     }
@@ -144,11 +145,12 @@ async function seed() {
       let memberId;
       if (existingMember.rowCount) {
         memberId = existingMember.rows[0].id;
+        await client.query('UPDATE users SET site_role = $1, access_status = $2 WHERE id = $3', [member.site_role || 'viewer', 'active', memberId]);
       } else {
         const memberPasswordHash = await bcrypt.hash('Construction123!', 12);
         const insertedMember = await client.query(
-          'INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id',
-          [member.name, member.email, memberPasswordHash]
+          'INSERT INTO users (name, email, password_hash, site_role) VALUES ($1, $2, $3, $4) RETURNING id',
+          [member.name, member.email, memberPasswordHash, member.site_role || 'viewer']
         );
         memberId = insertedMember.rows[0].id;
       }

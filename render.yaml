@@ -19,8 +19,6 @@ services:
         value: production
       - key: APP_NAME
         value: BuildTrack Cloud
-      - key: EMAIL_PROVIDER
-        value: none
       - key: PGSSLMODE
         value: require
 
