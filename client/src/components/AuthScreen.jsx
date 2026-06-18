@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 
 export default function AuthScreen({ onAuth, pendingInviteCode }) {
@@ -6,6 +6,14 @@ export default function AuthScreen({ onAuth, pendingInviteCode }) {
   const [form, setForm] = useState({ name: '', email: 'admin@demo.com', password: 'Construction123!', rememberMe: true });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = window.localStorage.getItem('psg-login-remember-me');
+    if (saved === 'true' || saved === 'false') {
+      setForm((current) => ({ ...current, rememberMe: saved === 'true' }));
+    }
+  }, []);
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -20,6 +28,9 @@ export default function AuthScreen({ onAuth, pendingInviteCode }) {
         ? { name: form.name, email: form.email, password: form.password }
         : { email: form.email, password: form.password };
       const data = await api(`/auth/${mode}`, { method: 'POST', body: payload, token: null });
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('psg-login-remember-me', String(form.rememberMe));
+      }
       onAuth(data, form.rememberMe);
     } catch (err) {
       setError(err.message);
@@ -66,14 +77,12 @@ export default function AuthScreen({ onAuth, pendingInviteCode }) {
             <input type="password" value={form.password} onChange={(event) => updateField('password', event.target.value)} placeholder="At least 8 characters" />
           </label>
           <label className="remember-me-row">
-            <span>
-              <input
-                type="checkbox"
-                checked={form.rememberMe}
-                onChange={(event) => updateField('rememberMe', event.target.checked)}
-              />
-              <span> Remember me on this device</span>
-            </span>
+            <input
+              type="checkbox"
+              checked={form.rememberMe}
+              onChange={(event) => updateField('rememberMe', event.target.checked)}
+            />
+            <span>Remember me on this device</span>
           </label>
           {error && <p className="error-box">{error}</p>}
           <button className="primary-button" disabled={loading}>{loading ? 'Working...' : mode === 'login' ? 'Login' : 'Create account'}</button>
