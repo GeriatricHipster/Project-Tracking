@@ -1,6 +1,8 @@
 const TOKEN_KEY = 'buildtrack_token';
 const SESSION_TOKEN_KEY = 'buildtrack_session_token';
 
+export const API_BASE = import.meta.env.VITE_API_URL || '/api';
+
 function getStorage() {
   if (typeof window === 'undefined') return null;
   try {
@@ -54,7 +56,7 @@ export async function api(path, options = {}) {
     }
   }
 
-  const response = await fetch(`${(import.meta.env.VITE_API_URL || '/api')}${path}`, {
+  const response = await fetch(`${API_BASE}${path}`, {
     method: options.method || 'GET',
     headers,
     body
@@ -71,7 +73,7 @@ export async function api(path, options = {}) {
 }
 
 export async function downloadFromApi(path, fallbackName = 'download') {
-  const response = await fetch(`${(import.meta.env.VITE_API_URL || '/api')}${path}`, {
+  const response = await fetch(`${API_BASE}${path}`, {
     method: 'GET',
     headers: authHeaders()
   });

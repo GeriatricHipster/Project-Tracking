@@ -1,8 +1,8 @@
 import { io } from 'socket.io-client';
-import { API_BASE } from './api';
 
-const defaultSocketUrl = API_BASE.startsWith('http')
-  ? API_BASE.replace(/\/api\/?$/, '')
+const apiBase = import.meta.env.VITE_API_URL || '/api';
+const defaultSocketUrl = apiBase.startsWith('http')
+  ? apiBase.replace(/\/api\/?$/, '')
   : window.location.origin;
 export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || defaultSocketUrl;
 
