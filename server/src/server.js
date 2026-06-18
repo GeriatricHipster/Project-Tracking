@@ -492,10 +492,6 @@ async function hasPortfolioViewAccess(userId, db = { query }) {
     `SELECT 1
      FROM users
      WHERE id = $1 AND access_revoked = false AND site_role IN ('owner', 'manager')
-     UNION
-     SELECT 1
-     FROM project_members
-     WHERE user_id = $1 AND role IN ('owner', 'manager')
      LIMIT 1`,
     [userId]
   );
@@ -985,11 +981,6 @@ app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
            SELECT 1
            FROM users
            WHERE id = $1 AND access_revoked = false AND site_role IN ('owner', 'manager')
-         )
-         OR EXISTS (
-           SELECT 1
-           FROM project_members
-           WHERE user_id = $1 AND role IN ('owner', 'manager')
          )
        ) AS can_view_all
      ),

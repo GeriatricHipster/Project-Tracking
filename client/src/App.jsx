@@ -6,6 +6,10 @@ import SiteBanner from './components/SiteBanner';
 import { api, getToken, setToken } from './lib/api';
 
 export default function App() {
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === 'undefined') return 'light';
+    return window.localStorage.getItem('psg-theme') || 'light';
+  });
   const [token, setTokenState] = useState(getToken());
   const [user, setUser] = useState(null);
   const [projects, setProjects] = useState([]);
@@ -35,6 +39,13 @@ export default function App() {
     const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}`;
     window.history.replaceState(null, '', nextUrl);
   }
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    window.localStorage.setItem('psg-theme', theme);
+  }, [theme]);
 
   function openProjectFromUrl(nextProjects) {
     const requestedProjectId = projectIdFromUrl();
@@ -132,6 +143,10 @@ export default function App() {
     await loadProjects();
   }
 
+  function toggleTheme() {
+    setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
+  }
+
   function logout() {
     setToken(null);
     setTokenState(null);
@@ -140,32 +155,41 @@ export default function App() {
     setSelectedProjectId(null);
   }
 
+  const themeToggle = (
+    <button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
+      {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+    </button>
+  );
+
   if (booting) {
-    return <main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main>;
+    return <><button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button><main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main></>;
   }
 
   if (!token || !user) {
-    return <AuthScreen onAuth={handleAuth} pendingInviteCode={inviteCodeFromUrl()} />;
+    return <><button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button><AuthScreen onAuth={handleAuth} pendingInviteCode={inviteCodeFromUrl()} /></>;
   }
 
   if (selectedProjectId) {
-    return <ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} />;
+    return <><button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button><ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></>;
   }
 
   return (
-    <Dashboard
-      user={user}
-      projects={projects}
-      loading={loadingProjects}
-      onOpenProject={setSelectedProjectId}
-      onCreateProject={createProject}
-      onUpdateProject={updateProject}
-      onDeleteProject={deleteProject}
-      onAcceptInvite={acceptInviteCode}
-      inviteNotice={inviteNotice}
-      inviteError={inviteError}
-      onRefresh={loadProjects}
-      onLogout={logout}
-    />
+    <>
+      {themeToggle}
+      <Dashboard
+        user={user}
+        projects={projects}
+        loading={loadingProjects}
+        onOpenProject={setSelectedProjectId}
+        onCreateProject={createProject}
+        onUpdateProject={updateProject}
+        onDeleteProject={deleteProject}
+        onAcceptInvite={acceptInviteCode}
+        inviteNotice={inviteNotice}
+        inviteError={inviteError}
+        onRefresh={loadProjects}
+        onLogout={logout}
+      />
+    </>
   );
 }
