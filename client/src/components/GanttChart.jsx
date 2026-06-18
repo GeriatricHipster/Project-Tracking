@@ -2,13 +2,13 @@ import { useRef, useState } from 'react';
 import { addDays, daysBetween, formatDate, maxIsoDate, minIsoDate, todayIso } from '../lib/dates';
 
 function getScale(totalDays) {
-  if (totalDays > 180) return { stepDays: 14, unitWidth: 72, label: '2 wk' };
-  if (totalDays > 90) return { stepDays: 7, unitWidth: 72, label: 'week' };
-  if (totalDays > 45) return { stepDays: 3, unitWidth: 56, label: '3 day' };
-  return { stepDays: 1, unitWidth: 44, label: 'day' };
+  if (totalDays > 180) return { stepDays: 14, unitWidth: 84, label: '2 wk' };
+  if (totalDays > 90) return { stepDays: 7, unitWidth: 86, label: 'week' };
+  if (totalDays > 45) return { stepDays: 3, unitWidth: 66, label: '3 day' };
+  return { stepDays: 1, unitWidth: 54, label: 'day' };
 }
 
-const zoomLevels = [0.8, 1, 1.25, 1.5, 1.85];
+const zoomLevels = [0.8, 1, 1.25, 1.55, 1.9, 2.25];
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -16,14 +16,17 @@ function clamp(value, min, max) {
 
 function taskMeta(task) {
   const parts = [];
+  if (task.trade) parts.push(task.trade);
   if (task.vendor) parts.push(task.vendor);
-  if (task.assigned_to_name) parts.push(task.assigned_to_name);
+  if (task.security_team_member) parts.push(`Security: ${task.security_team_member}`);
+  if (task.pm) parts.push(`PM: ${task.pm}`);
+  if (task.assigned_to_name) parts.push(`Assignee: ${task.assigned_to_name}`);
   return parts.join(' · ');
 }
 
 export default function GanttChart({ project, tasks, dependencies, onEditTask }) {
   const scrollRef = useRef(null);
-  const [zoomIndex, setZoomIndex] = useState(1);
+  const [zoomIndex, setZoomIndex] = useState(2);
   const allStartDates = [project.start_date, ...tasks.map((task) => task.start_date)];
   const allEndDates = [project.end_date, ...tasks.map((task) => task.end_date)];
   const rangeStart = minIsoDate(allStartDates) || project.start_date;
@@ -33,10 +36,10 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
   const zoom = zoomLevels[zoomIndex];
   const scale = { ...baseScale, unitWidth: Math.round(baseScale.unitWidth * zoom) };
   const totalUnits = Math.ceil(totalDays / scale.stepDays);
-  const chartWidth = Math.max(1120, totalUnits * scale.unitWidth + 160);
-  const rowHeight = 58;
-  const headerHeight = 86;
-  const chartHeight = headerHeight + Math.max(tasks.length, 1) * rowHeight + 12;
+  const chartWidth = Math.max(1600, totalUnits * scale.unitWidth + 220);
+  const rowHeight = 66;
+  const headerHeight = 104;
+  const chartHeight = headerHeight + Math.max(tasks.length, 1) * rowHeight + 18;
   const today = todayIso();
   const todayOffset = today >= rangeStart && today <= rangeEnd
     ? (daysBetween(rangeStart, today) / scale.stepDays) * scale.unitWidth
@@ -54,7 +57,7 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
   function getTaskPosition(task) {
     const left = (daysBetween(rangeStart, task.start_date) / scale.stepDays) * scale.unitWidth;
     const duration = Math.max(1, daysBetween(task.start_date, task.end_date) + 1);
-    const width = Math.max(42, (duration / scale.stepDays) * scale.unitWidth);
+    const width = Math.max(56, (duration / scale.stepDays) * scale.unitWidth);
     const rowIndex = taskIndex.get(task.id) || 0;
     const y = headerHeight + rowIndex * rowHeight + rowHeight / 2;
     return { left, width, right: left + width, y };
@@ -68,14 +71,25 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
     setZoomIndex((current) => Math.min(zoomLevels.length - 1, current + 1));
   }
 
+  function resetZoom() {
+    setZoomIndex(2);
+  }
+
   function scrollToToday() {
     if (!scrollRef.current || todayOffset === null) return;
-    const target = clamp(todayOffset - scrollRef.current.clientWidth / 2, 0, chartWidth);
+    const maxLeft = Math.max(0, chartWidth - scrollRef.current.clientWidth);
+    const target = clamp(todayOffset - scrollRef.current.clientWidth / 2, 0, maxLeft);
     scrollRef.current.scrollTo({ left: target, behavior: 'smooth' });
   }
 
   function scrollToStart() {
     scrollRef.current?.scrollTo({ left: 0, behavior: 'smooth' });
+  }
+
+  function scrollByDays(days) {
+    if (!scrollRef.current) return;
+    const pixels = (days / scale.stepDays) * scale.unitWidth;
+    scrollRef.current.scrollBy({ left: pixels, behavior: 'smooth' });
   }
 
   return (
@@ -87,13 +101,16 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
         </div>
         <div className="gantt-toolbar" aria-label="Gantt navigation controls">
           <button className="ghost-button compact" onClick={scrollToStart} type="button">Start</button>
+          <button className="ghost-button compact" onClick={() => scrollByDays(-30)} type="button">Prev 30 days</button>
           <button className="ghost-button compact" onClick={scrollToToday} disabled={todayOffset === null} type="button">Today</button>
+          <button className="ghost-button compact" onClick={() => scrollByDays(30)} type="button">Next 30 days</button>
           <button className="ghost-button compact" onClick={zoomOut} disabled={zoomIndex === 0} type="button">Zoom out</button>
+          <button className="ghost-button compact" onClick={resetZoom} type="button">Reset zoom</button>
           <button className="ghost-button compact" onClick={zoomIn} disabled={zoomIndex === zoomLevels.length - 1} type="button">Zoom in</button>
         </div>
       </div>
 
-      <p className="gantt-navigation-help">Scroll sideways to move through the schedule. Click a task name or bar to edit it.</p>
+      <p className="gantt-navigation-help">Use the buttons or horizontal scroll bar to move through the schedule. Click a task name or bar to edit it.</p>
 
       <div className="gantt-shell expanded-gantt-shell">
         <div className="gantt-label-column" style={{ paddingTop: headerHeight }}>
@@ -156,7 +173,7 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
 
             {tasks.map((task) => {
               const position = getTaskPosition(task);
-              const top = position.y - 18;
+              const top = position.y - 21;
               return (
                 <button
                   className={`gantt-bar expanded status-bg-${task.status}`}
@@ -168,7 +185,7 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
                     backgroundColor: task.color || '#2563eb'
                   }}
                   onClick={() => onEditTask?.(task)}
-                  title={`${task.name}: ${formatDate(task.start_date)} to ${formatDate(task.end_date)} · ${task.vendor || 'No vendor'} · ${task.percent_complete}% complete`}
+                  title={`${task.name}: ${formatDate(task.start_date)} to ${formatDate(task.end_date)} · ${taskMeta(task) || 'No team/vendor assigned'} · ${task.percent_complete}% complete`}
                   type="button"
                 >
                   <span className="gantt-progress" style={{ width: `${task.percent_complete}%` }} />

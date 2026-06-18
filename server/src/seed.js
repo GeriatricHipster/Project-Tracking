@@ -12,7 +12,7 @@ const demoTasks = [
   {
     name: 'Mobilization and site setup',
     description: 'Temporary fencing, trailer setup, safety signage, utilities, and logistics plan.',
-    trade: 'General Conditions',
+    trade: 'CCure & Cameras',
     status: 'complete',
     priority: 'high',
     start_date: '2026-06-01',
@@ -23,7 +23,7 @@ const demoTasks = [
   {
     name: 'Demolition and selective removals',
     description: 'Interior removals, floor prep, and debris haul-off.',
-    trade: 'Demolition',
+    trade: 'Cameras',
     status: 'complete',
     priority: 'high',
     start_date: '2026-06-08',
@@ -34,7 +34,7 @@ const demoTasks = [
   {
     name: 'Underground plumbing rough-in',
     description: 'Sawcut, trench, underground waste and water lines, backfill.',
-    trade: 'Plumbing',
+    trade: 'CCure',
     status: 'in_progress',
     priority: 'critical',
     start_date: '2026-06-22',
@@ -45,7 +45,7 @@ const demoTasks = [
   {
     name: 'Electrical rough-in',
     description: 'Branch conduit, panels, homeruns, and above-ceiling rough-in.',
-    trade: 'Electrical',
+    trade: 'CCure',
     status: 'not_started',
     priority: 'normal',
     start_date: '2026-07-06',
@@ -56,7 +56,7 @@ const demoTasks = [
   {
     name: 'HVAC ductwork and equipment rough-in',
     description: 'Duct mains, VAV boxes, refrigerant lines, equipment pads.',
-    trade: 'Mechanical',
+    trade: 'Cameras',
     status: 'not_started',
     priority: 'normal',
     start_date: '2026-07-06',
@@ -67,7 +67,7 @@ const demoTasks = [
   {
     name: 'Framing and drywall hang',
     description: 'Metal stud framing, backing, drywall hanging, and inspections.',
-    trade: 'Drywall',
+    trade: 'CCure & Cameras',
     status: 'not_started',
     priority: 'normal',
     start_date: '2026-07-20',
@@ -78,7 +78,7 @@ const demoTasks = [
   {
     name: 'Drywall finish and paint primer',
     description: 'Tape, texture, sand, prime walls and ceilings.',
-    trade: 'Finishes',
+    trade: 'Cameras',
     status: 'not_started',
     priority: 'normal',
     start_date: '2026-08-10',
@@ -89,7 +89,7 @@ const demoTasks = [
   {
     name: 'Ceilings, flooring, and casework',
     description: 'ACT grid, flooring install, millwork and casework.',
-    trade: 'Finishes',
+    trade: 'Cameras',
     status: 'not_started',
     priority: 'normal',
     start_date: '2026-08-24',
@@ -100,7 +100,7 @@ const demoTasks = [
   {
     name: 'MEP trim and startup',
     description: 'Device trim, plumbing fixtures, HVAC controls, testing and balancing.',
-    trade: 'MEP',
+    trade: 'CCure & Cameras',
     status: 'not_started',
     priority: 'high',
     start_date: '2026-09-08',
@@ -111,7 +111,7 @@ const demoTasks = [
   {
     name: 'Punch list, inspections, and turnover',
     description: 'Final inspections, owner punch, closeout documents, training, and turnover.',
-    trade: 'Closeout',
+    trade: 'CCure & Cameras',
     status: 'not_started',
     priority: 'critical',
     start_date: '2026-09-23',

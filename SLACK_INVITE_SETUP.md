@@ -1,4 +1,4 @@
-# Slack direct message invitation setup
+# Slack channel invitation setup
 
 This version sends the project invitation code when a project manager or project owner adds or updates a project member. The separate Slack invite panel was removed.
 
@@ -8,17 +8,18 @@ The normal flow is now:
 2. Use **Project members**.
 3. Add or update the member.
 4. BuildTrack creates a one-use project invite code for that member.
-5. BuildTrack sends the code to that person as a Slack direct message.
+5. BuildTrack posts the code into your chosen Slack channel.
+6. The Slack message calls out the assigned BuildTrack email.
 
-The user still needs a BuildTrack account. The Slack email and the BuildTrack email should match.
+The user still needs a BuildTrack account. The code is targeted to that BuildTrack user/email.
 
 ---
 
 ## What you need from Slack
 
-Direct messages require a Slack **Bot User OAuth Token**. This is different from the older Slack webhook.
+You need a Slack **Incoming Webhook**. A webhook is a special Slack URL that lets BuildTrack post a message into one Slack channel.
 
-A webhook can post into a channel. A bot token can look up a Slack user by email, open a direct message, and send a message.
+You do **not** need Slack direct messages, `SLACK_BOT_TOKEN`, or the `users:read.email` permission for this version.
 
 ---
 
@@ -49,81 +50,35 @@ BuildTrack Cloud
 
 ---
 
-## Step 2: Add bot permissions
+## Step 2: Turn on Incoming Webhooks
 
-In the Slack app settings, go to:
+Inside the Slack app settings:
 
-```text
-OAuth & Permissions
-```
+1. Click **Incoming Webhooks** in the left menu.
+2. Turn **Activate Incoming Webhooks** to **On**.
+3. Click **Add New Webhook to Workspace**.
+4. Choose the Slack channel where BuildTrack should post project invitation codes.
 
-Scroll to:
-
-```text
-Bot Token Scopes
-```
-
-Add these scopes:
+A good channel name would be:
 
 ```text
-chat:write
-im:write
-users:read
-users:read.email
+#project-invites
 ```
 
-What these mean in plain language:
+5. Click **Allow**.
+6. Copy the webhook URL Slack gives you.
+
+The webhook URL should start with:
 
 ```text
-chat:write        lets BuildTrack send a Slack message
-im:write          lets BuildTrack open a direct message
-users:read        lets BuildTrack look up Slack users
-users:read.email  lets BuildTrack find a Slack user by email address
+https://hooks.slack.com/services/
 ```
+
+Treat this URL like a password. Do not paste it into GitHub.
 
 ---
 
-## Step 3: Install or reinstall the Slack app
-
-Still in **OAuth & Permissions**, click:
-
-```text
-Install to Workspace
-```
-
-If the app was already installed, Slack may show:
-
-```text
-Reinstall to Workspace
-```
-
-Use that after adding new scopes.
-
-Approve the installation.
-
----
-
-## Step 4: Copy the bot token
-
-After installation, Slack shows a token called:
-
-```text
-Bot User OAuth Token
-```
-
-It usually starts with:
-
-```text
-xoxb-
-```
-
-Copy that full token.
-
-Treat this token like a password. Do not paste it into GitHub.
-
----
-
-# Part 2: Add the Slack token to Render
+# Part 2: Add the Slack webhook to Render
 
 Open Render and go to your BuildTrack web service, usually:
 
@@ -141,13 +96,13 @@ Add these environment variables:
 
 | Key | Value |
 |---|---|
-| `SLACK_BOT_TOKEN` | Paste the Slack bot token that starts with `xoxb-` |
+| `SLACK_WEBHOOK_URL` | Paste the Slack webhook URL that starts with `https://hooks.slack.com/services/` |
 | `APP_URL` | Your live BuildTrack app URL |
 
 Example:
 
 ```text
-SLACK_BOT_TOKEN=xoxb-your-slack-token
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/your/webhook/url
 APP_URL=https://buildtrack-cloud.onrender.com
 ```
 
@@ -165,13 +120,6 @@ Not this:
 https://buildtrack-cloud.onrender.com/
 ```
 
-Optional fallback if you still want channel messages when direct messages fail:
-
-```text
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/your/webhook/url
-SLACK_DM_FALLBACK_TO_WEBHOOK=true
-```
-
 Then click:
 
 ```text
@@ -186,50 +134,48 @@ Save, rebuild, and deploy
 2. Open a project.
 3. Find **Project members**.
 4. Add or update a registered user.
-5. Use an email address that matches that person's Slack account.
+5. Use the email address registered in BuildTrack.
 6. Click **Add / update member**.
 
-A notice should appear telling you whether Slack sent the direct message.
+A notice should appear telling you whether the Slack channel invitation was sent.
 
-The assigned person should receive a Slack DM from the BuildTrack Slack app.
+The Slack channel message will include:
+
+- Project name
+- Project location
+- Project dates
+- Assigned BuildTrack email
+- Project role
+- Invitation code
+- Link to accept the invitation
 
 ---
 
 # Troubleshooting
 
-## The project member was updated, but no Slack DM was sent
+## The project member was updated, but no Slack message was sent
 
 Check Render for this exact key:
 
 ```text
-SLACK_BOT_TOKEN
+SLACK_WEBHOOK_URL
 ```
 
 Make sure you clicked **Save, rebuild, and deploy** after adding it.
 
-## Slack says `users_not_found`
+## The message went to the wrong Slack channel
 
-The email in BuildTrack probably does not match the person's Slack account email.
+A Slack Incoming Webhook is tied to the channel you selected when you created it.
 
-Fix this by either:
+Fix:
 
-1. Registering the BuildTrack user with the same email used in Slack, or
-2. Updating the user's email in Slack/your company directory.
-
-## Slack says `missing_scope`
-
-Your Slack app is missing one of the required bot scopes.
-
-Go back to Slack and add:
-
-```text
-chat:write
-im:write
-users:read
-users:read.email
-```
-
-Then reinstall the Slack app to the workspace and update Render if Slack gives you a new token.
+1. Go back to the Slack app.
+2. Open **Incoming Webhooks**.
+3. Click **Add New Webhook to Workspace**.
+4. Choose the correct channel.
+5. Copy the new webhook URL.
+6. Replace `SLACK_WEBHOOK_URL` in Render.
+7. Click **Save, rebuild, and deploy**.
 
 ## The link opens the wrong website
 
@@ -244,4 +190,3 @@ It should be your live BuildTrack URL.
 ## Owner role did not get an invite code
 
 BuildTrack does not create owner invite codes. Owner access is powerful, so owner assignment is handled directly in the app.
-

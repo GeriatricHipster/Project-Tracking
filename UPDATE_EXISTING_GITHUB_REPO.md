@@ -6,17 +6,19 @@ Use these steps if you already uploaded an older BuildTrack Cloud version.
 
 This version adds or updates:
 
-- Slack direct-message invite codes sent from the Project Members add/update workflow
+- Slack channel invite codes sent from the Project Members add/update workflow
 - Separate Slack invite-code panel removed from the project screen
-- Vendor dropdown on the Add/Edit Task form
-- Bigger Gantt chart with zoom, Start, and Today controls
+- Project notes section editable by assigned viewers, editors, managers, and owners
+- Viewers can edit project notes only
+- Vendor dropdown now defaults to blank
+- Trade dropdown with CCure, Cameras, and CCure & Cameras
+- Security Team Member dropdown with Derick, Eric, James, Justin, Kenna, Kyra, Ryan, and Suvam
+- PM dropdown with Kurt and Austin
+- Bigger Gantt chart with zoom, Start, Today, Prev/Next 30-day pan buttons, and larger rows
 - Header/banner image on login, dashboard, project, and loading pages
 - Gantt checklist
 - Drag-and-drop blueprint uploads
 - Site member management
-- Revoke/restore site access
-- Delete user account
-- Change site role
 - Projects tab showing who is assigned to each project
 
 ## Update steps without Terminal
@@ -30,7 +32,7 @@ This version adds or updates:
 7. Use this commit message:
 
 ```text
-Add Slack DM invites vendor dropdown banner and larger Gantt
+Add Slack channel invites notes task dropdowns and larger Gantt
 ```
 
 8. Click **Commit changes**.
@@ -45,11 +47,12 @@ Open the app and check:
 - Projects tab
 - Calendar overview tab
 - Site Members tab, visible only to site managers and owners
+- Editable Project Notes section inside a project
 - Gantt checklist inside a project
 - Blueprint drag-and-drop upload inside a project
-- Vendor dropdown when adding or editing a task
-- Bigger Gantt chart controls: Start, Today, Zoom out, Zoom in
-- Project Members add/update flow
+- Trade, Vendor, Security Team Member, and PM dropdowns when adding or editing a task
+- Bigger Gantt chart controls: Start, Today, Prev/Next 30 days, Zoom out, Reset zoom, Zoom in
+- Project Members add/update flow posting a Slack channel invitation
 
 ## Slack setup
 
@@ -59,16 +62,11 @@ Open:
 SLACK_INVITE_SETUP.md
 ```
 
-For direct messages, add these environment variables in Render:
-
-```text
-SLACK_BOT_TOKEN
-APP_URL
-```
-
-Optional channel fallback variables:
+For Slack channel messages, add these environment variables in Render:
 
 ```text
 SLACK_WEBHOOK_URL
-SLACK_DM_FALLBACK_TO_WEBHOOK
+APP_URL
 ```
+
+You do not need `SLACK_BOT_TOKEN` or direct-message scopes for this version.

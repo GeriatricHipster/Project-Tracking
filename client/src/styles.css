@@ -2034,3 +2034,66 @@ th {
     justify-content: flex-start;
   }
 }
+
+/* Project notes, task dropdowns, and larger Gantt refinements */
+.project-notes-panel {
+  border-left: 6px solid #2563eb;
+}
+
+.project-notes-textarea {
+  min-height: 160px;
+  line-height: 1.55;
+}
+
+.notes-save-button {
+  justify-self: start;
+}
+
+.expanded-gantt-panel {
+  padding: 1.45rem;
+}
+
+.expanded-gantt-shell {
+  grid-template-columns: 420px minmax(0, 1fr);
+  min-height: 560px;
+}
+
+.expanded-gantt-scroll {
+  overflow: auto;
+  max-height: 78vh;
+}
+
+.gantt-label-row.expanded {
+  height: 66px;
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+}
+
+.gantt-header-row.expanded,
+.gantt-header-unit {
+  height: 104px;
+}
+
+.gantt-bar.expanded {
+  height: 42px;
+  font-size: 0.94rem;
+  border-radius: 16px;
+}
+
+.gantt-toolbar {
+  max-width: 760px;
+}
+
+.table-scroll table {
+  min-width: 1420px;
+}
+
+@media (max-width: 760px) {
+  .expanded-gantt-shell {
+    grid-template-columns: 280px minmax(0, 1fr);
+  }
+
+  .project-notes-textarea {
+    min-height: 130px;
+  }
+}

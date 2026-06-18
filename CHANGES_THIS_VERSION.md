@@ -1,16 +1,21 @@
 # Changes in this version
 
-This version updates BuildTrack so Slack invitation codes are part of the normal project member workflow instead of a separate Slack invite panel.
+This version updates BuildTrack so Slack invitation codes are posted to a specific Slack channel during the normal project member add/update workflow.
 
-## Added
+## Added or changed
 
-- Automatic Slack invitation code creation when a project manager or owner adds/updates a project member.
-- Slack direct-message delivery using a Slack Bot User OAuth Token.
-- One-use, targeted invite codes for the assigned BuildTrack user/email.
-- Optional Slack channel fallback if you still want webhook posting as a backup.
-- Vendor dropdown on tasks with: Everbase, IES, Ideacom, Utah Yamas, Convergint, Pavion, Beacon, Stone Security, and S101.
-- Larger Gantt chart with zoom controls, Start/Today buttons, bigger rows, wider horizontal scrolling, and vendor/assignee task labels.
-- Header/banner image across login, dashboard, project, and loading pages.
+- Slack channel invitation code posting when a project manager or owner adds/updates a project member.
+- The Slack message calls out the assigned BuildTrack email.
+- Direct Slack DM logic removed from the active workflow.
+- Project notes section inside each project.
+- Assigned viewers, editors, managers, and owners can edit project notes.
+- Viewers can edit project notes only; other schedule controls remain read-only.
+- Vendor dropdown now defaults to blank.
+- Trade is now a dropdown with: CCure, Cameras, CCure & Cameras.
+- Security Team Member dropdown with: Derick, Eric, James, Justin, Kenna, Kyra, Ryan, Suvam.
+- PM dropdown with: Kurt, Austin.
+- Larger Gantt chart with bigger rows, wider labels, Prev/Next 30-day pan buttons, reset zoom, and more task details.
+- The uploaded banner image is now used as the app header/banner image.
 
 ## Removed from the user interface
 
@@ -25,18 +30,11 @@ This version updates BuildTrack so Slack invitation codes are part of the normal
 
 ## Slack setup required
 
-For direct messages, add these Render environment variables after deployment:
+For Slack channel invitations, add these Render environment variables after deployment:
 
 ```text
-SLACK_BOT_TOKEN=your Slack Bot User OAuth Token
+SLACK_WEBHOOK_URL=your Slack Incoming Webhook URL
 APP_URL=your live BuildTrack app URL
-```
-
-Optional fallback:
-
-```text
-SLACK_WEBHOOK_URL=your Slack incoming webhook URL
-SLACK_DM_FALLBACK_TO_WEBHOOK=true
 ```
 
 Plain-English setup steps are in:

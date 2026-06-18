@@ -7,7 +7,7 @@ function describeSlack(result, baseMessage) {
   const code = result?.invite?.formatted_code;
   if (!slack) return baseMessage;
   if (slack.sent) {
-    const destination = slack.mode === 'direct_message' ? 'Slack direct message' : 'Slack channel message';
+    const destination = 'Slack channel invitation';
     const warning = slack.warning ? ` Note: ${slack.warning}` : '';
     return `${baseMessage} ${destination} sent${code ? ` with code ${code}` : ''}.${warning}`;
   }
@@ -74,7 +74,7 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
             {roleOptions.map((role) => <option key={role} value={role}>{role}</option>)}
           </select>
         </label>
-        <p className="form-help">The user must already have a BuildTrack account. When Slack is set up, an invite code is sent automatically after add/update.</p>
+        <p className="form-help">The user must already have a BuildTrack account. When Slack is set up, an invite code is posted to the project invite channel after add/update and calls out the assigned BuildTrack email.</p>
         {error && <p className="error-box">{error}</p>}
         {notice && <p className="notice-box">{notice}</p>}
         <button className="primary-button compact" disabled={!canManage || saving}>{saving ? 'Adding...' : 'Add / update member'}</button>

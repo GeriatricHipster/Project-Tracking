@@ -15,7 +15,10 @@ const priorityOptions = [
   ['critical', 'Critical']
 ];
 
+const tradeOptions = ['CCure', 'Cameras', 'CCure & Cameras'];
 const vendorOptions = ['Everbase', 'IES', 'Ideacom', 'Utah Yamas', 'Convergint', 'Pavion', 'Beacon', 'Stone Security', 'S101'];
+const securityTeamOptions = ['Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam'];
+const pmOptions = ['Kurt', 'Austin'];
 
 function blankTask(project) {
   const start = project?.start_date || todayIso();
@@ -23,7 +26,9 @@ function blankTask(project) {
     name: '',
     description: '',
     trade: '',
-    vendor: vendorOptions[0],
+    vendor: '',
+    security_team_member: '',
+    pm: '',
     assigned_to: '',
     parent_task_id: '',
     status: 'not_started',
@@ -47,7 +52,9 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         name: editingTask.name || '',
         description: editingTask.description || '',
         trade: editingTask.trade || '',
-        vendor: editingTask.vendor || vendorOptions[0],
+        vendor: editingTask.vendor || '',
+        security_team_member: editingTask.security_team_member || '',
+        pm: editingTask.pm || '',
         assigned_to: editingTask.assigned_to || '',
         parent_task_id: editingTask.parent_task_id || '',
         status: editingTask.status || 'not_started',
@@ -80,6 +87,10 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     try {
       await onSave({
         ...form,
+        trade: form.trade || null,
+        vendor: form.vendor || null,
+        security_team_member: form.security_team_member || null,
+        pm: form.pm || null,
         assigned_to: form.assigned_to || null,
         parent_task_id: form.parent_task_id || null,
         percent_complete: Number(form.percent_complete),
@@ -98,7 +109,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       <div className="panel-heading">
         <div>
           <h2>{editingTask ? 'Edit task' : 'Add task'}</h2>
-          <p>{canEdit ? 'Update dates, vendor, status, responsibility, and progress.' : 'Viewer access is read-only.'}</p>
+          <p>{canEdit ? 'Update dates, vendor, status, responsibility, and progress.' : 'Viewer access is read-only except for project notes.'}</p>
         </div>
         {editingTask && <button className="ghost-button" onClick={onCancel} type="button">Cancel edit</button>}
       </div>
@@ -112,11 +123,15 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         <div className="three-col">
           <label>
             Trade
-            <input disabled={!canEdit} value={form.trade} onChange={(event) => updateField('trade', event.target.value)} placeholder="Access control, Electrical, Security" />
+            <select disabled={!canEdit} value={form.trade} onChange={(event) => updateField('trade', event.target.value)}>
+              <option value="">Select trade</option>
+              {tradeOptions.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
+            </select>
           </label>
           <label>
             Vendor
             <select disabled={!canEdit} value={form.vendor} onChange={(event) => updateField('vendor', event.target.value)}>
+              <option value="">Select vendor</option>
               {vendorOptions.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
             </select>
           </label>
@@ -127,6 +142,30 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
               {members.map((member) => (
                 <option key={member.user_id} value={member.user_id}>{member.name}</option>
               ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="three-col">
+          <label>
+            Security Team Member
+            <select disabled={!canEdit} value={form.security_team_member} onChange={(event) => updateField('security_team_member', event.target.value)}>
+              <option value="">Select security team member</option>
+              {securityTeamOptions.map((member) => <option key={member} value={member}>{member}</option>)}
+            </select>
+          </label>
+          <label>
+            PM
+            <select disabled={!canEdit} value={form.pm} onChange={(event) => updateField('pm', event.target.value)}>
+              <option value="">Select PM</option>
+              {pmOptions.map((pm) => <option key={pm} value={pm}>{pm}</option>)}
+            </select>
+          </label>
+          <label>
+            Parent task
+            <select disabled={!canEdit} value={form.parent_task_id} onChange={(event) => updateField('parent_task_id', event.target.value)}>
+              <option value="">None</option>
+              {parentTaskOptions.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}
             </select>
           </label>
         </div>
@@ -166,14 +205,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
           </label>
         </div>
 
-        <div className="three-col">
-          <label>
-            Parent task
-            <select disabled={!canEdit} value={form.parent_task_id} onChange={(event) => updateField('parent_task_id', event.target.value)}>
-              <option value="">None</option>
-              {parentTaskOptions.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}
-            </select>
-          </label>
+        <div className="two-col">
           <label>
             Color
             <input disabled={!canEdit} type="color" value={form.color} onChange={(event) => updateField('color', event.target.value)} />

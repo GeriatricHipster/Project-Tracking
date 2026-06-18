@@ -18,8 +18,6 @@ const PORT = Number(process.env.PORT || 4000);
 const JWT_SECRET = process.env.JWT_SECRET || 'local-development-secret-change-me';
 const APP_NAME = process.env.APP_NAME || 'BuildTrack Cloud';
 const SLACK_WEBHOOK_URL = String(process.env.SLACK_WEBHOOK_URL || '').trim();
-const SLACK_BOT_TOKEN = String(process.env.SLACK_BOT_TOKEN || '').trim();
-const SLACK_DM_FALLBACK_TO_WEBHOOK = String(process.env.SLACK_DM_FALLBACK_TO_WEBHOOK || 'false').trim().toLowerCase() === 'true';
 const SLACK_ASSIGNMENT_INVITE_DAYS = Number(process.env.SLACK_ASSIGNMENT_INVITE_DAYS || 7);
 const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
   .split(',')
@@ -40,6 +38,9 @@ const priorities = new Set(['low', 'normal', 'high', 'critical']);
 const roles = new Set(['owner', 'manager', 'editor', 'viewer']);
 const inviteRoles = new Set(['manager', 'editor', 'viewer']);
 const vendors = new Set(['Everbase', 'IES', 'Ideacom', 'Utah Yamas', 'Convergint', 'Pavion', 'Beacon', 'Stone Security', 'S101']);
+const trades = new Set(['CCure', 'Cameras', 'CCure & Cameras']);
+const securityTeamMembers = new Set(['Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam']);
+const projectManagers = new Set(['Kurt', 'Austin']);
 const siteRoles = new Set(['owner', 'manager', 'member']);
 const dependencyTypes = new Set(['FS', 'SS', 'FF', 'SF']);
 const managerSiteRoles = new Set(['owner', 'manager']);
@@ -183,58 +184,16 @@ function slackSafeText(value, fallback = 'Not set') {
   return text || fallback;
 }
 
-async function slackApiJson(method, payload) {
-  if (!SLACK_BOT_TOKEN) {
-    throw httpError(400, 'Slack direct messages require SLACK_BOT_TOKEN in Render. Add a Slack Bot User OAuth Token first.');
-  }
-
-  const response = await fetch(`https://slack.com/api/${method}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
-      'Content-Type': 'application/json; charset=utf-8'
-    },
-    body: JSON.stringify(payload || {})
-  });
-
-  const data = await response.json().catch(() => null);
-  if (!response.ok || !data?.ok) {
-    const errorCode = data?.error || `HTTP ${response.status}`;
-    throw httpError(502, `Slack ${method} failed: ${errorCode}`);
-  }
-  return data;
-}
-
-async function slackApiGet(method, params = {}) {
-  if (!SLACK_BOT_TOKEN) {
-    throw httpError(400, 'Slack direct messages require SLACK_BOT_TOKEN in Render. Add a Slack Bot User OAuth Token first.');
-  }
-
-  const url = new URL(`https://slack.com/api/${method}`);
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value);
-  }
-
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}` }
-  });
-
-  const data = await response.json().catch(() => null);
-  if (!response.ok || !data?.ok) {
-    const errorCode = data?.error || `HTTP ${response.status}`;
-    throw httpError(502, `Slack ${method} failed: ${errorCode}`);
-  }
-  return data;
-}
-
 function buildSlackInvitePayload({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
   const formattedCode = formatInviteCode(invite.code);
   const inviteUrl = buildInviteUrl(req, invite.code);
   const expiresAt = invite.expires_at ? new Date(invite.expires_at).toLocaleString('en-US', { timeZone: 'UTC', timeZoneName: 'short' }) : 'No expiration';
   const roleText = assignmentRole || invite.role;
+  const targetEmail = targetUser?.email ? normalizeEmail(targetUser.email) : '';
+  const targetName = slackSafeText(targetUser?.name, 'Assigned user');
+  const targetCallout = targetEmail ? `<mailto:${targetEmail}|${targetEmail}>` : targetName;
   const targetIntro = targetUser
-    ? `You have been assigned to *${slackSafeText(project.name)}* as *${roleText}*.`
+    ? `${actor.name} assigned *${targetName}* (${targetCallout}) to *${slackSafeText(project.name)}* as *${roleText}*.`
     : `${actor.name} created an invitation code for *${slackSafeText(project.name)}*.`;
 
   const fields = [
@@ -242,6 +201,7 @@ function buildSlackInvitePayload({ req, project, invite, actor, targetUser = nul
     { type: 'mrkdwn', text: `*Location:*\n${slackSafeText(project.location)}` },
     { type: 'mrkdwn', text: `*Dates:*\n${project.start_date} to ${project.end_date}` },
     { type: 'mrkdwn', text: `*Project role:*\n${roleText}` },
+    { type: 'mrkdwn', text: `*Assigned BuildTrack email:*\n${targetEmail ? targetCallout : 'Not targeted'}` },
     { type: 'mrkdwn', text: `*Code expires:*\n${expiresAt}` },
     { type: 'mrkdwn', text: `*Code uses:*\n${invite.max_uses}` }
   ];
@@ -283,21 +243,21 @@ function buildSlackInvitePayload({ req, project, invite, actor, targetUser = nul
       {
         type: 'mrkdwn',
         text: targetUser
-          ? `Sent by ${actor.name}. Use the same email in BuildTrack and Slack for direct messages.`
+          ? `Sent by ${actor.name}. This code is intended for ${targetEmail || targetName}. Only that BuildTrack user can accept it.`
           : `Only people with a BuildTrack account can accept this code. Created by ${actor.name}.`
       }
     ]
   });
 
   return {
-    text: `${APP_NAME} project invitation for ${project.name}. Code: ${formattedCode}`,
+    text: `${APP_NAME} project invitation for ${project.name}. ${targetEmail ? `Assigned to ${targetEmail}. ` : ''}Code: ${formattedCode}`,
     blocks
   };
 }
 
 async function sendSlackWebhookInviteMessage({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
   if (!SLACK_WEBHOOK_URL) {
-    throw httpError(400, 'Slack channel fallback is not set up. Add SLACK_WEBHOOK_URL in Render if you want channel fallback messages.');
+    throw httpError(400, 'Slack channel invitations are not set up. Add SLACK_WEBHOOK_URL in Render and redeploy.');
   }
 
   const payload = buildSlackInvitePayload({ req, project, invite, actor, targetUser, assignmentRole });
@@ -316,52 +276,24 @@ async function sendSlackWebhookInviteMessage({ req, project, invite, actor, targ
   return { sent: true, mode: 'channel_webhook' };
 }
 
-async function sendSlackDirectInviteMessage({ req, project, invite, actor, targetUser, assignmentRole = null }) {
-  if (!targetUser?.email) {
-    throw httpError(400, 'Cannot send a Slack direct message without the assigned user email.');
-  }
-
-  const lookup = await slackApiGet('users.lookupByEmail', { email: targetUser.email });
-  const slackUserId = lookup.user?.id;
-  if (!slackUserId) throw httpError(502, 'Slack user lookup did not return a user ID.');
-
-  const opened = await slackApiJson('conversations.open', { users: slackUserId });
-  const channelId = opened.channel?.id;
-  if (!channelId) throw httpError(502, 'Slack did not return a direct message channel ID.');
-
-  const payload = buildSlackInvitePayload({ req, project, invite, actor, targetUser, assignmentRole });
-  await slackApiJson('chat.postMessage', { channel: channelId, ...payload });
-
-  return { sent: true, mode: 'direct_message', slack_user_id: slackUserId };
-}
-
 async function sendSlackInviteMessage({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
-  const errors = [];
-
-  if (targetUser && SLACK_BOT_TOKEN) {
-    try {
-      return await sendSlackDirectInviteMessage({ req, project, invite, actor, targetUser, assignmentRole });
-    } catch (error) {
-      errors.push(error.message || 'Slack direct message failed.');
-    }
-  } else if (targetUser && !SLACK_BOT_TOKEN) {
-    errors.push('Slack direct message is not set up. Add SLACK_BOT_TOKEN in Render.');
+  if (!SLACK_WEBHOOK_URL) {
+    return {
+      sent: false,
+      mode: 'channel_webhook',
+      error: 'Slack channel invitations are not set up. Add SLACK_WEBHOOK_URL in Render and redeploy.'
+    };
   }
 
-  if ((!targetUser || SLACK_DM_FALLBACK_TO_WEBHOOK) && SLACK_WEBHOOK_URL) {
-    try {
-      const fallback = await sendSlackWebhookInviteMessage({ req, project, invite, actor, targetUser, assignmentRole });
-      return errors.length ? { ...fallback, warning: errors.join(' ') } : fallback;
-    } catch (error) {
-      errors.push(error.message || 'Slack channel fallback failed.');
-    }
+  try {
+    return await sendSlackWebhookInviteMessage({ req, project, invite, actor, targetUser, assignmentRole });
+  } catch (error) {
+    return {
+      sent: false,
+      mode: 'channel_webhook',
+      error: error.message || 'Slack channel message failed.'
+    };
   }
-
-  return {
-    sent: false,
-    mode: targetUser ? 'direct_message' : 'channel_webhook',
-    error: errors.join(' ') || 'Slack is not configured yet. Add SLACK_BOT_TOKEN for direct messages or SLACK_WEBHOOK_URL for channel fallback.'
-  };
 }
 
 async function selectProjectForInvite(client, projectId) {
@@ -476,12 +408,24 @@ function normalizeOptionalEnum(value, allowed, label) {
   return text;
 }
 
-function normalizeVendor(value, partial = false) {
+function normalizeTaskChoice(value, allowed, label, partial = false) {
   if (partial && value === undefined) return undefined;
   const text = cleanText(value);
   if (!text) return null;
-  if (!vendors.has(text)) {
-    throw httpError(400, `vendor must be one of: ${Array.from(vendors).join(', ')}.`);
+  if (!allowed.has(text)) {
+    throw httpError(400, `${label} must be one of: ${Array.from(allowed).join(', ')}.`);
+  }
+  return text;
+}
+
+function normalizeVendor(value, partial = false) {
+  return normalizeTaskChoice(value, vendors, 'vendor', partial);
+}
+
+function normalizeProjectNotes(value) {
+  const text = String(value ?? '');
+  if (text.length > 10000) {
+    throw httpError(400, 'Project notes must be 10,000 characters or fewer.');
   }
   return text;
 }
@@ -764,6 +708,8 @@ const taskSelect = `
   t.description,
   t.trade,
   t.vendor,
+  t.security_team_member,
+  t.pm,
   t.assigned_to,
   assignee.name AS assigned_to_name,
   assignee.email AS assigned_to_email,
@@ -814,6 +760,7 @@ async function loadProjectPayload(projectId, userId) {
        p.name,
        p.location,
        p.description,
+       p.notes,
        p.project_status,
        to_char(p.start_date, 'YYYY-MM-DD') AS start_date,
        to_char(p.end_date, 'YYYY-MM-DD') AS end_date,
@@ -915,8 +862,10 @@ function buildTaskInput(body, partial = false) {
 
   if (!partial || body.name !== undefined) input.name = requireText(body.name, 'Task name');
   if (!partial || body.description !== undefined) input.description = cleanText(body.description);
-  if (!partial || body.trade !== undefined) input.trade = cleanText(body.trade);
+  if (!partial || body.trade !== undefined) input.trade = normalizeTaskChoice(body.trade, trades, 'trade', partial);
   if (!partial || body.vendor !== undefined) input.vendor = normalizeVendor(body.vendor, partial);
+  if (!partial || body.security_team_member !== undefined) input.security_team_member = normalizeTaskChoice(body.security_team_member, securityTeamMembers, 'security_team_member', partial);
+  if (!partial || body.pm !== undefined) input.pm = normalizeTaskChoice(body.pm, projectManagers, 'pm', partial);
   if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeOptionalId(body.assigned_to, 'assigned_to');
   if (!partial || body.parent_task_id !== undefined) input.parent_task_id = normalizeOptionalId(body.parent_task_id, 'parent_task_id');
 
@@ -1304,7 +1253,7 @@ app.post('/api/projects', requireAuth, asyncHandler(async (req, res) => {
     const result = await client.query(
       `INSERT INTO projects (name, location, description, start_date, end_date, created_by)
        VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, name, location, description, project_status, to_char(start_date, 'YYYY-MM-DD') AS start_date,
+       RETURNING id, name, location, description, notes, project_status, to_char(start_date, 'YYYY-MM-DD') AS start_date,
          to_char(end_date, 'YYYY-MM-DD') AS end_date, created_by, created_at, updated_at`,
       [name, location, description, startDate, endDate, req.user.id]
     );
@@ -1346,7 +1295,7 @@ app.patch('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res)
     await requireProjectMembership(projectId, req.user.id, 'manager', client);
 
     const beforeResult = await client.query(
-      `SELECT id, name, location, description, project_status, to_char(start_date, 'YYYY-MM-DD') AS start_date,
+      `SELECT id, name, location, description, notes, project_status, to_char(start_date, 'YYYY-MM-DD') AS start_date,
         to_char(end_date, 'YYYY-MM-DD') AS end_date, created_by, created_at, updated_at
        FROM projects WHERE id = $1`,
       [projectId]
@@ -1393,7 +1342,7 @@ app.patch('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res)
       `UPDATE projects
        SET ${sets.join(', ')}
        WHERE id = $${values.length}
-       RETURNING id, name, location, description, project_status, to_char(start_date, 'YYYY-MM-DD') AS start_date,
+       RETURNING id, name, location, description, notes, project_status, to_char(start_date, 'YYYY-MM-DD') AS start_date,
          to_char(end_date, 'YYYY-MM-DD') AS end_date, created_by, created_at, updated_at`,
       values
     );
@@ -1414,6 +1363,42 @@ app.patch('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res)
 
   emitProjectChange(projectId, { actorId: req.user.id, message: 'Project details updated.' });
   res.json({ project: updatedProject });
+}));
+
+
+app.patch('/api/projects/:projectId/notes', requireAuth, asyncHandler(async (req, res) => {
+  const projectId = parseId(req.params.projectId, 'projectId');
+  const notes = normalizeProjectNotes(req.body.notes);
+
+  const updated = await tx(async (client) => {
+    await requireProjectMembership(projectId, req.user.id, 'viewer', client);
+
+    const beforeResult = await client.query('SELECT id, notes FROM projects WHERE id = $1', [projectId]);
+    if (!beforeResult.rowCount) throw httpError(404, 'Project not found.');
+
+    const result = await client.query(
+      `UPDATE projects
+       SET notes = $1
+       WHERE id = $2
+       RETURNING id, notes, updated_at`,
+      [notes, projectId]
+    );
+
+    await writeAudit(client, {
+      projectId,
+      userId: req.user.id,
+      action: 'project_notes_updated',
+      entityType: 'project',
+      entityId: projectId,
+      before: beforeResult.rows[0],
+      after: result.rows[0]
+    });
+
+    return result.rows[0];
+  });
+
+  emitProjectChange(projectId, { actorId: req.user.id, message: 'Project notes updated.' });
+  res.json({ project: updated });
 }));
 
 app.delete('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res) => {
@@ -1958,9 +1943,9 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
 
     const insertResult = await client.query(
       `INSERT INTO tasks
-        (project_id, parent_task_id, name, description, trade, vendor, assigned_to, status, priority, start_date, end_date,
+        (project_id, parent_task_id, name, description, trade, vendor, security_team_member, pm, assigned_to, status, priority, start_date, end_date,
          percent_complete, color, sort_order, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
        RETURNING id`,
       [
         projectId,
@@ -1969,6 +1954,8 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
         input.description,
         input.trade,
         input.vendor,
+        input.security_team_member,
+        input.pm,
         input.assigned_to ?? null,
         input.status,
         input.priority,

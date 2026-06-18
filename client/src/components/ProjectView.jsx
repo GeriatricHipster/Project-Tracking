@@ -8,6 +8,7 @@ import DependencyPanel from './DependencyPanel';
 import GanttChart from './GanttChart';
 import GanttChecklist from './GanttChecklist';
 import MembersPanel from './MembersPanel';
+import ProjectNotesPanel from './ProjectNotesPanel';
 import SiteBanner from './SiteBanner';
 import TaskForm from './TaskForm';
 import TaskTable from './TaskTable';
@@ -33,8 +34,10 @@ export default function ProjectView({ projectId, user, onBack }) {
   const [toast, setToast] = useState('');
   const [editingTask, setEditingTask] = useState(null);
 
-  const canEdit = roleRank[data?.project?.role || 'viewer'] >= roleRank.editor;
-  const canManage = roleRank[data?.project?.role || 'viewer'] >= roleRank.manager;
+  const projectRole = data?.project?.role || 'viewer';
+  const canEdit = roleRank[projectRole] >= roleRank.editor;
+  const canManage = roleRank[projectRole] >= roleRank.manager;
+  const canEditNotes = projectRole !== 'portfolio_viewer' && roleRank[projectRole] >= roleRank.viewer;
 
   async function loadProject({ quiet = false } = {}) {
     if (!quiet) setLoading(true);
@@ -157,6 +160,11 @@ export default function ProjectView({ projectId, user, onBack }) {
     await loadProject({ quiet: true });
   }
 
+  async function saveProjectNotes(notes) {
+    await api(`/projects/${projectId}/notes`, { method: 'PATCH', body: { notes } });
+    await loadProject({ quiet: true });
+  }
+
 
 
 
@@ -201,6 +209,8 @@ export default function ProjectView({ projectId, user, onBack }) {
 
       {toast && <div className="toast">{toast}</div>}
       {error && <div className="error-box">{error}</div>}
+
+      <ProjectNotesPanel project={project} canEdit={canEditNotes} onSave={saveProjectNotes} />
 
       <GanttChart project={project} tasks={orderedTasks} dependencies={dependencies} onEditTask={setEditingTask} />
       <GanttChecklist checklist={checklist || []} canEdit={canEdit} onToggle={updateChecklistItem} />
