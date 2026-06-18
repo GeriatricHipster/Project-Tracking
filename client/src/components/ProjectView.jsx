@@ -3,10 +3,12 @@ import { api, getToken } from '../lib/api';
 import { createProjectSocket } from '../lib/socket';
 import { formatDate } from '../lib/dates';
 import ActivityPanel from './ActivityPanel';
-import BlueprintPanel from './BlueprintPanel';
+import BlueprintsPanel from './BlueprintsPanel';
 import DependencyPanel from './DependencyPanel';
 import GanttChart from './GanttChart';
+import GanttChecklist from './GanttChecklist';
 import MembersPanel from './MembersPanel';
+import SlackInvitePanel from './SlackInvitePanel';
 import TaskForm from './TaskForm';
 import TaskTable from './TaskTable';
 
@@ -116,23 +118,6 @@ export default function ProjectView({ projectId, user, onBack }) {
     await loadProject({ quiet: true });
   }
 
-  async function toggleChecklistItem(item, isChecked) {
-    await api(`/projects/${projectId}/checklist/${item.key}`, { method: 'PATCH', body: { is_checked: isChecked } });
-    await loadProject({ quiet: true });
-  }
-
-  async function uploadBlueprints(files) {
-    const formData = new FormData();
-    files.forEach((file) => formData.append('blueprints', file));
-    await api(`/projects/${projectId}/blueprints`, { method: 'POST', formData });
-    await loadProject({ quiet: true });
-  }
-
-  async function deleteBlueprint(blueprint) {
-    await api(`/blueprints/${blueprint.id}`, { method: 'DELETE' });
-    await loadProject({ quiet: true });
-  }
-
   async function addMember(payload) {
     const result = await api(`/projects/${projectId}/members`, { method: 'POST', body: payload });
     await loadProject({ quiet: true });
@@ -149,6 +134,33 @@ export default function ProjectView({ projectId, user, onBack }) {
     if (!confirmed) return;
     await api(`/projects/${projectId}/members/${member.user_id}`, { method: 'DELETE' });
     await loadProject({ quiet: true });
+  }
+
+  async function updateChecklistItem(item, isChecked) {
+    await api(`/projects/${projectId}/checklist/${item.item_key}`, {
+      method: 'PATCH',
+      body: { is_checked: isChecked }
+    });
+    await loadProject({ quiet: true });
+  }
+
+  async function uploadBlueprint(file) {
+    const formData = new FormData();
+    formData.append('blueprint', file);
+    await api(`/projects/${projectId}/blueprints`, { method: 'POST', body: formData });
+    await loadProject({ quiet: true });
+  }
+
+  async function deleteBlueprint(blueprint) {
+    await api(`/blueprints/${blueprint.id}`, { method: 'DELETE' });
+    await loadProject({ quiet: true });
+  }
+
+
+  async function sendSlackInvite(payload) {
+    const result = await api(`/projects/${projectId}/slack-invites`, { method: 'POST', body: payload });
+    await loadProject({ quiet: true });
+    return result;
   }
 
   if (loading && !data) {
@@ -169,7 +181,7 @@ export default function ProjectView({ projectId, user, onBack }) {
     );
   }
 
-  const { project, members, dependencies, audit } = data;
+  const { project, members, dependencies, checklist, blueprints, audit } = data;
 
   return (
     <main className="app-page project-view">
@@ -190,15 +202,8 @@ export default function ProjectView({ projectId, user, onBack }) {
       {toast && <div className="toast">{toast}</div>}
       {error && <div className="error-box">{error}</div>}
 
-      <GanttChart
-        project={project}
-        tasks={orderedTasks}
-        dependencies={dependencies}
-        checklist={data.checklist || []}
-        canEdit={canEdit}
-        onEditTask={setEditingTask}
-        onToggleChecklist={toggleChecklistItem}
-      />
+      <GanttChart project={project} tasks={orderedTasks} dependencies={dependencies} onEditTask={setEditingTask} />
+      <GanttChecklist checklist={checklist || []} canEdit={canEdit} onToggle={updateChecklistItem} />
 
       <section className="project-workspace">
         <div className="workspace-main">
@@ -215,13 +220,6 @@ export default function ProjectView({ projectId, user, onBack }) {
         </div>
 
         <aside className="workspace-side">
-          <BlueprintPanel
-            blueprints={data.blueprints || []}
-            canUpload={canEdit}
-            canDelete={canManage}
-            onUploadBlueprints={uploadBlueprints}
-            onDeleteBlueprint={deleteBlueprint}
-          />
           <DependencyPanel
             tasks={orderedTasks}
             dependencies={dependencies}
@@ -229,6 +227,19 @@ export default function ProjectView({ projectId, user, onBack }) {
             onAddDependency={addDependency}
             onDeleteDependency={deleteDependency}
           />
+          <BlueprintsPanel
+            blueprints={blueprints || []}
+            canEdit={canEdit}
+            onUpload={uploadBlueprint}
+            onDelete={deleteBlueprint}
+          />
+          {canManage && (
+            <SlackInvitePanel
+              canManage={canManage}
+              projectRole={project.role}
+              onSendSlackInvite={sendSlackInvite}
+            />
+          )}
           <MembersPanel
             currentUser={user}
             projectRole={project.role}

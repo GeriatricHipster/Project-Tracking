@@ -1,12 +1,30 @@
-# Start Here: BuildTrack Cloud through GitHub
+# Start Here: Create and Deploy BuildTrack Cloud Without Terminal
 
-These steps are written for a non-coder. You can upload the project to GitHub through the website and deploy it through Render.
+These steps are written for GitHub's website and Render. You do not need to run Terminal commands.
 
-## Step 1: Unzip the project
+## What you are creating
 
-Download and unzip the BuildTrack Cloud ZIP file.
+This app tracks construction project timelines and includes:
 
-Open the unzipped folder. You should see files and folders like this:
+- Active Projects tab
+- Completed Projects tab
+- Projects / assignments tab showing who is assigned to each project
+- Calendar overview of projects and status
+- Gantt chart for each project
+- Gantt checklist for IPs, panels, clearances, doors, and CCure operator setup
+- Drag-and-drop blueprint uploads
+- Project member assignments
+- Site member management for managers and owners
+
+GitHub stores the code. Render runs the live website, backend, and PostgreSQL database.
+
+---
+
+## Step 1: Unzip this folder
+
+Unzip the downloaded file on your computer.
+
+Open the unzipped folder. You should see:
 
 ```text
 client
@@ -17,85 +35,122 @@ README.md
 START_HERE_GITHUB.md
 ```
 
-Upload the unzipped contents, not the ZIP file itself.
+Upload the contents of the folder, not the ZIP file itself.
+
+---
 
 ## Step 2: Create a GitHub repository
 
 1. Go to GitHub.
-2. Click the `+` button near the top-right.
-3. Click `New repository`.
-4. Name it something like `buildtrack-cloud`.
-5. Choose `Private` if this is for your company.
-6. Do not add a README, license, or gitignore on GitHub.
-7. Click `Create repository`.
-
-## Step 3: Upload the project files to GitHub
-
-1. On the empty repo page, click `uploading an existing file`.
-2. Open the unzipped BuildTrack folder on your computer.
-3. Select everything inside that folder.
-4. Drag those files and folders into GitHub.
-5. Use this commit message:
+2. Click the **+** button near the top-right.
+3. Click **New repository**.
+4. Name it something like:
 
 ```text
-Initial BuildTrack Cloud upload
+buildtrack-cloud
 ```
 
-6. Click `Commit changes`.
+5. Choose **Private** if this is for your company.
+6. Do not add a README, license, or .gitignore.
+7. Click **Create repository**.
 
-After upload, make sure `render.yaml` is visible at the top level of the repo.
+---
 
-## Step 4: Deploy on Render
+## Step 3: Upload the app files to GitHub
+
+1. In the empty GitHub repo, click **uploading an existing file**.
+2. Open the unzipped app folder on your computer.
+3. Select all files and folders inside it.
+4. Drag them into GitHub.
+5. At the bottom, enter this commit message:
+
+```text
+Upload BuildTrack Cloud
+```
+
+6. Click **Commit changes**.
+
+Important: `render.yaml` must be at the top level of the repo, not inside another folder.
+
+---
+
+## Step 4: Deploy with Render Blueprint
 
 1. Open Render.
-2. Click `New +`.
-3. Choose `Blueprint`.
+2. Click **New +**.
+3. Choose **Blueprint**.
 4. Connect your GitHub account if asked.
-5. Select your BuildTrack GitHub repository.
+5. Select your `buildtrack-cloud` repository.
 6. Render should find `render.yaml`.
-7. Click `Deploy Blueprint`.
+7. Click **Deploy Blueprint**.
 
 Render will create:
 
 ```text
-buildtrack-cloud   web app
-buildtrack-db      PostgreSQL database
+buildtrack-cloud   the live app
+buildtrack-db      the PostgreSQL database
 ```
+
+---
 
 ## Step 5: Open the app
 
-When Render finishes, open the live app URL. It will look similar to:
+When Render finishes, open the web address it gives you. It will look similar to:
 
 ```text
 https://buildtrack-cloud.onrender.com
 ```
 
-Register your first real account. In a fresh database, the first registered user becomes a site owner.
+Click **Register** and create your first real account.
 
-## Step 6: Add your team
+The first registered account becomes a **site owner**.
 
-Managers and owners can use the `Site members` tab to:
+---
 
-- Change a user's site role
-- Revoke access
-- Delete a user
-- See which projects each user is assigned to
+## Step 6: Manage users
 
-Project managers and owners can also open a project and use the `Project members` panel to assign registered users to that project.
+After logging in as a site owner or site manager:
 
-## Step 7: Use the new project tools
+1. Open the **Site members** tab.
+2. Review registered users.
+3. Change site role if needed.
+4. Revoke access when someone should no longer log in.
+5. Restore access when needed.
+6. Delete users only when they are no longer needed.
 
-Inside a project, you can now use:
+Site role options:
 
-- Gantt chart
-- Project checklist
-- Task list
-- Blueprint drag-and-drop upload
-- Dependencies
-- Project members
-- Activity history
+```text
+Owner     full site management
+Manager   can manage site users except protected owner actions
+Member    normal user account
+```
 
-Checklist items included on the Gantt chart section:
+Project role options inside a project:
+
+```text
+Owner     can manage/delete that project
+Manager   can manage that project
+Editor    can edit tasks/checklists/uploads
+Viewer    can view assigned projects only
+```
+
+---
+
+## Step 7: Add blueprints to a project
+
+1. Open a project.
+2. Find the **Blueprints** panel.
+3. Drag and drop a PDF, image, DWG, or drawing file.
+4. Use **Download** to retrieve it later.
+
+Default file limit: 25 MB.
+
+---
+
+## Step 8: Use the Gantt checklist
+
+Open a project and look below the Gantt chart. You will see checkboxes for:
 
 ```text
 IPs requested
@@ -105,6 +160,21 @@ Doors programmed
 CCure Operator established
 ```
 
-## Updating an existing GitHub repo
+Users with edit access can check or uncheck these items.
 
-Use `UPDATE_EXISTING_GITHUB_REPO.md`.
+## Optional Slack invite code setup
+
+After the updated app is deployed, you can connect a Slack channel so project managers can send invitation codes from inside a project.
+
+Open this file for the plain-English setup steps:
+
+```text
+SLACK_INVITE_SETUP.md
+```
+
+The only Render keys you need for Slack are:
+
+```text
+SLACK_WEBHOOK_URL
+APP_URL
+```

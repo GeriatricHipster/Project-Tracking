@@ -3,9 +3,9 @@ const { pool, tx } = require('./db');
 
 const demoTeam = [
   { name: 'Site Superintendent', email: 'superintendent@demo.com', role: 'manager', site_role: 'manager' },
-  { name: 'Electrical Foreman', email: 'electrical@demo.com', role: 'editor', site_role: 'editor' },
-  { name: 'Plumbing Foreman', email: 'plumbing@demo.com', role: 'editor', site_role: 'editor' },
-  { name: 'Owner Representative', email: 'owner@demo.com', role: 'viewer', site_role: 'viewer' }
+  { name: 'Electrical Foreman', email: 'electrical@demo.com', role: 'editor' },
+  { name: 'Plumbing Foreman', email: 'plumbing@demo.com', role: 'editor' },
+  { name: 'Owner Representative', email: 'owner@demo.com', role: 'viewer' }
 ];
 
 const demoTasks = [
@@ -129,7 +129,6 @@ async function seed() {
 
     if (existingUser.rowCount) {
       userId = existingUser.rows[0].id;
-      await client.query('UPDATE users SET site_role = $1, access_status = $2 WHERE id = $3', ['owner', 'active', userId]);
     } else {
       const passwordHash = await bcrypt.hash('Construction123!', 12);
       const insertedUser = await client.query(
@@ -139,21 +138,23 @@ async function seed() {
       userId = insertedUser.rows[0].id;
     }
 
+    await client.query('UPDATE users SET site_role = $1, access_revoked = false WHERE id = $2', ['owner', userId]);
+
     const teamMembers = [{ id: userId, role: 'owner', name: 'Demo Project Manager', email }];
     for (const member of demoTeam) {
       const existingMember = await client.query('SELECT id FROM users WHERE email = $1', [member.email]);
       let memberId;
       if (existingMember.rowCount) {
         memberId = existingMember.rows[0].id;
-        await client.query('UPDATE users SET site_role = $1, access_status = $2 WHERE id = $3', [member.site_role || 'viewer', 'active', memberId]);
       } else {
         const memberPasswordHash = await bcrypt.hash('Construction123!', 12);
         const insertedMember = await client.query(
           'INSERT INTO users (name, email, password_hash, site_role) VALUES ($1, $2, $3, $4) RETURNING id',
-          [member.name, member.email, memberPasswordHash, member.site_role || 'viewer']
+          [member.name, member.email, memberPasswordHash, member.site_role || 'member']
         );
         memberId = insertedMember.rows[0].id;
       }
+      await client.query('UPDATE users SET site_role = $1, access_revoked = false WHERE id = $2', [member.site_role || 'member', memberId]);
       teamMembers.push({ id: memberId, role: member.role, name: member.name, email: member.email });
     }
 
@@ -190,6 +191,19 @@ async function seed() {
         [projectId, member.id, member.role]
       );
     }
+
+
+    await client.query(
+      `INSERT INTO project_checklist_items (project_id, item_key, label, sort_order)
+       VALUES
+        ($1, 'ips_requested', 'IPs requested', 1),
+        ($1, 'panel_ordered', 'Panel ordered', 2),
+        ($1, 'clearances_programmed', 'Clearances programmed', 3),
+        ($1, 'doors_programmed', 'Doors programmed', 4),
+        ($1, 'ccure_operator_established', 'CCure Operator established', 5)
+       ON CONFLICT (project_id, item_key) DO NOTHING`,
+      [projectId]
+    );
 
     const taskAssigneeIds = [
       teamMembers[0].id,
@@ -298,6 +312,19 @@ async function seed() {
         [completedProjectId, member.id, member.role]
       );
     }
+
+
+    await client.query(
+      `INSERT INTO project_checklist_items (project_id, item_key, label, sort_order)
+       VALUES
+        ($1, 'ips_requested', 'IPs requested', 1),
+        ($1, 'panel_ordered', 'Panel ordered', 2),
+        ($1, 'clearances_programmed', 'Clearances programmed', 3),
+        ($1, 'doors_programmed', 'Doors programmed', 4),
+        ($1, 'ccure_operator_established', 'CCure Operator established', 5)
+       ON CONFLICT (project_id, item_key) DO NOTHING`,
+      [completedProjectId]
+    );
 
     const completedTaskCount = await client.query('SELECT count(*)::int AS count FROM tasks WHERE project_id = $1', [completedProjectId]);
     if (completedTaskCount.rows[0].count === 0) {

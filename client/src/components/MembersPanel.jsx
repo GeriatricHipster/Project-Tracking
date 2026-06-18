@@ -32,7 +32,7 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
       <div className="panel-heading compact-heading">
         <div>
           <h2>Project members</h2>
-          <p>{members.length} user{members.length === 1 ? '' : 's'}</p>
+          <p>{members.length} user{members.length === 1 ? '' : 's'} assigned</p>
         </div>
       </div>
 
@@ -50,14 +50,14 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
         <p className="form-help">The user must already have a registered BuildTrack account.</p>
         {error && <p className="error-box">{error}</p>}
         {notice && <p className="notice-box">{notice}</p>}
-        <button className="primary-button compact" disabled={!canManage || saving}>{saving ? 'Saving...' : 'Add / update member'}</button>
+        <button className="primary-button compact" disabled={!canManage || saving}>{saving ? 'Adding...' : 'Add / update member'}</button>
       </form>
 
       <div className="member-list">
         {members.map((member) => (
           <div className="member-item" key={member.user_id}>
             <div>
-              <strong>{member.name}</strong>
+              <strong>{member.name}{member.access_revoked ? ' (revoked)' : ''}</strong>
               <span>{member.email}</span>
             </div>
             <div className="member-actions">

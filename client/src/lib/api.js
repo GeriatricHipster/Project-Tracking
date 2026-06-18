@@ -10,21 +10,28 @@ export function setToken(token) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
-export async function api(path, options = {}) {
+function authHeaders(options = {}) {
   const token = options.token === undefined ? getToken() : options.token;
   const headers = {
     ...(options.headers || {})
   };
 
-  let body;
-  if (options.formData) {
-    body = options.formData;
-  } else if (options.body !== undefined) {
-    headers['Content-Type'] = 'application/json';
-    body = JSON.stringify(options.body);
-  }
-
   if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+export async function api(path, options = {}) {
+  const headers = authHeaders(options);
+  let body;
+
+  if (options.body !== undefined) {
+    if (options.body instanceof FormData) {
+      body = options.body;
+    } else {
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify(options.body);
+    }
+  }
 
   const response = await fetch(`${API_BASE}${path}`, {
     method: options.method || 'GET',
@@ -42,28 +49,32 @@ export async function api(path, options = {}) {
   return data;
 }
 
-export async function downloadFile(path, fileName) {
-  const token = getToken();
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
-  const response = await fetch(`${API_BASE}${path}`, { headers });
+export async function downloadFromApi(path, fallbackName = 'download') {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'GET',
+    headers: authHeaders()
+  });
 
   if (!response.ok) {
     let message = `Download failed with status ${response.status}`;
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
       const data = await response.json();
-      message = data.error || message;
+      message = data?.error || message;
     }
     throw new Error(message);
   }
 
   const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
+  const disposition = response.headers.get('content-disposition') || '';
+  const encodedName = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];
+  const fileName = encodedName ? decodeURIComponent(encodedName) : fallbackName;
+  const url = window.URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = fileName || 'download';
+  anchor.download = fileName;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  URL.revokeObjectURL(url);
+  window.URL.revokeObjectURL(url);
 }

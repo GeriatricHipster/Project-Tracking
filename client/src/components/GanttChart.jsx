@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { addDays, daysBetween, formatDate, maxIsoDate, minIsoDate, todayIso } from '../lib/dates';
 
 function getScale(totalDays) {
@@ -12,9 +11,7 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-export default function GanttChart({ project, tasks, dependencies, checklist = [], canEdit = false, onEditTask, onToggleChecklist }) {
-  const [busyChecklistKey, setBusyChecklistKey] = useState('');
-  const [checklistError, setChecklistError] = useState('');
+export default function GanttChart({ project, tasks, dependencies, onEditTask }) {
   const allStartDates = [project.start_date, ...tasks.map((task) => task.start_date)];
   const allEndDates = [project.end_date, ...tasks.map((task) => task.end_date)];
   const rangeStart = minIsoDate(allStartDates) || project.start_date;
@@ -47,18 +44,6 @@ export default function GanttChart({ project, tasks, dependencies, checklist = [
     const rowIndex = taskIndex.get(task.id) || 0;
     const y = headerHeight + rowIndex * rowHeight + rowHeight / 2;
     return { left, width, right: left + width, y };
-  }
-
-  async function toggleChecklistItem(item, nextChecked) {
-    setChecklistError('');
-    setBusyChecklistKey(item.key);
-    try {
-      await onToggleChecklist?.(item, nextChecked);
-    } catch (err) {
-      setChecklistError(err.message);
-    } finally {
-      setBusyChecklistKey('');
-    }
   }
 
   return (
@@ -150,31 +135,6 @@ export default function GanttChart({ project, tasks, dependencies, checklist = [
             })}
           </div>
         </div>
-      </div>
-
-      <div className="gantt-checklist">
-        <div>
-          <h3>Project checklist</h3>
-          <p>Track project readiness items alongside the schedule.</p>
-        </div>
-        <div className="checklist-grid">
-          {checklist.map((item) => (
-            <label className={`checklist-item ${item.is_checked ? 'checked' : ''}`} key={item.key}>
-              <input
-                checked={Boolean(item.is_checked)}
-                disabled={!canEdit || busyChecklistKey === item.key}
-                type="checkbox"
-                onChange={(event) => toggleChecklistItem(item, event.target.checked)}
-              />
-              <span>
-                <strong>{item.label}</strong>
-                {item.is_checked && item.checked_by_name && <small>Checked by {item.checked_by_name}</small>}
-              </span>
-            </label>
-          ))}
-        </div>
-        {!canEdit && <p className="form-help">Checklist is read-only for viewer access.</p>}
-        {checklistError && <p className="error-box">{checklistError}</p>}
       </div>
     </section>
   );

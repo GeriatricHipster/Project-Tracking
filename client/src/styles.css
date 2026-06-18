@@ -1714,103 +1714,96 @@ th {
   color: #6d28d9;
 }
 
-.gantt-checklist {
-  margin-top: 1rem;
-  border-top: 1px solid #e5e7eb;
-  padding-top: 1rem;
+.gantt-checklist-panel {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.75rem;
 }
 
-.gantt-checklist h3 {
-  margin: 0 0 0.2rem;
-  font-size: 1.05rem;
-}
-
-.gantt-checklist p {
-  margin: 0;
-  color: #64748b;
-}
-
-.checklist-grid {
+.gantt-checklist-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.65rem;
+  gap: 0.75rem;
 }
 
-.checklist-item {
+.checklist-card {
   display: flex;
-  align-items: flex-start;
+  grid-template-columns: none;
+  align-items: center;
   gap: 0.65rem;
   border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  padding: 0.8rem;
+  border-radius: 16px;
+  padding: 0.85rem;
   background: #ffffff;
-  cursor: pointer;
+  color: #111827;
 }
 
-.checklist-item.checked {
-  border-color: #bbf7d0;
+.checklist-card.checked {
   background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
 }
 
-.checklist-item input {
-  width: 18px;
-  min-width: 18px;
-  height: 18px;
-  margin-top: 0.1rem;
+.checklist-card input {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0;
 }
 
-.checklist-item span {
-  display: grid;
-  gap: 0.16rem;
-}
-
-.checklist-item small {
-  color: #64748b;
-  font-size: 0.76rem;
-  font-weight: 700;
+.blueprint-panel {
+  overflow: hidden;
 }
 
 .drop-zone {
+  display: grid;
+  gap: 0.25rem;
+  place-items: center;
+  min-height: 118px;
   border: 2px dashed #cbd5e1;
-  border-radius: 16px;
+  border-radius: 18px;
   padding: 1rem;
   background: #f8fafc;
-  display: grid;
-  gap: 0.45rem;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  text-align: center;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
 }
 
-.drop-zone.drag-over {
-  border-color: #2563eb;
-  background: #eff6ff;
-}
-
-.drop-zone.disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
+.drop-zone strong,
+.drop-zone span {
+  display: block;
 }
 
 .drop-zone span {
   color: #64748b;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
+  font-weight: 700;
 }
 
-.blueprint-list {
+.drop-zone.dragging {
+  border-color: #2563eb;
+  background: #eff6ff;
+  transform: scale(1.01);
+}
+
+.drop-zone.disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
+}
+
+.blueprint-list,
+.site-user-list {
   display: grid;
-  gap: 0.6rem;
-  margin-top: 0.8rem;
+  gap: 0.75rem;
 }
 
 .blueprint-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
   border: 1px solid #e5e7eb;
   border-radius: 14px;
-  padding: 0.8rem;
+  padding: 0.75rem;
   background: #ffffff;
-  display: grid;
-  gap: 0.65rem;
 }
 
 .blueprint-item strong,
@@ -1820,78 +1813,103 @@ th {
 
 .blueprint-item span {
   color: #64748b;
-  font-size: 0.78rem;
-  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  margin-top: 0.15rem;
 }
 
-.blueprint-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.site-member-list {
+.site-user-card {
   display: grid;
   gap: 0.85rem;
-}
-
-.site-member-card {
   border: 1px solid #e5e7eb;
   border-radius: 18px;
   padding: 1rem;
   background: #ffffff;
-  display: grid;
-  gap: 0.9rem;
 }
 
-.site-member-card.revoked {
+.site-user-card.revoked {
   background: #f8fafc;
-  opacity: 0.88;
+  border-color: #cbd5e1;
 }
 
-.site-member-main {
+.site-user-main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 1rem;
   align-items: start;
 }
 
-.site-member-controls {
+.site-user-main h3,
+.site-user-main p {
+  margin-bottom: 0.3rem;
+}
+
+.site-user-actions {
   display: flex;
   align-items: end;
-  gap: 0.6rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
-.site-member-controls label {
-  display: grid;
-  gap: 0.25rem;
-  font-size: 0.76rem;
-  color: #64748b;
-  font-weight: 900;
+.site-user-actions label {
+  min-width: 150px;
 }
 
-.site-member-controls select {
-  min-width: 120px;
+.site-projects {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
 }
 
-.site-project-list {
-  gap: 0.45rem;
+.role-member {
+  background: #f3f4f6;
+  color: #4b5563;
 }
 
-.assigned-project-chip.static {
-  cursor: default;
-  border-color: #e5e7eb;
-  background: #f8fafc;
-}
-
-@media (max-width: 900px) {
-  .site-member-main {
+@media (max-width: 760px) {
+  .blueprint-item,
+  .site-user-main {
     grid-template-columns: 1fr;
   }
 
-  .site-member-controls {
+  .site-user-actions {
     justify-content: flex-start;
   }
+}
+
+.auth-invite-note {
+  margin-top: 1rem;
+}
+
+.join-invite-card {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.join-invite-card h3 {
+  margin-bottom: 0.35rem;
+}
+
+.slack-invite-panel .two-col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.invite-result-box {
+  display: grid;
+  gap: 0.25rem;
+  border: 1px dashed #93c5fd;
+  border-radius: 14px;
+  background: #eff6ff;
+  padding: 0.85rem;
+  color: #1e3a8a;
+}
+
+.invite-result-box span,
+.invite-result-box small {
+  color: #1d4ed8;
+  overflow-wrap: anywhere;
+}
+
+.invite-result-box strong {
+  font-size: 1.35rem;
+  letter-spacing: 0.08em;
 }

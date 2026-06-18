@@ -1,19 +1,24 @@
 # Render Deployment Checklist
 
-Use this checklist after uploading the project to GitHub.
+Use this after uploading the project to GitHub.
 
-## Required Render services
+## Render Blueprint
 
-The included `render.yaml` creates:
+Choose:
 
 ```text
-buildtrack-cloud   web service
-buildtrack-db      PostgreSQL database
+New + > Blueprint
 ```
 
-## Required environment variables
+Select your GitHub repository.
 
-The Blueprint sets these automatically:
+Render should read:
+
+```text
+render.yaml
+```
+
+## Environment variables created by render.yaml
 
 ```text
 DATABASE_URL
@@ -21,31 +26,19 @@ JWT_SECRET
 CLIENT_ORIGIN
 NODE_ENV
 APP_NAME
+MAX_BLUEPRINT_BYTES
 PGSSLMODE
 ```
 
-## Optional environment variable
-
-You can add this in Render if you want a different maximum blueprint upload size:
-
-```text
-BLUEPRINT_MAX_FILE_SIZE=26214400
-```
-
-The default is 25 MB.
+You do not need to add email settings. The email invitation feature has been removed.
 
 ## After deploy
 
-1. Open the Render app URL.
-2. Register your first account.
-3. Create a project.
-4. Add tasks.
-5. Check the Gantt chart.
-6. Test the checklist.
-7. Drag and drop a blueprint file into the project.
-8. Add users in Site members.
-9. Assign users in Project members.
-
-## Production notes
-
-For real company use, upgrade Render's web service and database from free plans. Blueprint files are stored in PostgreSQL in this version. For very large blueprint sets, add cloud object storage later.
+1. Open the Render URL.
+2. Register your first real user.
+3. Confirm the first user can see the **Site members** tab.
+4. Create a project.
+5. Add tasks.
+6. Add project members.
+7. Upload a blueprint.
+8. Test the Gantt checklist.

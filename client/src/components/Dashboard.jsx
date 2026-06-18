@@ -1,6 +1,14 @@
 import { useMemo, useState } from 'react';
-import SiteMembersPanel from './SiteMembersPanel';
 import { addDays, formatDate, todayIso } from '../lib/dates';
+import SiteMembersPanel from './SiteMembersPanel';
+
+const dashboardTabs = [
+  { id: 'projects', label: 'Active projects' },
+  { id: 'completed', label: 'Completed' },
+  { id: 'assignments', label: 'Projects / assignments' },
+  { id: 'calendar', label: 'Calendar overview' },
+  { id: 'site-members', label: 'Site members', managersOnly: true }
+];
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const managerRoles = new Set(['owner', 'manager']);
@@ -109,6 +117,9 @@ export default function Dashboard({
   onCreateProject,
   onUpdateProject,
   onDeleteProject,
+  onAcceptInvite,
+  inviteNotice,
+  inviteError,
   onRefresh,
   onLogout
 }) {
@@ -123,20 +134,14 @@ export default function Dashboard({
     end_date: addDays(start, 90)
   });
   const [error, setError] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+  const [inviteJoinError, setInviteJoinError] = useState('');
+  const [joiningInvite, setJoiningInvite] = useState(false);
   const [saving, setSaving] = useState(false);
   const [actionProjectId, setActionProjectId] = useState(null);
 
-  const canManageSite = Boolean(user?.can_manage_site)
-    || managerRoles.has(user?.site_role)
-    || projects.some((project) => managerRoles.has(project.role));
-
-  const dashboardTabs = [
-    { id: 'projects', label: 'Active projects' },
-    { id: 'completed', label: 'Completed' },
-    { id: 'assignments', label: 'Projects' },
-    { id: 'calendar', label: 'Calendar overview' },
-    ...(canManageSite ? [{ id: 'site-members', label: 'Site members' }] : [])
-  ];
+  const canManageSite = Boolean(user?.can_manage_site || ['owner', 'manager'].includes(user?.site_role));
+  const visibleTabs = dashboardTabs.filter((tab) => !tab.managersOnly || canManageSite);
 
   const activeProjects = useMemo(
     () => projects.filter((project) => getLifecycleStatus(project) !== 'completed'),
@@ -195,6 +200,21 @@ export default function Dashboard({
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+
+  async function submitInviteCode(event) {
+    event.preventDefault();
+    setInviteJoinError('');
+    setJoiningInvite(true);
+    try {
+      await onAcceptInvite(inviteCode);
+      setInviteCode('');
+    } catch (err) {
+      setInviteJoinError(err.message);
+    } finally {
+      setJoiningInvite(false);
     }
   }
 
@@ -312,42 +332,50 @@ export default function Dashboard({
   function renderProjectsTab() {
     return (
       <section className="page-grid">
-        {canManageSite ? (
-          <aside className="panel create-panel">
-            <h2>Create project</h2>
-            <form className="stack" onSubmit={submit}>
+        <aside className="panel create-panel">
+          <h2>Create project</h2>
+          <form className="stack" onSubmit={submit}>
+            <label>
+              Project name
+              <input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Medical office buildout" />
+            </label>
+            <label>
+              Location
+              <input value={form.location} onChange={(event) => updateField('location', event.target.value)} placeholder="City, state" />
+            </label>
+            <label>
+              Description
+              <textarea value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Scope, client, phase, or notes" />
+            </label>
+            <div className="two-col">
               <label>
-                Project name
-                <input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Medical office buildout" />
+                Start
+                <input type="date" value={form.start_date} onChange={(event) => updateField('start_date', event.target.value)} />
               </label>
               <label>
-                Location
-                <input value={form.location} onChange={(event) => updateField('location', event.target.value)} placeholder="City, state" />
+                Finish
+                <input type="date" value={form.end_date} onChange={(event) => updateField('end_date', event.target.value)} />
               </label>
+            </div>
+            {error && <p className="error-box">{error}</p>}
+            <button className="primary-button" disabled={saving}>{saving ? 'Creating...' : 'Create project'}</button>
+          </form>
+
+          <div className="join-invite-card">
+            <h3>Join with invite code</h3>
+            <p className="muted">Paste a project code from Slack to add yourself to that project.</p>
+            <form className="stack compact-form" onSubmit={submitInviteCode}>
               <label>
-                Description
-                <textarea value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Scope, client, phase, or notes" />
+                Invite code
+                <input value={inviteCode} onChange={(event) => setInviteCode(event.target.value)} placeholder="ABCD-1234-EF" />
               </label>
-              <div className="two-col">
-                <label>
-                  Start
-                  <input type="date" value={form.start_date} onChange={(event) => updateField('start_date', event.target.value)} />
-                </label>
-                <label>
-                  Finish
-                  <input type="date" value={form.end_date} onChange={(event) => updateField('end_date', event.target.value)} />
-                </label>
-              </div>
-              {error && <p className="error-box">{error}</p>}
-              <button className="primary-button" disabled={saving}>{saving ? 'Creating...' : 'Create project'}</button>
+              {inviteJoinError && <p className="error-box">{inviteJoinError}</p>}
+              <button className="ghost-button compact" disabled={!onAcceptInvite || joiningInvite || !inviteCode.trim()} type="submit">
+                {joiningInvite ? 'Joining...' : 'Join project'}
+              </button>
             </form>
-          </aside>
-        ) : (
-          <aside className="panel create-panel">
-            <h2>Your access</h2>
-            <p className="muted">Viewer/editor accounts can only see projects they are assigned to. Site managers and owners can create projects and view the full portfolio.</p>
-          </aside>
-        )}
+          </div>
+        </aside>
 
         <section className="panel project-list-panel">
           <div className="panel-heading">
@@ -360,7 +388,7 @@ export default function Dashboard({
           {renderProjectCards(
             activeProjects,
             'No active projects yet',
-            'Create your first project, then add tasks and invite other users.'
+            'Create your first project, then add tasks and assign other users.'
           )}
         </section>
       </section>
@@ -394,8 +422,8 @@ export default function Dashboard({
         <section className="panel">
           <div className="panel-heading">
             <div>
-              <h2>Projects and assignments</h2>
-              <p>See who is assigned to each active or completed project you can access.</p>
+              <h2>Project assignments</h2>
+              <p>See which users are assigned to each active or completed project you can access.</p>
             </div>
           </div>
 
@@ -593,7 +621,7 @@ export default function Dashboard({
           <span className="brand-mark">BT</span>
           <div>
             <strong>BuildTrack Cloud</strong>
-            <span>{user?.name}</span>
+            <span>{user?.name} · {titleCase(user?.site_role || 'member')}</span>
           </div>
         </div>
         <div className="topbar-actions">
@@ -603,7 +631,7 @@ export default function Dashboard({
       </header>
 
       <nav className="dashboard-tabs" aria-label="Dashboard tabs">
-        {dashboardTabs.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             className={activeTab === tab.id ? 'active' : ''}
             key={tab.id}
@@ -615,12 +643,14 @@ export default function Dashboard({
         ))}
       </nav>
 
+      {inviteNotice && <p className="notice-box dashboard-error">{inviteNotice}</p>}
+      {inviteError && <p className="error-box dashboard-error">{inviteError}</p>}
       {activeTab !== 'projects' && activeTab !== 'completed' && error && <p className="error-box dashboard-error">{error}</p>}
       {activeTab === 'projects' && renderProjectsTab()}
       {activeTab === 'completed' && renderCompletedTab()}
       {activeTab === 'assignments' && renderAssignmentsTab()}
       {activeTab === 'calendar' && renderCalendarTab()}
-      {activeTab === 'site-members' && canManageSite && <SiteMembersPanel currentUser={user} />}
+      {activeTab === 'site-members' && canManageSite && <SiteMembersPanel currentUser={user} onOpenProject={onOpenProject} />}
     </main>
   );
 }

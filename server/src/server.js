@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const http = require('http');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
@@ -16,7 +17,7 @@ const { pool, query, tx } = require('./db');
 const PORT = Number(process.env.PORT || 4000);
 const JWT_SECRET = process.env.JWT_SECRET || 'local-development-secret-change-me';
 const APP_NAME = process.env.APP_NAME || 'BuildTrack Cloud';
-const BLUEPRINT_MAX_FILE_SIZE = Number(process.env.BLUEPRINT_MAX_FILE_SIZE || 25 * 1024 * 1024);
+const SLACK_WEBHOOK_URL = String(process.env.SLACK_WEBHOOK_URL || '').trim();
 const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
@@ -34,17 +35,23 @@ const statuses = new Set(['not_started', 'in_progress', 'blocked', 'complete']);
 const projectLifecycleStatuses = new Set(['active', 'completed']);
 const priorities = new Set(['low', 'normal', 'high', 'critical']);
 const roles = new Set(['owner', 'manager', 'editor', 'viewer']);
-const siteRoles = new Set(['owner', 'manager', 'editor', 'viewer']);
-const accessStatuses = new Set(['active', 'revoked']);
+const inviteRoles = new Set(['manager', 'editor', 'viewer']);
+const siteRoles = new Set(['owner', 'manager', 'member']);
 const dependencyTypes = new Set(['FS', 'SS', 'FF', 'SF']);
+const managerSiteRoles = new Set(['owner', 'manager']);
+const configuredBlueprintBytes = Number(process.env.MAX_BLUEPRINT_BYTES || 25 * 1024 * 1024);
+const MAX_BLUEPRINT_BYTES = Number.isFinite(configuredBlueprintBytes) && configuredBlueprintBytes > 0
+  ? configuredBlueprintBytes
+  : 25 * 1024 * 1024;
 
-const projectChecklistDefinitions = [
-  { key: 'ips_requested', label: 'IPs requested' },
-  { key: 'panel_ordered', label: 'Panel ordered' },
-  { key: 'clearances_programmed', label: 'Clearances programmed' },
-  { key: 'doors_programmed', label: 'Doors programmed' },
-  { key: 'ccure_operator_established', label: 'CCure Operator established' }
+const defaultChecklistItems = [
+  { item_key: 'ips_requested', label: 'IPs requested', sort_order: 1 },
+  { item_key: 'panel_ordered', label: 'Panel ordered', sort_order: 2 },
+  { item_key: 'clearances_programmed', label: 'Clearances programmed', sort_order: 3 },
+  { item_key: 'doors_programmed', label: 'Doors programmed', sort_order: 4 },
+  { item_key: 'ccure_operator_established', label: 'CCure Operator established', sort_order: 5 }
 ];
+
 const app = express();
 app.set('trust proxy', 1);
 const server = http.createServer(app);
@@ -70,7 +77,26 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 const blueprintUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: BLUEPRINT_MAX_FILE_SIZE, files: 10 }
+  limits: { fileSize: MAX_BLUEPRINT_BYTES },
+  fileFilter(req, file, callback) {
+    const allowedTypes = new Set([
+      'application/pdf',
+      'image/png',
+      'image/jpeg',
+      'image/webp',
+      'image/vnd.dwg',
+      'application/acad',
+      'application/x-acad',
+      'application/dwg',
+      'application/x-dwg',
+      'application/octet-stream'
+    ]);
+    if (!allowedTypes.has(file.mimetype)) {
+      callback(httpError(400, 'Blueprint uploads must be PDF, image, DWG, or common drawing files.'));
+      return;
+    }
+    callback(null, true);
+  }
 });
 
 function asyncHandler(handler) {
@@ -94,6 +120,131 @@ function parseId(value, label = 'id') {
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
+
+function normalizeInviteCode(value) {
+  const code = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!/^[A-Z0-9]{6,32}$/.test(code)) {
+    throw httpError(400, 'Invitation code must be 6 to 32 letters or numbers.');
+  }
+  return code;
+}
+
+function formatInviteCode(code) {
+  return String(code || '').replace(/(.{4})/g, '$1-').replace(/-$/, '');
+}
+
+function generateInviteCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.randomBytes(10);
+  let code = '';
+  for (const byte of bytes) {
+    code += alphabet[byte % alphabet.length];
+  }
+  return code;
+}
+
+function getAppUrl(req) {
+  const configured = String(process.env.APP_URL || '').trim().replace(/\/+$/, '');
+  if (configured) return configured;
+
+  const origin = String(req.get('origin') || '').trim().replace(/\/+$/, '');
+  if (origin && origin !== '*') return origin;
+
+  const host = req.get('x-forwarded-host') || req.get('host');
+  const proto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+  return host ? `${proto}://${host}` : '';
+}
+
+function clampInteger(value, { label, defaultValue, min, max }) {
+  if (value === undefined || value === null || value === '') return defaultValue;
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < min || number > max) {
+    throw httpError(400, `${label} must be a whole number from ${min} to ${max}.`);
+  }
+  return number;
+}
+
+function buildInviteUrl(req, code) {
+  const appUrl = getAppUrl(req);
+  return appUrl ? `${appUrl}/?invite=${encodeURIComponent(code)}` : '';
+}
+
+function slackSafeText(value, fallback = 'Not set') {
+  const text = String(value || '').trim();
+  return text || fallback;
+}
+
+async function sendSlackInviteMessage({ req, project, invite, actor }) {
+  if (!SLACK_WEBHOOK_URL) {
+    throw httpError(400, 'Slack is not set up yet. Add SLACK_WEBHOOK_URL in Render first.');
+  }
+
+  const formattedCode = formatInviteCode(invite.code);
+  const inviteUrl = buildInviteUrl(req, invite.code);
+  const expiresAt = invite.expires_at ? new Date(invite.expires_at).toLocaleString('en-US', { timeZone: 'UTC', timeZoneName: 'short' }) : 'No expiration';
+  const fields = [
+    { type: 'mrkdwn', text: `*Project:*\n${slackSafeText(project.name)}` },
+    { type: 'mrkdwn', text: `*Location:*\n${slackSafeText(project.location)}` },
+    { type: 'mrkdwn', text: `*Dates:*\n${project.start_date} to ${project.end_date}` },
+    { type: 'mrkdwn', text: `*Role:*\n${invite.role}` },
+    { type: 'mrkdwn', text: `*Expires:*\n${expiresAt}` },
+    { type: 'mrkdwn', text: `*Uses:*\n${invite.max_uses}` }
+  ];
+
+  const blocks = [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*${APP_NAME} project invitation*\n${actor.name} created an invitation code for *${slackSafeText(project.name)}*.`
+      }
+    },
+    { type: 'section', fields },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Invitation code:* \`${formattedCode}\`\nCopy this code into ${APP_NAME}, or use the button below.`
+      }
+    }
+  ];
+
+  if (inviteUrl) {
+    blocks.push({
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Open invitation', emoji: true },
+          url: inviteUrl
+        }
+      ]
+    });
+  }
+
+  blocks.push({
+    type: 'context',
+    elements: [
+      { type: 'mrkdwn', text: `Only people with a BuildTrack account can accept this code. Created by ${actor.name}.` }
+    ]
+  });
+
+  const response = await fetch(SLACK_WEBHOOK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text: `${APP_NAME} project invitation for ${project.name}. Code: ${formattedCode}`,
+      blocks
+    })
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    const message = body ? `Slack returned ${response.status}: ${body}` : `Slack returned ${response.status}.`;
+    throw httpError(502, message);
+  }
+}
+
 
 function cleanText(value) {
   if (value === undefined || value === null) return null;
@@ -170,13 +321,14 @@ function signToken(user) {
 }
 
 function publicUser(user) {
+  const siteRole = user.site_role || 'member';
   return {
     id: user.id,
     name: user.name,
     email: user.email,
-    site_role: user.site_role || 'viewer',
-    access_status: user.access_status || 'active',
-    can_manage_site: Boolean(user.can_manage_site)
+    site_role: siteRole,
+    access_revoked: Boolean(user.access_revoked),
+    can_manage_site: managerSiteRoles.has(siteRole)
   };
 }
 
@@ -187,9 +339,9 @@ async function requireAuth(req, res, next) {
     if (!token) throw httpError(401, 'Authentication token required.');
 
     const payload = jwt.verify(token, JWT_SECRET);
-    const result = await query('SELECT id, name, email, site_role, access_status FROM users WHERE id = $1', [payload.sub]);
+    const result = await query('SELECT id, name, email, site_role, access_revoked FROM users WHERE id = $1', [payload.sub]);
     if (!result.rowCount) throw httpError(401, 'User no longer exists.');
-    if (result.rows[0].access_status === 'revoked') throw httpError(403, 'Your account access has been revoked.');
+    if (result.rows[0].access_revoked) throw httpError(403, 'Your site access has been revoked. Contact a manager or owner.');
 
     req.user = result.rows[0];
     next();
@@ -207,119 +359,132 @@ async function getMembership(projectId, userId, db = { query }) {
   return result.rows[0] || null;
 }
 
-async function getSiteAdminAccess(userId, db = { query }) {
+async function hasPortfolioViewAccess(userId, db = { query }) {
   const result = await db.query(
-    `SELECT
-       u.site_role,
-       u.access_status,
-       EXISTS (
-         SELECT 1 FROM project_members pm
-         WHERE pm.user_id = u.id AND pm.role IN ('owner', 'manager')
-       ) AS has_project_admin_role
-     FROM users u
-     WHERE u.id = $1`,
+    `SELECT 1
+     FROM users
+     WHERE id = $1 AND access_revoked = false AND site_role IN ('owner', 'manager')
+     UNION
+     SELECT 1
+     FROM project_members
+     WHERE user_id = $1 AND role IN ('owner', 'manager')
+     LIMIT 1`,
     [userId]
   );
-
-  if (!result.rowCount) throw httpError(401, 'User no longer exists.');
-  const row = result.rows[0];
-  if (row.access_status === 'revoked') throw httpError(403, 'Your account access has been revoked.');
-
-  const siteRole = row.site_role || 'viewer';
-  return {
-    siteRole,
-    accessStatus: row.access_status || 'active',
-    canManageSite: ['owner', 'manager'].includes(siteRole) || row.has_project_admin_role === true,
-    canViewPortfolio: ['owner', 'manager'].includes(siteRole) || row.has_project_admin_role === true,
-    isSiteOwner: siteRole === 'owner',
-    hasProjectAdminRole: row.has_project_admin_role === true
-  };
-}
-
-async function requireSiteManager(userId, db = { query }) {
-  const access = await getSiteAdminAccess(userId, db);
-  if (!access.canManageSite) throw httpError(403, 'This action requires site manager or owner access.');
-  return access;
-}
-
-async function ensureAtLeastOneActiveSiteOwner(db, targetUserId = null) {
-  const result = await db.query(
-    `SELECT count(*)::int AS count
-     FROM users
-     WHERE site_role = 'owner'
-       AND access_status = 'active'
-       AND ($1::int IS NULL OR id <> $1)`,
-    [targetUserId]
-  );
-  if (result.rows[0].count <= 0) {
-    throw httpError(400, 'The site must keep at least one active owner.');
-  }
-}
-
-function checklistDefinitionForKey(key) {
-  const definition = projectChecklistDefinitions.find((item) => item.key === key);
-  if (!definition) throw httpError(400, `Checklist item must be one of: ${projectChecklistDefinitions.map((item) => item.key).join(', ')}.`);
-  return definition;
-}
-
-function buildChecklist(rows) {
-  const byKey = new Map((rows || []).map((row) => [row.item_key, row]));
-  return projectChecklistDefinitions.map((definition) => {
-    const row = byKey.get(definition.key);
-    return {
-      key: definition.key,
-      label: definition.label,
-      is_checked: Boolean(row?.is_checked),
-      checked_at: row?.checked_at || null,
-      checked_by: row?.checked_by || null,
-      checked_by_name: row?.checked_by_name || null
-    };
-  });
-}
-
-function safeDownloadName(name) {
-  return String(name || 'blueprint')
-    .replace(/[\r\n\0]/g, '')
-    .replace(/[\\/]/g, '-')
-    .replace(/"/g, "'")
-    .slice(0, 160) || 'blueprint';
-}
-
-async function hasPortfolioViewAccess(userId, db = { query }) {
-  const access = await getSiteAdminAccess(userId, db);
-  return access.canViewPortfolio;
+  return result.rowCount > 0;
 }
 
 async function requireProjectAccess(projectId, userId, db = { query }) {
   const membership = await getMembership(projectId, userId, db);
   if (membership) return { role: membership.role, membership, portfolio: false };
 
-  const siteAccess = await getSiteAdminAccess(userId, db);
-  if (siteAccess.canViewPortfolio) {
+  if (await hasPortfolioViewAccess(userId, db)) {
     const exists = await db.query('SELECT 1 FROM projects WHERE id = $1', [projectId]);
     if (!exists.rowCount) throw httpError(404, 'Project not found.');
-    if (siteAccess.siteRole === 'owner') return { role: 'owner', membership: null, portfolio: true };
-    if (siteAccess.siteRole === 'manager') return { role: 'manager', membership: null, portfolio: true };
     return { role: 'portfolio_viewer', membership: null, portfolio: true };
   }
 
   throw httpError(403, 'You are not assigned to this project.');
 }
 
+function higherProjectRole(roleA, roleB) {
+  return roleRank[roleA] >= roleRank[roleB] ? roleA : roleB;
+}
+
 async function requireProjectMembership(projectId, userId, minimumRole = 'viewer', db = { query }) {
   const membership = await getMembership(projectId, userId, db);
-  if (membership && roleRank[membership.role] >= roleRank[minimumRole]) return membership;
-
-  const siteAccess = await getSiteAdminAccess(userId, db);
-  const inheritedRole = siteAccess.siteRole === 'owner' ? 'owner' : siteAccess.siteRole === 'manager' ? 'manager' : null;
-  if (inheritedRole && roleRank[inheritedRole] >= roleRank[minimumRole]) {
-    const exists = await db.query('SELECT 1 FROM projects WHERE id = $1', [projectId]);
-    if (!exists.rowCount) throw httpError(404, 'Project not found.');
-    return { role: inheritedRole, inherited_site_role: true };
-  }
-
   if (!membership) throw httpError(403, 'You are not assigned to this project.');
-  throw httpError(403, `This action requires ${minimumRole} access or higher.`);
+  if (roleRank[membership.role] < roleRank[minimumRole]) {
+    throw httpError(403, `This action requires ${minimumRole} access or higher.`);
+  }
+  return membership;
+}
+
+
+function requireSiteManagement(user) {
+  const siteRole = user?.site_role || 'member';
+  if (!managerSiteRoles.has(siteRole)) {
+    throw httpError(403, 'Site member management requires site manager or site owner access.');
+  }
+  return siteRole;
+}
+
+function ensureSiteActorCanManageTarget(actorRole, targetUser, requestedRole = null) {
+  if (actorRole === 'owner') return;
+  if (targetUser.site_role === 'owner' || requestedRole === 'owner') {
+    throw httpError(403, 'Only site owners can manage site owners.');
+  }
+}
+
+async function ensureLastSiteOwnerSafe(db, targetUserId, options = {}) {
+  const target = await db.query('SELECT id, site_role, access_revoked FROM users WHERE id = $1', [targetUserId]);
+  if (!target.rowCount) throw httpError(404, 'User not found.');
+
+  const current = target.rows[0];
+  const nextRole = options.nextRole === undefined ? current.site_role : options.nextRole;
+  const nextRevoked = options.nextRevoked === undefined ? current.access_revoked : options.nextRevoked;
+  const deleting = Boolean(options.deleting);
+
+  const wouldRemoveActiveOwner = current.site_role === 'owner' && !current.access_revoked && (
+    deleting || nextRole !== 'owner' || nextRevoked === true
+  );
+
+  if (!wouldRemoveActiveOwner) return current;
+
+  const owners = await db.query(
+    "SELECT count(*)::int AS count FROM users WHERE site_role = 'owner' AND access_revoked = false AND id <> $1",
+    [targetUserId]
+  );
+  if (owners.rows[0].count < 1) {
+    throw httpError(400, 'The site must keep at least one active owner. Assign another owner before making this change.');
+  }
+  return current;
+}
+
+async function ensureNotLastProjectOwner(db, targetUserId) {
+  const result = await db.query(
+    `SELECT p.id, p.name
+     FROM projects p
+     JOIN project_members target_pm ON target_pm.project_id = p.id
+      AND target_pm.user_id = $1
+      AND target_pm.role = 'owner'
+     WHERE NOT EXISTS (
+       SELECT 1
+       FROM project_members other_pm
+       WHERE other_pm.project_id = p.id
+        AND other_pm.user_id <> $1
+        AND other_pm.role = 'owner'
+     )
+     ORDER BY p.name
+     LIMIT 5`,
+    [targetUserId]
+  );
+
+  if (result.rowCount) {
+    const names = result.rows.map((row) => row.name).join(', ');
+    throw httpError(400, `This user is the only owner on: ${names}. Add another project owner before deleting the user.`);
+  }
+}
+
+function safeDownloadName(value) {
+  const cleaned = String(value || 'blueprint').replace(/[\\/\r\n\t]/g, ' ').trim();
+  return cleaned || 'blueprint';
+}
+
+async function runBlueprintUpload(req, res) {
+  await new Promise((resolve, reject) => {
+    blueprintUpload.single('blueprint')(req, res, (error) => {
+      if (error) {
+        if (error.code === 'LIMIT_FILE_SIZE') {
+          error.status = 400;
+          error.message = `Blueprint file is too large. Maximum size is ${Math.round(MAX_BLUEPRINT_BYTES / (1024 * 1024))} MB.`;
+        }
+        reject(error);
+      } else {
+        resolve();
+      }
+    });
+  });
 }
 
 async function writeAudit(db, entry) {
@@ -346,6 +511,65 @@ function emitProjectChange(projectId, payload) {
     at: new Date().toISOString(),
     ...payload
   });
+}
+
+
+async function ensureProjectChecklist(db, projectId) {
+  const values = [];
+  const placeholders = defaultChecklistItems.map((item, index) => {
+    const offset = index * 4;
+    values.push(projectId, item.item_key, item.label, item.sort_order);
+    return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`;
+  });
+
+  await db.query(
+    `INSERT INTO project_checklist_items (project_id, item_key, label, sort_order)
+     VALUES ${placeholders.join(', ')}
+     ON CONFLICT (project_id, item_key) DO NOTHING`,
+    values
+  );
+}
+
+async function loadProjectChecklist(projectId) {
+  await ensureProjectChecklist({ query }, projectId);
+  const result = await query(
+    `SELECT
+       pci.id,
+       pci.project_id,
+       pci.item_key,
+       pci.label,
+       pci.is_checked,
+       pci.sort_order,
+       pci.updated_by,
+       updater.name AS updated_by_name,
+       pci.updated_at
+     FROM project_checklist_items pci
+     LEFT JOIN users updater ON updater.id = pci.updated_by
+     WHERE pci.project_id = $1
+     ORDER BY pci.sort_order ASC, pci.id ASC`,
+    [projectId]
+  );
+  return result.rows;
+}
+
+async function loadProjectBlueprints(projectId) {
+  const result = await query(
+    `SELECT
+       pb.id,
+       pb.project_id,
+       pb.original_name,
+       pb.mime_type,
+       pb.size_bytes,
+       pb.uploaded_by,
+       uploader.name AS uploaded_by_name,
+       pb.created_at
+     FROM project_blueprints pb
+     LEFT JOIN users uploader ON uploader.id = pb.uploaded_by
+     WHERE pb.project_id = $1
+     ORDER BY pb.created_at DESC, pb.id DESC`,
+    [projectId]
+  );
+  return result.rows;
 }
 
 const taskSelect = `
@@ -456,7 +680,8 @@ async function loadProjectPayload(projectId, userId) {
        pm.role,
        pm.created_at,
        u.name,
-       u.email
+       u.email,
+       u.access_revoked
      FROM project_members pm
      JOIN users u ON u.id = pm.user_id
      WHERE pm.project_id = $1
@@ -486,47 +711,16 @@ async function loadProjectPayload(projectId, userId) {
     [projectId]
   );
 
-  const checklistResult = await query(
-    `SELECT
-       pci.project_id,
-       pci.item_key,
-       pci.label,
-       pci.is_checked,
-       pci.checked_by,
-       pci.checked_at,
-       checked_user.name AS checked_by_name
-     FROM project_checklist_items pci
-     LEFT JOIN users checked_user ON checked_user.id = pci.checked_by
-     WHERE pci.project_id = $1
-     ORDER BY pci.item_key`,
-    [projectId]
-  );
-
-  const blueprintsResult = await query(
-    `SELECT
-       pb.id,
-       pb.project_id,
-       pb.file_name,
-       pb.mime_type,
-       pb.file_size,
-       pb.uploaded_by,
-       pb.created_at,
-       uploader.name AS uploaded_by_name,
-       uploader.email AS uploaded_by_email
-     FROM project_blueprints pb
-     LEFT JOIN users uploader ON uploader.id = pb.uploaded_by
-     WHERE pb.project_id = $1
-     ORDER BY pb.created_at DESC`,
-    [projectId]
-  );
+  const checklist = await loadProjectChecklist(projectId);
+  const blueprints = await loadProjectBlueprints(projectId);
 
   return {
     project: { ...projectResult.rows[0], role: access.role },
     tasks: tasksResult.rows,
     dependencies: dependenciesResult.rows,
     members: membersResult.rows,
-    checklist: buildChecklist(checklistResult.rows),
-    blueprints: blueprintsResult.rows,
+    checklist,
+    blueprints,
     audit: auditResult.rows
   };
 }
@@ -613,13 +807,13 @@ app.post('/api/auth/register', asyncHandler(async (req, res) => {
   if (password.length < 8) throw httpError(400, 'Password must be at least 8 characters.');
 
   const passwordHash = await bcrypt.hash(password, 12);
-  const userCountResult = await query('SELECT count(*)::int AS count FROM users');
-  const initialSiteRole = userCountResult.rows[0].count === 0 ? 'owner' : 'viewer';
+  const countResult = await query('SELECT count(*)::int AS count FROM users');
+  const siteRole = countResult.rows[0].count === 0 ? 'owner' : 'member';
 
   try {
     const result = await query(
-      'INSERT INTO users (name, email, password_hash, site_role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, site_role, access_status',
-      [name, email, passwordHash, initialSiteRole]
+      'INSERT INTO users (name, email, password_hash, site_role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, site_role, access_revoked',
+      [name, email, passwordHash, siteRole]
     );
     const user = result.rows[0];
     res.status(201).json({ user: publicUser(user), token: signToken(user) });
@@ -633,11 +827,11 @@ app.post('/api/auth/login', asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || '');
 
-  const result = await query('SELECT id, name, email, password_hash, site_role, access_status FROM users WHERE email = $1', [email]);
+  const result = await query('SELECT id, name, email, password_hash, site_role, access_revoked FROM users WHERE email = $1', [email]);
   if (!result.rowCount) throw httpError(401, 'Invalid email or password.');
 
   const user = result.rows[0];
-  if (user.access_status === 'revoked') throw httpError(403, 'Your account access has been revoked.');
+  if (user.access_revoked) throw httpError(403, 'Your site access has been revoked. Contact a manager or owner.');
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) throw httpError(401, 'Invalid email or password.');
 
@@ -645,16 +839,23 @@ app.post('/api/auth/login', asyncHandler(async (req, res) => {
 }));
 
 app.get('/api/me', requireAuth, asyncHandler(async (req, res) => {
-  const siteAccess = await getSiteAdminAccess(req.user.id);
-  res.json({ user: publicUser({ ...req.user, can_manage_site: siteAccess.canManageSite }) });
+  res.json({ user: publicUser(req.user) });
 }));
 
 app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
   const result = await query(
     `WITH portfolio_access AS (
        SELECT (
-         EXISTS (SELECT 1 FROM users WHERE id = $1 AND site_role IN ('owner', 'manager') AND access_status = 'active')
-         OR EXISTS (SELECT 1 FROM project_members WHERE user_id = $1 AND role IN ('owner', 'manager'))
+         EXISTS (
+           SELECT 1
+           FROM users
+           WHERE id = $1 AND access_revoked = false AND site_role IN ('owner', 'manager')
+         )
+         OR EXISTS (
+           SELECT 1
+           FROM project_members
+           WHERE user_id = $1 AND role IN ('owner', 'manager')
+         )
        ) AS can_view_all
      ),
      accessible_projects AS (
@@ -668,10 +869,9 @@ app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
          to_char(p.end_date, 'YYYY-MM-DD') AS end_date,
          p.created_at,
          p.updated_at,
-         coalesce(pm.role, CASE WHEN u.site_role IN ('owner', 'manager') THEN u.site_role ELSE 'portfolio_viewer' END) AS role
+         coalesce(pm.role, 'portfolio_viewer') AS role
        FROM projects p
        CROSS JOIN portfolio_access pa
-       JOIN users u ON u.id = $1
        LEFT JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = $1
        WHERE pa.can_view_all = true OR pm.user_id = $1
      ),
@@ -698,7 +898,8 @@ app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
                'user_id', u.id,
                'name', u.name,
                'email', u.email,
-               'role', pm.role
+               'role', pm.role,
+               'access_revoked', u.access_revoked
              )
              ORDER BY CASE pm.role WHEN 'owner' THEN 1 WHEN 'manager' THEN 2 WHEN 'editor' THEN 3 ELSE 4 END, u.name
            ) FILTER (WHERE u.id IS NOT NULL),
@@ -754,6 +955,157 @@ app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
   res.json({ projects: result.rows });
 }));
 
+
+app.get('/api/site/users', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteManagement(req.user);
+
+  const result = await query(
+    `WITH member_projects AS (
+       SELECT
+         pm.user_id,
+         count(*)::int AS project_count,
+         coalesce(
+           json_agg(
+             json_build_object(
+               'id', p.id,
+               'name', p.name,
+               'location', p.location,
+               'project_status', p.project_status,
+               'role', pm.role,
+               'start_date', to_char(p.start_date, 'YYYY-MM-DD'),
+               'end_date', to_char(p.end_date, 'YYYY-MM-DD')
+             )
+             ORDER BY p.name
+           ) FILTER (WHERE p.id IS NOT NULL),
+           '[]'::json
+         ) AS projects
+       FROM project_members pm
+       JOIN projects p ON p.id = pm.project_id
+       GROUP BY pm.user_id
+     )
+     SELECT
+       u.id,
+       u.name,
+       u.email,
+       u.site_role,
+       u.access_revoked,
+       u.created_at,
+       u.updated_at,
+       coalesce(mp.project_count, 0) AS project_count,
+       coalesce(mp.projects, '[]'::json) AS projects
+     FROM users u
+     LEFT JOIN member_projects mp ON mp.user_id = u.id
+     ORDER BY u.access_revoked ASC,
+       CASE u.site_role WHEN 'owner' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END,
+       u.name ASC`
+  );
+
+  res.json({ users: result.rows });
+}));
+
+app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) => {
+  const targetUserId = parseId(req.params.userId, 'userId');
+  const actorRole = requireSiteManagement(req.user);
+
+  const updatedUser = await tx(async (client) => {
+    const targetResult = await client.query(
+      'SELECT id, name, email, site_role, access_revoked FROM users WHERE id = $1',
+      [targetUserId]
+    );
+    if (!targetResult.rowCount) throw httpError(404, 'User not found.');
+    const targetUser = targetResult.rows[0];
+
+    let nextRole;
+    if (req.body.site_role !== undefined || req.body.role !== undefined) {
+      nextRole = requireEnum(req.body.site_role ?? req.body.role, siteRoles, 'site_role');
+    }
+    let nextRevoked;
+    if (req.body.access_revoked !== undefined || req.body.revoked !== undefined) {
+      nextRevoked = normalizeBoolean(req.body.access_revoked ?? req.body.revoked, targetUser.access_revoked);
+    }
+
+    ensureSiteActorCanManageTarget(actorRole, targetUser, nextRole);
+    if (targetUserId === req.user.id && nextRevoked === true) {
+      throw httpError(400, 'You cannot revoke your own access.');
+    }
+    if (targetUserId === req.user.id && nextRole && nextRole !== targetUser.site_role) {
+      throw httpError(400, 'Ask another site owner to change your own site role.');
+    }
+
+    await ensureLastSiteOwnerSafe(client, targetUserId, {
+      nextRole: nextRole === undefined ? targetUser.site_role : nextRole,
+      nextRevoked: nextRevoked === undefined ? targetUser.access_revoked : nextRevoked
+    });
+    if (nextRevoked === true && targetUser.access_revoked === false) {
+      await ensureNotLastProjectOwner(client, targetUserId);
+    }
+
+    const values = [];
+    const sets = [];
+    if (nextRole !== undefined) {
+      values.push(nextRole);
+      sets.push(`site_role = $${values.length}`);
+    }
+    if (nextRevoked !== undefined) {
+      values.push(nextRevoked);
+      sets.push(`access_revoked = $${values.length}`);
+    }
+    if (!sets.length) return targetUser;
+
+    values.push(targetUserId);
+    const updateResult = await client.query(
+      `UPDATE users
+       SET ${sets.join(', ')}
+       WHERE id = $${values.length}
+       RETURNING id, name, email, site_role, access_revoked, created_at, updated_at`,
+      values
+    );
+
+    await writeAudit(client, {
+      userId: req.user.id,
+      action: 'site_user_updated',
+      entityType: 'site_user',
+      entityId: targetUserId,
+      before: targetUser,
+      after: updateResult.rows[0]
+    });
+
+    return updateResult.rows[0];
+  });
+
+  res.json({ user: updatedUser });
+}));
+
+app.delete('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) => {
+  const targetUserId = parseId(req.params.userId, 'userId');
+  const actorRole = requireSiteManagement(req.user);
+
+  await tx(async (client) => {
+    const targetResult = await client.query(
+      'SELECT id, name, email, site_role, access_revoked FROM users WHERE id = $1',
+      [targetUserId]
+    );
+    if (!targetResult.rowCount) throw httpError(404, 'User not found.');
+    const targetUser = targetResult.rows[0];
+
+    if (targetUserId === req.user.id) throw httpError(400, 'You cannot delete your own user account.');
+    ensureSiteActorCanManageTarget(actorRole, targetUser);
+    await ensureLastSiteOwnerSafe(client, targetUserId, { deleting: true });
+    await ensureNotLastProjectOwner(client, targetUserId);
+
+    await writeAudit(client, {
+      userId: req.user.id,
+      action: 'site_user_deleted',
+      entityType: 'site_user',
+      entityId: targetUserId,
+      before: targetUser
+    });
+    await client.query('DELETE FROM users WHERE id = $1', [targetUserId]);
+  });
+
+  res.status(204).send();
+}));
+
 app.post('/api/projects', requireAuth, asyncHandler(async (req, res) => {
   const name = requireText(req.body.name, 'Project name');
   const location = cleanText(req.body.location);
@@ -761,7 +1113,6 @@ app.post('/api/projects', requireAuth, asyncHandler(async (req, res) => {
   const startDate = normalizeDate(req.body.start_date, 'start_date');
   const endDate = normalizeDate(req.body.end_date, 'end_date');
   ensureDateOrder(startDate, endDate);
-  await requireSiteManager(req.user.id);
 
   const project = await tx(async (client) => {
     const result = await client.query(
@@ -778,6 +1129,7 @@ app.post('/api/projects', requireAuth, asyncHandler(async (req, res) => {
       req.user.id,
       'owner'
     ]);
+    await ensureProjectChecklist(client, inserted.id);
 
     await writeAudit(client, {
       projectId: inserted.id,
@@ -908,14 +1260,17 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
   const member = await tx(async (client) => {
     const membership = await requireProjectMembership(projectId, req.user.id, 'manager', client);
     if (role === 'owner' && membership.role !== 'owner') {
-      throw httpError(403, 'Only project owners or site owners can add another owner.');
+      throw httpError(403, 'Only project owners can add another owner.');
     }
 
-    const userResult = await client.query('SELECT id, name, email FROM users WHERE email = $1 AND access_status = $2', [email, 'active']);
+    const userResult = await client.query('SELECT id, name, email, access_revoked FROM users WHERE email = $1', [email]);
     if (!userResult.rowCount) {
-      throw httpError(404, 'That active user was not found. Ask them to create an account first, or reactivate them in Site members.');
+      throw httpError(404, 'That user has not registered yet. Ask them to create an account first, then add them again.');
     }
     const user = userResult.rows[0];
+    if (user.access_revoked) {
+      throw httpError(400, 'That user is currently revoked at the site level. Restore site access before assigning them to a project.');
+    }
 
     await client.query(
       `INSERT INTO project_members (project_id, user_id, role)
@@ -924,7 +1279,7 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
       [projectId, user.id, role]
     );
 
-    const row = { project_id: projectId, user_id: user.id, role, name: user.name, email: user.email };
+    const row = { project_id: projectId, user_id: user.id, role, name: user.name, email: user.email, access_revoked: false };
     await writeAudit(client, {
       projectId,
       userId: req.user.id,
@@ -1022,239 +1377,271 @@ app.delete('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler
 }));
 
 
-app.get('/api/site/users', requireAuth, asyncHandler(async (req, res) => {
-  const access = await requireSiteManager(req.user.id);
-  const result = await query(
-    `SELECT
-       u.id,
-       u.name,
-       u.email,
-       u.site_role,
-       u.access_status,
-       u.created_at,
-       count(pm.project_id)::int AS project_count,
-       coalesce(
-         json_agg(
-           json_build_object(
-             'project_id', p.id,
-             'project_name', p.name,
-             'project_status', p.project_status,
-             'role', pm.role,
-             'start_date', to_char(p.start_date, 'YYYY-MM-DD'),
-             'end_date', to_char(p.end_date, 'YYYY-MM-DD')
-           )
-           ORDER BY p.name
-         ) FILTER (WHERE p.id IS NOT NULL),
-         '[]'::json
-       ) AS projects
-     FROM users u
-     LEFT JOIN project_members pm ON pm.user_id = u.id
-     LEFT JOIN projects p ON p.id = pm.project_id
-     GROUP BY u.id
-     ORDER BY
-       CASE u.access_status WHEN 'active' THEN 1 ELSE 2 END,
-       CASE u.site_role WHEN 'owner' THEN 1 WHEN 'manager' THEN 2 WHEN 'editor' THEN 3 ELSE 4 END,
-       u.name`,
-    []
-  );
-
-  res.json({
-    users: result.rows,
-    access: {
-      site_role: access.siteRole,
-      can_manage_site: access.canManageSite,
-      is_site_owner: access.isSiteOwner
-    }
+app.post('/api/projects/:projectId/slack-invites', requireAuth, asyncHandler(async (req, res) => {
+  const projectId = parseId(req.params.projectId, 'projectId');
+  const role = requireEnum(req.body.role || 'viewer', inviteRoles, 'invite role');
+  const expiresInDays = clampInteger(req.body.expires_in_days ?? req.body.expires_days, {
+    label: 'expires_in_days',
+    defaultValue: 7,
+    min: 1,
+    max: 30
   });
+  const maxUses = clampInteger(req.body.max_uses, {
+    label: 'max_uses',
+    defaultValue: 10,
+    min: 1,
+    max: 100
+  });
+
+  const created = await tx(async (client) => {
+    const membership = await requireProjectMembership(projectId, req.user.id, 'manager', client);
+    if (role === 'manager' && membership.role !== 'owner') {
+      throw httpError(403, 'Only project owners can create manager invitation codes.');
+    }
+
+    const projectResult = await client.query(
+      `SELECT id, name, location, description, project_status,
+        to_char(start_date, 'YYYY-MM-DD') AS start_date,
+        to_char(end_date, 'YYYY-MM-DD') AS end_date
+       FROM projects
+       WHERE id = $1`,
+      [projectId]
+    );
+    if (!projectResult.rowCount) throw httpError(404, 'Project not found.');
+
+    let invite;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const code = generateInviteCode();
+      const insertResult = await client.query(
+        `INSERT INTO project_invite_codes
+          (project_id, code, role, max_uses, expires_at, created_by)
+         VALUES ($1, $2, $3, $4, now() + ($5::int * interval '1 day'), $6)
+         ON CONFLICT (code) DO NOTHING
+         RETURNING id, project_id, code, role, max_uses, uses_count, expires_at, created_by, created_at`,
+        [projectId, code, role, maxUses, expiresInDays, req.user.id]
+      );
+      if (insertResult.rowCount) {
+        invite = insertResult.rows[0];
+        break;
+      }
+    }
+
+    if (!invite) throw httpError(500, 'Could not create a unique invitation code. Please try again.');
+
+    await writeAudit(client, {
+      projectId,
+      userId: req.user.id,
+      action: 'slack_invite_code_created',
+      entityType: 'project_invite_code',
+      entityId: invite.id,
+      after: { ...invite, formatted_code: formatInviteCode(invite.code) }
+    });
+
+    return { project: projectResult.rows[0], invite };
+  });
+
+  let slack = { sent: false };
+  try {
+    await sendSlackInviteMessage({ req, project: created.project, invite: created.invite, actor: req.user });
+    slack = { sent: true };
+  } catch (error) {
+    slack = { sent: false, error: error.message || 'Slack message could not be sent.' };
+  }
+
+  const responseInvite = {
+    ...created.invite,
+    formatted_code: formatInviteCode(created.invite.code),
+    invite_url: buildInviteUrl(req, created.invite.code)
+  };
+
+  emitProjectChange(projectId, {
+    actorId: req.user.id,
+    message: slack.sent ? 'Slack invitation code sent.' : 'Invitation code created, but Slack did not send.'
+  });
+
+  res.status(slack.sent ? 201 : 202).json({ invite: responseInvite, project: created.project, slack });
 }));
 
-app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) => {
-  const targetUserId = parseId(req.params.userId, 'userId');
+app.post('/api/invites/:code/accept', requireAuth, asyncHandler(async (req, res) => {
+  const code = normalizeInviteCode(req.params.code);
 
-  const updatedUser = await tx(async (client) => {
-    const access = await requireSiteManager(req.user.id, client);
-    const beforeResult = await client.query('SELECT id, name, email, site_role, access_status, created_at FROM users WHERE id = $1', [targetUserId]);
-    if (!beforeResult.rowCount) throw httpError(404, 'User not found.');
-    const before = beforeResult.rows[0];
-
-    const values = [];
-    const sets = [];
-
-    if (req.body.site_role !== undefined) {
-      const nextRole = requireEnum(req.body.site_role, siteRoles, 'site_role');
-      if (!access.isSiteOwner && (before.site_role === 'owner' || nextRole === 'owner')) {
-        throw httpError(403, 'Only a site owner can manage owner-level users.');
-      }
-      if (before.site_role === 'owner' && nextRole !== 'owner') {
-        await ensureAtLeastOneActiveSiteOwner(client, targetUserId);
-      }
-      values.push(nextRole);
-      sets.push(`site_role = $${values.length}`);
-    }
-
-    if (req.body.access_status !== undefined) {
-      const nextStatus = requireEnum(req.body.access_status, accessStatuses, 'access_status');
-      if (targetUserId === req.user.id && nextStatus === 'revoked') {
-        throw httpError(400, 'You cannot revoke your own access while signed in.');
-      }
-      if (!access.isSiteOwner && before.site_role === 'owner') {
-        throw httpError(403, 'Only a site owner can revoke an owner-level user.');
-      }
-      if (before.site_role === 'owner' && nextStatus === 'revoked') {
-        await ensureAtLeastOneActiveSiteOwner(client, targetUserId);
-      }
-      values.push(nextStatus);
-      sets.push(`access_status = $${values.length}`);
-    }
-
-    if (!sets.length) return before;
-
-    values.push(targetUserId);
-    const updateResult = await client.query(
-      `UPDATE users SET ${sets.join(', ')} WHERE id = $${values.length}
-       RETURNING id, name, email, site_role, access_status, created_at`,
-      values
+  const result = await tx(async (client) => {
+    const inviteResult = await client.query(
+      `SELECT
+         pic.id,
+         pic.project_id,
+         pic.code,
+         pic.role,
+         pic.max_uses,
+         pic.uses_count,
+         pic.expires_at,
+         pic.revoked_at,
+         p.name,
+         p.location,
+         p.project_status,
+         to_char(p.start_date, 'YYYY-MM-DD') AS start_date,
+         to_char(p.end_date, 'YYYY-MM-DD') AS end_date
+       FROM project_invite_codes pic
+       JOIN projects p ON p.id = pic.project_id
+       WHERE pic.code = $1
+       FOR UPDATE OF pic`,
+      [code]
     );
 
-    await writeAudit(client, {
-      userId: req.user.id,
-      action: 'site_user_updated',
-      entityType: 'user',
-      entityId: targetUserId,
-      before,
-      after: updateResult.rows[0]
-    });
+    if (!inviteResult.rowCount) throw httpError(404, 'Invitation code not found. Check the code and try again.');
+    const invite = inviteResult.rows[0];
 
-    return updateResult.rows[0];
-  });
-
-  res.json({ user: updatedUser });
-}));
-
-app.delete('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) => {
-  const targetUserId = parseId(req.params.userId, 'userId');
-
-  await tx(async (client) => {
-    const access = await requireSiteManager(req.user.id, client);
-    if (targetUserId === req.user.id) throw httpError(400, 'You cannot delete your own user account while signed in.');
-
-    const beforeResult = await client.query('SELECT id, name, email, site_role, access_status, created_at FROM users WHERE id = $1', [targetUserId]);
-    if (!beforeResult.rowCount) throw httpError(404, 'User not found.');
-    const before = beforeResult.rows[0];
-
-    if (!access.isSiteOwner && before.site_role === 'owner') {
-      throw httpError(403, 'Only a site owner can delete an owner-level user.');
+    if (invite.revoked_at) throw httpError(400, 'This invitation code has been revoked.');
+    if (invite.expires_at && new Date(invite.expires_at).getTime() < Date.now()) {
+      throw httpError(400, 'This invitation code has expired. Ask a project manager for a new one.');
     }
-    if (before.site_role === 'owner') {
-      await ensureAtLeastOneActiveSiteOwner(client, targetUserId);
+    if (Number(invite.uses_count) >= Number(invite.max_uses)) {
+      throw httpError(400, 'This invitation code has already been used the maximum number of times.');
     }
 
+    const currentMembership = await client.query(
+      'SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2',
+      [invite.project_id, req.user.id]
+    );
+
+    let finalRole = invite.role;
+    let alreadyMember = false;
+    if (currentMembership.rowCount) {
+      alreadyMember = true;
+      finalRole = higherProjectRole(currentMembership.rows[0].role, invite.role);
+      if (finalRole !== currentMembership.rows[0].role) {
+        await client.query(
+          'UPDATE project_members SET role = $1 WHERE project_id = $2 AND user_id = $3',
+          [finalRole, invite.project_id, req.user.id]
+        );
+      }
+    } else {
+      await client.query(
+        'INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3)',
+        [invite.project_id, req.user.id, invite.role]
+      );
+      await client.query('UPDATE project_invite_codes SET uses_count = uses_count + 1 WHERE id = $1', [invite.id]);
+    }
+
     await writeAudit(client, {
+      projectId: invite.project_id,
       userId: req.user.id,
-      action: 'site_user_deleted',
-      entityType: 'user',
-      entityId: targetUserId,
-      before
+      action: 'invite_code_accepted',
+      entityType: 'project_invite_code',
+      entityId: invite.id,
+      after: {
+        invite_id: invite.id,
+        code: invite.code,
+        role: finalRole,
+        already_member: alreadyMember,
+        accepted_by: req.user.id
+      }
     });
-    await client.query('DELETE FROM users WHERE id = $1', [targetUserId]);
+
+    return {
+      project: {
+        id: invite.project_id,
+        name: invite.name,
+        location: invite.location,
+        project_status: invite.project_status,
+        start_date: invite.start_date,
+        end_date: invite.end_date,
+        role: finalRole
+      },
+      membership: { role: finalRole, already_member: alreadyMember }
+    };
   });
 
-  res.status(204).send();
+  emitProjectChange(result.project.id, { actorId: req.user.id, message: `${req.user.name} joined from an invitation code.` });
+  res.json(result);
 }));
+
 
 app.patch('/api/projects/:projectId/checklist/:itemKey', requireAuth, asyncHandler(async (req, res) => {
   const projectId = parseId(req.params.projectId, 'projectId');
-  const itemKey = String(req.params.itemKey || '').trim();
-  const definition = checklistDefinitionForKey(itemKey);
+  const itemKey = requireText(req.params.itemKey, 'Checklist item key');
   const isChecked = normalizeBoolean(req.body.is_checked ?? req.body.checked, false);
 
   const item = await tx(async (client) => {
     await requireProjectMembership(projectId, req.user.id, 'editor', client);
+    await ensureProjectChecklist(client, projectId);
 
-    const beforeResult = await client.query(
+    const before = await client.query(
       'SELECT * FROM project_checklist_items WHERE project_id = $1 AND item_key = $2',
-      [projectId, definition.key]
+      [projectId, itemKey]
     );
+    if (!before.rowCount) throw httpError(404, 'Checklist item not found.');
 
     const result = await client.query(
-      `INSERT INTO project_checklist_items
-        (project_id, item_key, label, is_checked, checked_by, checked_at)
-       VALUES ($1, $2, $3, $4, CASE WHEN $4 THEN $5 ELSE NULL END, CASE WHEN $4 THEN now() ELSE NULL END)
-       ON CONFLICT (project_id, item_key)
-       DO UPDATE SET
-         label = EXCLUDED.label,
-         is_checked = EXCLUDED.is_checked,
-         checked_by = CASE WHEN EXCLUDED.is_checked THEN $5 ELSE NULL END,
-         checked_at = CASE WHEN EXCLUDED.is_checked THEN now() ELSE NULL END,
-         updated_at = now()
-       RETURNING project_id, item_key, label, is_checked, checked_by, checked_at`,
-      [projectId, definition.key, definition.label, isChecked, req.user.id]
+      `UPDATE project_checklist_items
+       SET is_checked = $1, updated_by = $2
+       WHERE project_id = $3 AND item_key = $4
+       RETURNING id, project_id, item_key, label, is_checked, sort_order, updated_by, updated_at`,
+      [isChecked, req.user.id, projectId, itemKey]
     );
 
     await writeAudit(client, {
       projectId,
       userId: req.user.id,
-      action: isChecked ? 'checklist_checked' : 'checklist_unchecked',
+      action: 'checklist_updated',
       entityType: 'project_checklist_item',
-      before: beforeResult.rows[0] || null,
+      entityId: result.rows[0].id,
+      before: before.rows[0],
       after: result.rows[0]
     });
 
-    return {
-      key: result.rows[0].item_key,
-      label: result.rows[0].label,
-      is_checked: result.rows[0].is_checked,
-      checked_by: result.rows[0].checked_by,
-      checked_at: result.rows[0].checked_at,
-      checked_by_name: isChecked ? req.user.name : null
-    };
+    return result.rows[0];
   });
 
-  emitProjectChange(projectId, { actorId: req.user.id, message: `Checklist updated: ${definition.label}` });
+  emitProjectChange(projectId, { actorId: req.user.id, message: `Checklist updated: ${item.label}` });
   res.json({ item });
 }));
 
-app.post('/api/projects/:projectId/blueprints', requireAuth, blueprintUpload.array('blueprints', 10), asyncHandler(async (req, res) => {
+app.get('/api/projects/:projectId/blueprints', requireAuth, asyncHandler(async (req, res) => {
   const projectId = parseId(req.params.projectId, 'projectId');
-  const files = Array.isArray(req.files) ? req.files : [];
-  if (!files.length) throw httpError(400, 'Drag and drop at least one blueprint file.');
+  await requireProjectAccess(projectId, req.user.id);
+  res.json({ blueprints: await loadProjectBlueprints(projectId) });
+}));
 
-  const blueprints = await tx(async (client) => {
+app.post('/api/projects/:projectId/blueprints', requireAuth, asyncHandler(async (req, res) => {
+  const projectId = parseId(req.params.projectId, 'projectId');
+  await requireProjectMembership(projectId, req.user.id, 'editor');
+  await runBlueprintUpload(req, res);
+
+  if (!req.file) throw httpError(400, 'Drag in or choose a blueprint file to upload.');
+  const originalName = safeDownloadName(req.file.originalname);
+  const mimeType = req.file.mimetype || 'application/octet-stream';
+
+  const blueprint = await tx(async (client) => {
     await requireProjectMembership(projectId, req.user.id, 'editor', client);
-    const rows = [];
+    const result = await client.query(
+      `INSERT INTO project_blueprints
+        (project_id, original_name, mime_type, size_bytes, file_data, uploaded_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, project_id, original_name, mime_type, size_bytes, uploaded_by, created_at`,
+      [projectId, originalName, mimeType, req.file.size, req.file.buffer, req.user.id]
+    );
 
-    for (const file of files) {
-      const fileName = safeDownloadName(file.originalname || 'blueprint');
-      const result = await client.query(
-        `INSERT INTO project_blueprints
-          (project_id, file_name, mime_type, file_size, file_data, uploaded_by)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, project_id, file_name, mime_type, file_size, uploaded_by, created_at`,
-        [projectId, fileName, file.mimetype || 'application/octet-stream', file.size || file.buffer.length, file.buffer, req.user.id]
-      );
-      rows.push({ ...result.rows[0], uploaded_by_name: req.user.name, uploaded_by_email: req.user.email });
+    await writeAudit(client, {
+      projectId,
+      userId: req.user.id,
+      action: 'blueprint_uploaded',
+      entityType: 'project_blueprint',
+      entityId: result.rows[0].id,
+      after: { ...result.rows[0], file_data: undefined }
+    });
 
-      await writeAudit(client, {
-        projectId,
-        userId: req.user.id,
-        action: 'blueprint_uploaded',
-        entityType: 'project_blueprint',
-        entityId: result.rows[0].id,
-        after: { id: result.rows[0].id, file_name: fileName, file_size: result.rows[0].file_size }
-      });
-    }
-
-    return rows;
+    return { ...result.rows[0], uploaded_by_name: req.user.name };
   });
 
-  emitProjectChange(projectId, { actorId: req.user.id, message: `${blueprints.length} blueprint file${blueprints.length === 1 ? '' : 's'} uploaded.` });
-  res.status(201).json({ blueprints });
+  emitProjectChange(projectId, { actorId: req.user.id, message: `Blueprint uploaded: ${blueprint.original_name}` });
+  res.status(201).json({ blueprint });
 }));
 
 app.get('/api/blueprints/:blueprintId/download', requireAuth, asyncHandler(async (req, res) => {
   const blueprintId = parseId(req.params.blueprintId, 'blueprintId');
   const result = await query(
-    `SELECT id, project_id, file_name, mime_type, file_size, file_data
+    `SELECT id, project_id, original_name, mime_type, size_bytes, file_data
      FROM project_blueprints
      WHERE id = $1`,
     [blueprintId]
@@ -1263,9 +1650,10 @@ app.get('/api/blueprints/:blueprintId/download', requireAuth, asyncHandler(async
   const blueprint = result.rows[0];
   await requireProjectAccess(blueprint.project_id, req.user.id);
 
+  const fileName = safeDownloadName(blueprint.original_name);
   res.setHeader('Content-Type', blueprint.mime_type || 'application/octet-stream');
-  res.setHeader('Content-Length', blueprint.file_size);
-  res.setHeader('Content-Disposition', `attachment; filename="${safeDownloadName(blueprint.file_name)}"`);
+  res.setHeader('Content-Length', String(blueprint.size_bytes));
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
   res.send(blueprint.file_data);
 }));
 
@@ -1274,27 +1662,27 @@ app.delete('/api/blueprints/:blueprintId', requireAuth, asyncHandler(async (req,
   let projectId;
 
   await tx(async (client) => {
-    const beforeResult = await client.query(
-      'SELECT id, project_id, file_name, file_size, uploaded_by, created_at FROM project_blueprints WHERE id = $1',
+    const before = await client.query(
+      `SELECT id, project_id, original_name, mime_type, size_bytes, uploaded_by, created_at
+       FROM project_blueprints WHERE id = $1`,
       [blueprintId]
     );
-    if (!beforeResult.rowCount) throw httpError(404, 'Blueprint not found.');
-    const before = beforeResult.rows[0];
-    projectId = before.project_id;
-    await requireProjectMembership(projectId, req.user.id, 'manager', client);
+    if (!before.rowCount) throw httpError(404, 'Blueprint not found.');
+    projectId = before.rows[0].project_id;
+    await requireProjectMembership(projectId, req.user.id, 'editor', client);
 
+    await client.query('DELETE FROM project_blueprints WHERE id = $1', [blueprintId]);
     await writeAudit(client, {
       projectId,
       userId: req.user.id,
       action: 'blueprint_deleted',
       entityType: 'project_blueprint',
       entityId: blueprintId,
-      before
+      before: before.rows[0]
     });
-    await client.query('DELETE FROM project_blueprints WHERE id = $1', [blueprintId]);
   });
 
-  emitProjectChange(projectId, { actorId: req.user.id, message: 'Blueprint file deleted.' });
+  emitProjectChange(projectId, { actorId: req.user.id, message: 'Blueprint deleted.' });
   res.status(204).send();
 }));
 
@@ -1560,9 +1948,9 @@ io.use(async (socket, next) => {
     const token = socket.handshake.auth && socket.handshake.auth.token;
     if (!token) throw httpError(401, 'Socket authentication token required.');
     const payload = jwt.verify(token, JWT_SECRET);
-    const result = await query('SELECT id, name, email, site_role, access_status FROM users WHERE id = $1', [payload.sub]);
+    const result = await query('SELECT id, name, email, site_role, access_revoked FROM users WHERE id = $1', [payload.sub]);
     if (!result.rowCount) throw httpError(401, 'Socket user not found.');
-    if (result.rows[0].access_status === 'revoked') throw httpError(403, 'Your account access has been revoked.');
+    if (result.rows[0].access_revoked) throw httpError(403, 'Socket user access has been revoked.');
     socket.user = result.rows[0];
     next();
   } catch (error) {
@@ -1612,12 +2000,12 @@ app.use((req, res) => {
 });
 
 app.use((error, req, res, next) => {
-  const status = error.status || (error.code === 'LIMIT_FILE_SIZE' ? 413 : 500);
+  const status = error.status || 500;
   if (status >= 500) {
     console.error(error);
   }
   res.status(status).json({
-    error: error.code === 'LIMIT_FILE_SIZE' ? `Blueprint file is too large. Maximum upload size is ${Math.round(BLUEPRINT_MAX_FILE_SIZE / 1024 / 1024)} MB.` : (error.message || 'Server error.')
+    error: error.message || 'Server error.'
   });
 });
 

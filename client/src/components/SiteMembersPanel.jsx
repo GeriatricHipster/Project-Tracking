@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 
-const siteRoles = ['owner', 'manager', 'editor', 'viewer'];
-const accessStatuses = ['active', 'revoked'];
+const siteRoles = ['owner', 'manager', 'member'];
 
 function titleCase(value) {
   return String(value || '')
@@ -10,12 +9,14 @@ function titleCase(value) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export default function SiteMembersPanel({ currentUser }) {
+export default function SiteMembersPanel({ currentUser, onOpenProject }) {
   const [users, setUsers] = useState([]);
-  const [access, setAccess] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [busyUserId, setBusyUserId] = useState(null);
+  const [savingUserId, setSavingUserId] = useState(null);
+
+  const currentSiteRole = currentUser?.site_role || 'member';
+  const currentIsOwner = currentSiteRole === 'owner';
 
   async function loadUsers() {
     setLoading(true);
@@ -23,7 +24,6 @@ export default function SiteMembersPanel({ currentUser }) {
     try {
       const data = await api('/site/users');
       setUsers(data.users || []);
-      setAccess(data.access || null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -35,36 +35,44 @@ export default function SiteMembersPanel({ currentUser }) {
     loadUsers();
   }, []);
 
-  async function patchUser(user, payload) {
-    setBusyUserId(user.id);
+  function canChangeUser(user) {
+    if (user.id === currentUser?.id) return false;
+    if (currentIsOwner) return true;
+    return user.site_role !== 'owner';
+  }
+
+  function allowedRoleOptions(user) {
+    if (currentIsOwner) return siteRoles;
+    if (user.site_role === 'owner') return ['owner'];
+    return siteRoles.filter((role) => role !== 'owner');
+  }
+
+  async function updateUser(user, payload) {
+    setSavingUserId(user.id);
     setError('');
     try {
-      const data = await api(`/site/users/${user.id}`, { method: 'PATCH', body: payload });
-      setUsers((current) => current.map((candidate) => (candidate.id === user.id ? { ...candidate, ...data.user } : candidate)));
+      await api(`/site/users/${user.id}`, { method: 'PATCH', body: payload });
+      await loadUsers();
     } catch (err) {
       setError(err.message);
     } finally {
-      setBusyUserId(null);
+      setSavingUserId(null);
     }
   }
 
   async function deleteUser(user) {
-    const confirmed = window.confirm(`Delete ${user.name}? This removes their login and project assignments. Tasks they were assigned to will remain but become unassigned.`);
+    const confirmed = window.confirm(`Delete ${user.name}? This removes their login and project assignments.`);
     if (!confirmed) return;
-    setBusyUserId(user.id);
+    setSavingUserId(user.id);
     setError('');
     try {
       await api(`/site/users/${user.id}`, { method: 'DELETE' });
-      setUsers((current) => current.filter((candidate) => candidate.id !== user.id));
+      await loadUsers();
     } catch (err) {
       setError(err.message);
     } finally {
-      setBusyUserId(null);
+      setSavingUserId(null);
     }
-  }
-
-  function canChangeOwnerLevel(user) {
-    return access?.is_site_owner || user.site_role !== 'owner';
   }
 
   return (
@@ -72,72 +80,80 @@ export default function SiteMembersPanel({ currentUser }) {
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <h2>Site members</h2>
-            <p>Manage site access, global roles, revoked access, and user deletion.</p>
+            <h2>Site member management</h2>
+            <p>Managers and owners can review users, revoke access, delete accounts, and change site role.</p>
           </div>
           <button className="ghost-button compact" onClick={loadUsers} type="button">Refresh users</button>
         </div>
-        {loading && <p className="muted">Loading site members...</p>}
-        {error && <p className="error-box">{error}</p>}
 
-        <div className="site-member-list">
-          {users.map((siteUser) => {
-            const isSelf = siteUser.id === currentUser?.id;
-            const busy = busyUserId === siteUser.id;
-            const projects = Array.isArray(siteUser.projects) ? siteUser.projects : [];
-            const lockOwner = !canChangeOwnerLevel(siteUser);
-            return (
-              <article className={`site-member-card ${siteUser.access_status === 'revoked' ? 'revoked' : ''}`} key={siteUser.id}>
-                <div className="site-member-main">
-                  <div>
-                    <div className="project-card-title-row">
-                      <h3>{siteUser.name}</h3>
-                      {isSelf && <span className="archive-pill">You</span>}
-                      <span className={`role-pill role-${siteUser.site_role}`}>Site {siteUser.site_role}</span>
-                      <span className={`status-pill status-${siteUser.access_status === 'active' ? 'in_progress' : 'blocked'}`}>{titleCase(siteUser.access_status)}</span>
+        {error && <p className="error-box dashboard-error">{error}</p>}
+        {loading && <div className="panel loading-panel">Loading site members...</div>}
+
+        {!loading && (
+          <div className="site-user-list">
+            {users.map((siteUser) => {
+              const canChange = canChangeUser(siteUser);
+              const busy = savingUserId === siteUser.id;
+              const projects = Array.isArray(siteUser.projects) ? siteUser.projects : [];
+              return (
+                <article className={`site-user-card ${siteUser.access_revoked ? 'revoked' : ''}`} key={siteUser.id}>
+                  <div className="site-user-main">
+                    <div>
+                      <div className="project-card-title-row">
+                        <h3>{siteUser.name}</h3>
+                        <span className={`role-pill role-${siteUser.site_role}`}>{titleCase(siteUser.site_role)}</span>
+                        {siteUser.access_revoked && <span className="status-pill status-blocked">Access revoked</span>}
+                        {siteUser.id === currentUser?.id && <span className="archive-pill">You</span>}
+                      </div>
+                      <p className="muted">{siteUser.email}</p>
+                      <p>{siteUser.project_count} assigned project{siteUser.project_count === 1 ? '' : 's'}</p>
                     </div>
-                    <p className="muted">{siteUser.email}</p>
-                  </div>
-                  <div className="site-member-controls">
-                    <label>
-                      Site role
-                      <select
-                        disabled={busy || lockOwner}
-                        value={siteUser.site_role}
-                        onChange={(event) => patchUser(siteUser, { site_role: event.target.value })}
-                      >
-                        {siteRoles.map((role) => <option key={role} value={role}>{role}</option>)}
-                      </select>
-                    </label>
-                    <label>
-                      Access
-                      <select
-                        disabled={busy || isSelf || lockOwner}
-                        value={siteUser.access_status}
-                        onChange={(event) => patchUser(siteUser, { access_status: event.target.value })}
-                      >
-                        {accessStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
-                      </select>
-                    </label>
-                    <button className="danger-button compact" disabled={busy || isSelf || lockOwner} onClick={() => deleteUser(siteUser)} type="button">
-                      {busy ? 'Saving...' : 'Delete user'}
-                    </button>
-                  </div>
-                </div>
 
-                <div className="assigned-project-list site-project-list">
-                  {projects.map((project) => (
-                    <span className="assigned-project-chip static" key={`${siteUser.id}-${project.project_id}`}>
-                      <strong>{project.project_name}</strong>
-                      <span>{titleCase(project.role)} · {titleCase(project.project_status)}</span>
-                    </span>
-                  ))}
-                  {!projects.length && <span className="muted">No project assignments.</span>}
-                </div>
-              </article>
-            );
-          })}
-        </div>
+                    <div className="site-user-actions">
+                      <label>
+                        Site role
+                        <select
+                          disabled={!canChange || busy}
+                          value={siteUser.site_role}
+                          onChange={(event) => updateUser(siteUser, { site_role: event.target.value })}
+                        >
+                          {allowedRoleOptions(siteUser).map((role) => <option key={role} value={role}>{titleCase(role)}</option>)}
+                        </select>
+                      </label>
+                      <button
+                        className={siteUser.access_revoked ? 'ghost-button compact' : 'danger-button compact'}
+                        disabled={!canChange || busy}
+                        onClick={() => updateUser(siteUser, { access_revoked: !siteUser.access_revoked })}
+                        type="button"
+                      >
+                        {siteUser.access_revoked ? 'Restore access' : 'Revoke access'}
+                      </button>
+                      <button
+                        className="danger-button compact"
+                        disabled={!canChange || busy}
+                        onClick={() => deleteUser(siteUser)}
+                        type="button"
+                      >
+                        Delete user
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="assigned-project-list site-projects">
+                    {projects.map((project) => (
+                      <button className="assigned-project-chip" key={`${siteUser.id}-${project.id}`} onClick={() => onOpenProject(project.id)} type="button">
+                        <strong>{project.name}</strong>
+                        <span>{titleCase(project.role)} · {titleCase(project.project_status)} · {project.location || 'No location set'}</span>
+                      </button>
+                    ))}
+                    {!projects.length && <p className="muted">This user is not assigned to any projects yet.</p>}
+                  </div>
+                </article>
+              );
+            })}
+            {!users.length && <div className="empty-state"><h3>No users found</h3><p>Registered users will appear here.</p></div>}
+          </div>
+        )}
       </section>
     </section>
   );
