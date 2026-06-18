@@ -430,6 +430,17 @@ function normalizeProjectNotes(value) {
   return text;
 }
 
+function normalizeProjectNoteBody(value) {
+  const text = String(value ?? '').trim();
+  if (!text) {
+    throw httpError(400, 'Project note text is required.');
+  }
+  if (text.length > 10000) {
+    throw httpError(400, 'Project notes must be 10,000 characters or fewer.');
+  }
+  return text;
+}
+
 function normalizeProgress(value) {
   const number = Number(value);
   if (!Number.isInteger(number) || number < 0 || number > 100) {
@@ -839,6 +850,25 @@ async function loadProjectPayload(projectId, userId) {
     [projectId]
   );
 
+  const notesResult = await query(
+    `SELECT
+       pne.id,
+       pne.project_id,
+       pne.body,
+       pne.created_by,
+       pne.updated_by,
+       pne.created_at,
+       pne.updated_at,
+       creator.name AS created_by_name,
+       updater.name AS updated_by_name
+     FROM project_note_entries pne
+     LEFT JOIN users creator ON creator.id = pne.created_by
+     LEFT JOIN users updater ON updater.id = pne.updated_by
+     WHERE pne.project_id = $1
+     ORDER BY pne.created_at DESC, pne.id DESC`,
+    [projectId]
+  );
+
   const checklist = await loadProjectChecklist(projectId);
   const blueprints = await loadProjectBlueprints(projectId);
 
@@ -847,6 +877,7 @@ async function loadProjectPayload(projectId, userId) {
     tasks: tasksResult.rows,
     dependencies: dependenciesResult.rows,
     members: membersResult.rows,
+    notes_entries: notesResult.rows,
     checklist,
     blueprints,
     audit: auditResult.rows
@@ -1009,7 +1040,8 @@ app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
          count(*) FILTER (WHERE status = 'not_started')::int AS not_started_task_count,
          count(*) FILTER (WHERE status = 'in_progress')::int AS in_progress_task_count,
          count(*) FILTER (WHERE status = 'blocked')::int AS blocked_task_count,
-         count(*) FILTER (WHERE status = 'complete')::int AS complete_task_count
+         count(*) FILTER (WHERE status = 'complete')::int AS complete_task_count,
+         coalesce(array_to_string(array_agg(DISTINCT pm ORDER BY pm) FILTER (WHERE pm IS NOT NULL), ', '), '') AS pm_summary
        FROM tasks
        WHERE project_id IN (SELECT id FROM accessible_projects)
        GROUP BY project_id
@@ -1054,6 +1086,7 @@ app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
          coalesce(ts.in_progress_task_count, 0) AS in_progress_task_count,
          coalesce(ts.blocked_task_count, 0) AS blocked_task_count,
          coalesce(ts.complete_task_count, 0) AS complete_task_count,
+         coalesce(ts.pm_summary, '') AS pm_summary,
          coalesce(ms.member_count, 0) AS member_count,
          coalesce(ms.members, '[]'::json) AS members,
          CASE
@@ -1357,39 +1390,98 @@ app.patch('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res)
 }));
 
 
+async function createProjectNote(client, projectId, userId, body) {
+  await requireProjectMembership(projectId, userId, 'viewer', client);
+  const payload = body || {};
+  const noteBody = normalizeProjectNoteBody(payload.notes ?? payload.body ?? payload.text);
+  const result = await client.query(
+    `INSERT INTO project_note_entries (project_id, body, created_by, updated_by)
+     VALUES ($1, $2, $3, $3)
+     RETURNING id, project_id, body, created_by, updated_by, created_at, updated_at`,
+    [projectId, noteBody, userId]
+  );
+  await client.query('UPDATE projects SET updated_at = now() WHERE id = $1', [projectId]);
+  await writeAudit(client, {
+    projectId,
+    userId,
+    action: 'project_note_created',
+    entityType: 'project_note',
+    entityId: result.rows[0].id,
+    after: result.rows[0]
+  });
+  return result.rows[0];
+}
+
+app.post('/api/projects/:projectId/notes', requireAuth, asyncHandler(async (req, res) => {
+  const projectId = parseId(req.params.projectId, 'projectId');
+  const note = await tx(async (client) => createProjectNote(client, projectId, req.user.id, req.body));
+  emitProjectChange(projectId, { actorId: req.user.id, message: 'Project note added.' });
+  res.status(201).json({ note });
+}));
+
 app.patch('/api/projects/:projectId/notes', requireAuth, asyncHandler(async (req, res) => {
   const projectId = parseId(req.params.projectId, 'projectId');
-  const notes = normalizeProjectNotes(req.body.notes);
+  const note = await tx(async (client) => createProjectNote(client, projectId, req.user.id, req.body));
+  emitProjectChange(projectId, { actorId: req.user.id, message: 'Project note added.' });
+  res.status(201).json({ note });
+}));
+
+app.patch('/api/projects/:projectId/notes/:noteId', requireAuth, asyncHandler(async (req, res) => {
+  const projectId = parseId(req.params.projectId, 'projectId');
+  const noteId = parseId(req.params.noteId, 'noteId');
+  const payload = req.body || {};
+  const body = normalizeProjectNoteBody(payload.body ?? payload.notes ?? payload.text);
 
   const updated = await tx(async (client) => {
     await requireProjectMembership(projectId, req.user.id, 'viewer', client);
-
-    const beforeResult = await client.query('SELECT id, notes FROM projects WHERE id = $1', [projectId]);
-    if (!beforeResult.rowCount) throw httpError(404, 'Project not found.');
-
+    const before = await client.query('SELECT * FROM project_note_entries WHERE id = $1 AND project_id = $2', [noteId, projectId]);
+    if (!before.rowCount) throw httpError(404, 'Project note not found.');
     const result = await client.query(
-      `UPDATE projects
-       SET notes = $1
-       WHERE id = $2
-       RETURNING id, notes, updated_at`,
-      [notes, projectId]
+      `UPDATE project_note_entries
+       SET body = $1, updated_by = $2, updated_at = now()
+       WHERE id = $3 AND project_id = $4
+       RETURNING id, project_id, body, created_by, updated_by, created_at, updated_at`,
+      [body, req.user.id, noteId, projectId]
     );
-
+    await client.query('UPDATE projects SET updated_at = now() WHERE id = $1', [projectId]);
     await writeAudit(client, {
       projectId,
       userId: req.user.id,
-      action: 'project_notes_updated',
-      entityType: 'project',
-      entityId: projectId,
-      before: beforeResult.rows[0],
+      action: 'project_note_updated',
+      entityType: 'project_note',
+      entityId: noteId,
+      before: before.rows[0],
       after: result.rows[0]
     });
-
     return result.rows[0];
   });
 
-  emitProjectChange(projectId, { actorId: req.user.id, message: 'Project notes updated.' });
-  res.json({ project: updated });
+  emitProjectChange(projectId, { actorId: req.user.id, message: 'Project note updated.' });
+  res.json({ note: updated });
+}));
+
+app.delete('/api/projects/:projectId/notes/:noteId', requireAuth, asyncHandler(async (req, res) => {
+  const projectId = parseId(req.params.projectId, 'projectId');
+  const noteId = parseId(req.params.noteId, 'noteId');
+
+  await tx(async (client) => {
+    await requireProjectMembership(projectId, req.user.id, 'viewer', client);
+    const before = await client.query('SELECT * FROM project_note_entries WHERE id = $1 AND project_id = $2', [noteId, projectId]);
+    if (!before.rowCount) throw httpError(404, 'Project note not found.');
+    await client.query('DELETE FROM project_note_entries WHERE id = $1 AND project_id = $2', [noteId, projectId]);
+    await client.query('UPDATE projects SET updated_at = now() WHERE id = $1', [projectId]);
+    await writeAudit(client, {
+      projectId,
+      userId: req.user.id,
+      action: 'project_note_deleted',
+      entityType: 'project_note',
+      entityId: noteId,
+      before: before.rows[0]
+    });
+  });
+
+  emitProjectChange(projectId, { actorId: req.user.id, message: 'Project note deleted.' });
+  res.status(204).send();
 }));
 
 app.delete('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res) => {

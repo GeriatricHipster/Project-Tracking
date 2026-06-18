@@ -41,4 +41,4 @@ You do not need to add email settings. The email invitation feature has been rem
 5. Add tasks.
 6. Add project members.
 7. Upload a blueprint.
-8. Test the Project Milestones.
+8. Test the Gantt checklist.

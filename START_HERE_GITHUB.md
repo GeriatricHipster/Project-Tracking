@@ -11,7 +11,7 @@ This app tracks construction project timelines and includes:
 - Projects / assignments tab showing who is assigned to each project
 - Calendar overview of projects and status
 - Gantt chart for each project
-- Project Milestones for IPs, panels, clearances, doors, and CCure operator setup
+- Gantt checklist for IPs, panels, clearances, doors, and CCure operator setup
 - Drag-and-drop blueprint uploads
 - Project member assignments
 - Site member management for managers and owners
@@ -148,7 +148,7 @@ Default file limit: 25 MB.
 
 ---
 
-## Step 8: Use the Project Milestones
+## Step 8: Use the Gantt checklist
 
 Open a project and look below the Gantt chart. You will see checkboxes for:
 

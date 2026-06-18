@@ -160,12 +160,20 @@ export default function ProjectView({ projectId, user, onBack }) {
     await loadProject({ quiet: true });
   }
 
-  async function saveProjectNotes(notes) {
-    await api(`/projects/${projectId}/notes`, { method: 'PATCH', body: { notes } });
+  async function addProjectNote(body) {
+    await api(`/projects/${projectId}/notes`, { method: 'POST', body: { body } });
     await loadProject({ quiet: true });
   }
 
+  async function updateProjectNote(noteId, body) {
+    await api(`/projects/${projectId}/notes/${noteId}`, { method: 'PATCH', body: { body } });
+    await loadProject({ quiet: true });
+  }
 
+  async function deleteProjectNote(noteId) {
+    await api(`/projects/${projectId}/notes/${noteId}`, { method: 'DELETE' });
+    await loadProject({ quiet: true });
+  }
 
 
   if (loading && !data) {
@@ -224,7 +232,7 @@ export default function ProjectView({ projectId, user, onBack }) {
             onSave={saveTask}
             onCancel={() => setEditingTask(null)}
           />
-          <ProjectNotesPanel project={project} canEdit={canEditNotes} onSave={saveProjectNotes} />
+          <ProjectNotesPanel project={project} entries={data?.notes_entries || []} canEdit={canEditNotes} onCreateEntry={addProjectNote} onUpdateEntry={updateProjectNote} onDeleteEntry={deleteProjectNote} />
           <TaskTable tasks={orderedTasks} canEdit={canEdit} onEdit={setEditingTask} onDelete={deleteTask} />
         </div>
 

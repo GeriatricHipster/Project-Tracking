@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { addDays, formatDate, todayIso } from '../lib/dates';
+import { buildingOptions } from '../lib/buildings';
 import SiteMembersPanel from './SiteMembersPanel';
 import SiteBanner from './SiteBanner';
 
@@ -79,6 +80,20 @@ function projectIsActiveOnDate(project, dayIso) {
   return project.start_date <= dayIso && project.end_date >= dayIso;
 }
 
+function getProjectSearchText(project) {
+  const memberText = Array.isArray(project.members)
+    ? project.members.flatMap((member) => [member.name, member.email, member.role]).join(' ')
+    : '';
+  const projectPm = project.pm_summary || '';
+  return [project.name, project.location, project.description, projectPm, memberText].join(' ').toLowerCase();
+}
+
+function matchesProjectSearch(project, term) {
+  const query = String(term || '').trim().toLowerCase();
+  if (!query) return true;
+  return getProjectSearchText(project).includes(query);
+}
+
 function buildUserAssignments(projects) {
   const users = new Map();
 
@@ -127,6 +142,7 @@ export default function Dashboard({
   const start = todayIso();
   const [activeTab, setActiveTab] = useState('projects');
   const [calendarMonth, setCalendarMonth] = useState(start.slice(0, 7));
+  const [searchTerm, setSearchTerm] = useState('');
   const [form, setForm] = useState({
     name: '',
     location: '',
@@ -144,20 +160,25 @@ export default function Dashboard({
   const canManageSite = Boolean(user?.can_manage_site || ['owner', 'manager'].includes(user?.site_role));
   const visibleTabs = dashboardTabs.filter((tab) => !tab.managersOnly || canManageSite);
 
+  const visibleProjects = useMemo(
+    () => projects.filter((project) => matchesProjectSearch(project, searchTerm)),
+    [projects, searchTerm]
+  );
+
   const activeProjects = useMemo(
-    () => projects.filter((project) => getLifecycleStatus(project) !== 'completed'),
-    [projects]
+    () => visibleProjects.filter((project) => getLifecycleStatus(project) !== 'completed'),
+    [visibleProjects]
   );
 
   const completedProjects = useMemo(
-    () => projects.filter((project) => getLifecycleStatus(project) === 'completed'),
-    [projects]
+    () => visibleProjects.filter((project) => getLifecycleStatus(project) === 'completed'),
+    [visibleProjects]
   );
 
-  const assignmentUsers = useMemo(() => buildUserAssignments(projects), [projects]);
+  const assignmentUsers = useMemo(() => buildUserAssignments(visibleProjects), [visibleProjects]);
 
   const statusSummary = useMemo(() => {
-    return projects.reduce(
+    return visibleProjects.reduce(
       (summary, project) => {
         const lifecycle = getLifecycleStatus(project);
         const status = getProjectStatus(project);
@@ -172,18 +193,18 @@ export default function Dashboard({
       },
       { total: 0, active: 0, completed: 0, not_started: 0, in_progress: 0, blocked: 0, complete: 0 }
     );
-  }, [projects]);
+  }, [visibleProjects]);
 
   const calendarProjects = useMemo(() => {
     const rangeStart = `${calendarMonth}-01`;
     const rangeEnd = monthEndIso(calendarMonth);
-    return projects
+    return visibleProjects
       .filter((project) => projectOverlapsRange(project, rangeStart, rangeEnd))
       .sort((a, b) => {
         if (a.start_date !== b.start_date) return a.start_date.localeCompare(b.start_date);
         return String(a.name).localeCompare(String(b.name));
       });
-  }, [projects, calendarMonth]);
+  }, [visibleProjects, calendarMonth]);
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -313,6 +334,7 @@ export default function Dashboard({
                   <span><strong>{project.task_count}</strong> tasks</span>
                   <span><strong>{project.average_progress}%</strong> avg complete</span>
                   <span><strong>{project.member_count || members.length}</strong> users</span>
+                  {project.pm_summary && <span><strong>PM</strong> {project.pm_summary}</span>}
                   <span>{formatDate(project.start_date)} to {formatDate(project.end_date)}</span>
                 </div>
                 {renderProjectActions(project)}
@@ -337,12 +359,17 @@ export default function Dashboard({
           <h2>Create project</h2>
           <form className="stack" onSubmit={submit}>
             <label>
-              Project name
-              <input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Medical office buildout" />
+              Work Order #
+              <input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="WO-12345" />
             </label>
             <label>
-              Location
-              <input value={form.location} onChange={(event) => updateField('location', event.target.value)} placeholder="City, state" />
+              Building
+              <select value={form.location} onChange={(event) => updateField('location', event.target.value)}>
+                <option value=""> </option>
+                {buildingOptions.map((building) => (
+                  <option key={building} value={building}>{building}</option>
+                ))}
+              </select>
             </label>
             <label>
               Description
@@ -429,7 +456,7 @@ export default function Dashboard({
           </div>
 
           <div className="project-assignment-list">
-            {projects.map((project) => {
+            {visibleProjects.map((project) => {
               const members = Array.isArray(project.members) ? project.members : [];
               const status = getProjectStatus(project);
               return (
@@ -454,7 +481,7 @@ export default function Dashboard({
                 </article>
               );
             })}
-            {!loading && projects.length === 0 && (
+            {!loading && visibleProjects.length === 0 && (
               <div className="empty-state">
                 <h3>No assignments yet</h3>
                 <p>Create a project first. Then open it and add team members.</p>
@@ -631,6 +658,20 @@ export default function Dashboard({
           <button className="ghost-button" onClick={onLogout} type="button">Logout</button>
         </div>
       </header>
+
+      <section className="panel dashboard-search-panel">
+        <label className="dashboard-search-label">
+          Search projects
+          <input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search by Work Order #, Building, PM, or member"
+          />
+        </label>
+        <button className="ghost-button compact" onClick={() => setSearchTerm('')} disabled={!searchTerm} type="button">
+          Clear
+        </button>
+      </section>
 
       <nav className="dashboard-tabs" aria-label="Dashboard tabs">
         {visibleTabs.map((tab) => (
