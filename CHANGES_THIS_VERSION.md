@@ -1,40 +1,16 @@
-# Changes in this version
+# Changes in This Version
 
-This version updates the app name to **PSG and SS Tracking** and improves the project workspace layout.
+This version updates the app branding and project page layout.
 
-## Added or changed
+## Added / changed
 
-- App display name changed from BuildTrack Cloud to PSG and SS Tracking.
-- Project notes moved below the Add/Edit Task pane.
-- Dependencies, Blueprints, Project Members, and Activity side panes are slimmer and use a smaller form factor to avoid overlapping the task area.
-- Gantt chart now has an **Export PDF** button.
-- Gantt PDF export creates a landscape schedule file with task bars, progress, dates, project name, and dependency summary.
-- Slack channel invitation code posting remains tied to adding/updating project members.
-- The Slack message calls out the assigned PSG and SS Tracking email.
-- Vendor dropdown defaults to blank.
-- Trade dropdown includes: CCure, Cameras, CCure & Cameras.
-- Security Team Member dropdown includes: Derick, Eric, James, Justin, Kenna, Kyra, Ryan, Suvam.
-- PM dropdown includes: Kurt, Austin.
-- The uploaded banner image remains the app header/banner image.
+- App name changed to **PSG and SS Tracking**.
+- Project notes moved below the Add/Edit Task form.
+- Dependency, Blueprint, Project Members, and Activity panes were condensed and moved into a narrower right-side layout to reduce overlap with the task fields.
+- Added an **Export PDF** button to the Gantt chart. It opens a printable Gantt view; choose **Save as PDF** in the browser print window.
+- Vendor, Trade, Security Team Member, and PM dropdowns now default to a blank selection.
+- Existing Slack channel invitation workflow, blueprints, project notes, checklist, assignments tab, completed projects, delete project, and site member management features are preserved.
 
-## Still included
+## Deploying the update
 
-- Join with invite code box on the main dashboard.
-- Invite links that can add a logged-in or newly registered user to the project.
-- Active Projects, Completed, Projects, Calendar Overview, and Site Members tabs.
-- Project checklist, blueprint uploads, site member management, project member management, and project visibility rules.
-
-## Slack setup required
-
-For Slack channel invitations, add these Render environment variables after deployment:
-
-```text
-SLACK_WEBHOOK_URL=your Slack Incoming Webhook URL
-APP_URL=your live PSG and SS Tracking app URL
-```
-
-Plain-English setup steps are in:
-
-```text
-SLACK_INVITE_SETUP.md
-```
+Upload this ZIP's unzipped contents to your existing GitHub repository, commit the changes, and let Render redeploy.

@@ -1,5 +1,5 @@
 {
-  "name": "psg-ss-tracking-client",
+  "name": "buildtrack-client",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -14,8 +14,7 @@
     "vite": "^6.0.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "socket.io-client": "^4.8.1",
-    "jspdf": "^2.5.2"
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {}
 }

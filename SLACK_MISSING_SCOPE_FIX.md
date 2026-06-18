@@ -15,7 +15,7 @@ Use the channel webhook setup instead:
 
 ```text
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/your/webhook/url
-APP_URL=https://your-psg-ss-tracking-app.onrender.com
+APP_URL=https://your-buildtrack-app.onrender.com
 ```
 
 If you still see a `missing_scope` error after uploading this package, Render is probably still running an older deployment. Go to Render, open the PSG and SS Tracking service, and click **Manual Deploy** or **Clear build cache & deploy**.

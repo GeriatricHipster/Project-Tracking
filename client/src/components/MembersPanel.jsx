@@ -74,7 +74,7 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
             {roleOptions.map((role) => <option key={role} value={role}>{role}</option>)}
           </select>
         </label>
-        <p className="form-help">The user must already have a PSG and SS Tracking account. When Slack is set up, an invite code is posted to the project invite channel after add/update and calls out the assigned PSG and SS Tracking email.</p>
+        <p className="form-help">The user must already have a PSG and SS Tracking account. When Slack is set up, an invite code is posted to the project invite channel after add/update and calls out the assigned email address.</p>
         {error && <p className="error-box">{error}</p>}
         {notice && <p className="notice-box">{notice}</p>}
         <button className="primary-button compact" disabled={!canManage || saving}>{saving ? 'Adding...' : 'Add / update member'}</button>

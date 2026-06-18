@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react';
-import { exportGanttChartPdf } from '../lib/ganttPdf';
 import { addDays, daysBetween, formatDate, maxIsoDate, minIsoDate, todayIso } from '../lib/dates';
 
 function getScale(totalDays) {
@@ -25,11 +24,28 @@ function taskMeta(task) {
   return parts.join(' · ');
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function safeColor(value) {
+  return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : '#2563eb';
+}
+
+function statusLabel(value) {
+  return String(value || '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 export default function GanttChart({ project, tasks, dependencies, onEditTask }) {
   const scrollRef = useRef(null);
   const [zoomIndex, setZoomIndex] = useState(2);
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
-  const [exportError, setExportError] = useState('');
   const allStartDates = [project.start_date, ...tasks.map((task) => task.start_date)];
   const allEndDates = [project.end_date, ...tasks.map((task) => task.end_date)];
   const rangeStart = minIsoDate(allStartDates) || project.start_date;
@@ -95,16 +111,152 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
     scrollRef.current.scrollBy({ left: pixels, behavior: 'smooth' });
   }
 
-  async function exportPdf() {
-    setExportError('');
-    setIsExportingPdf(true);
-    try {
-      await exportGanttChartPdf({ project, tasks, dependencies });
-    } catch (error) {
-      setExportError(error.message || 'Could not export the Gantt chart PDF.');
-    } finally {
-      setIsExportingPdf(false);
+  function exportGanttPdf() {
+    const printWindow = window.open('', '_blank', 'width=1200,height=850');
+    if (!printWindow) {
+      window.alert('Please allow pop-ups for this site, then click Export PDF again.');
+      return;
     }
+
+    const printableTasks = tasks.length ? tasks : [];
+    const printRowHeight = 48;
+    const printHeaderHeight = 78;
+    const printHeight = printHeaderHeight + Math.max(printableTasks.length, 1) * printRowHeight + 18;
+    const tickStep = totalDays > 240 ? 30 : totalDays > 120 ? 14 : totalDays > 60 ? 7 : 3;
+    const ticks = [];
+    for (let offset = 0; offset <= totalDays; offset += tickStep) {
+      const date = addDays(rangeStart, offset);
+      ticks.push({ date, percent: clamp((offset / totalDays) * 100, 0, 100) });
+    }
+    if (!ticks.some((tick) => tick.date === rangeEnd)) {
+      ticks.push({ date: rangeEnd, percent: 100 });
+    }
+
+    const headerTicks = ticks.map((tick) => `
+      <div class="print-tick" style="left:${tick.percent}%">
+        <strong>${escapeHtml(tick.date.slice(5))}</strong>
+        <span>${escapeHtml(tick.date.slice(0, 4))}</span>
+      </div>
+    `).join('');
+
+    const gridLines = ticks.map((tick) => `
+      <div class="print-grid-line vertical" style="left:${tick.percent}%;height:${printHeight}px"></div>
+    `).join('');
+
+    const labelRows = printableTasks.length
+      ? printableTasks.map((task) => `
+          <div class="print-label-row" style="height:${printRowHeight}px">
+            <strong>${escapeHtml(task.name)}</strong>
+            <span>${escapeHtml(taskMeta(task) || 'No vendor/team assigned')}</span>
+          </div>
+        `).join('')
+      : `<div class="print-label-row" style="height:${printRowHeight}px"><strong>No tasks yet</strong><span>Add tasks before exporting.</span></div>`;
+
+    const rowLines = Array.from({ length: Math.max(printableTasks.length, 1) }, (_, index) => `
+      <div class="print-grid-line horizontal" style="top:${printHeaderHeight + index * printRowHeight}px"></div>
+    `).join('');
+
+    const bars = printableTasks.map((task, index) => {
+      const startOffset = clamp(daysBetween(rangeStart, task.start_date), 0, totalDays);
+      const duration = Math.max(1, daysBetween(task.start_date, task.end_date) + 1);
+      const left = clamp((startOffset / totalDays) * 100, 0, 100);
+      const width = clamp((duration / totalDays) * 100, 1.5, 100 - left);
+      const top = printHeaderHeight + index * printRowHeight + 9;
+      const color = safeColor(task.color);
+      return `
+        <div class="print-bar" style="left:${left}%;top:${top}px;width:${width}%;background:${color}">
+          <span class="print-progress" style="width:${clamp(Number(task.percent_complete || 0), 0, 100)}%"></span>
+          <span class="print-bar-label">${escapeHtml(task.name)} · ${escapeHtml(statusLabel(task.status))} · ${escapeHtml(task.percent_complete || 0)}%</span>
+        </div>
+      `;
+    }).join('');
+
+    const todayPercent = today >= rangeStart && today <= rangeEnd
+      ? clamp((daysBetween(rangeStart, today) / totalDays) * 100, 0, 100)
+      : null;
+    const todayLine = todayPercent === null ? '' : `
+      <div class="print-today-line" style="left:${todayPercent}%"><span>Today</span></div>
+    `;
+
+    const dependencyNote = dependencies.length
+      ? `<p class="print-small">Dependencies shown in app: ${dependencies.length}. The PDF export summarizes the schedule bars and task assignments.</p>`
+      : '';
+
+    const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(project.name)} Gantt chart</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: Arial, Helvetica, sans-serif; color: #111827; background: #ffffff; }
+    h1 { margin: 0 0 4px; font-size: 24px; }
+    p { margin: 0 0 12px; color: #4b5563; }
+    .print-meta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; font-size: 12px; color: #374151; }
+    .print-meta span { border: 1px solid #d1d5db; border-radius: 999px; padding: 5px 8px; }
+    .print-gantt { display: grid; grid-template-columns: 285px minmax(0, 1fr); border: 1px solid #d1d5db; border-radius: 14px; overflow: hidden; }
+    .print-labels { background: #f8fafc; border-right: 1px solid #d1d5db; }
+    .print-label-header { height: ${printHeaderHeight}px; display: flex; align-items: end; padding: 0 12px 11px; font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 800; }
+    .print-label-row { border-top: 1px solid #e5e7eb; padding: 7px 12px; overflow: hidden; }
+    .print-label-row strong, .print-label-row span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .print-label-row strong { font-size: 12px; }
+    .print-label-row span { margin-top: 3px; font-size: 10px; color: #64748b; }
+    .print-timeline { position: relative; min-height: ${printHeight}px; background: #ffffff; overflow: hidden; }
+    .print-tick { position: absolute; top: 0; width: 72px; transform: translateX(-1px); padding-top: 10px; font-size: 10px; color: #475569; }
+    .print-tick strong, .print-tick span { display: block; }
+    .print-tick strong { font-size: 12px; color: #0f172a; }
+    .print-grid-line { position: absolute; pointer-events: none; }
+    .print-grid-line.vertical { top: 0; width: 1px; background: #e5e7eb; }
+    .print-grid-line.horizontal { left: 0; right: 0; height: 1px; background: #e5e7eb; }
+    .print-bar { position: absolute; height: 30px; border-radius: 999px; color: #ffffff; overflow: hidden; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16); }
+    .print-progress { position: absolute; inset: 0 auto 0 0; background: rgba(255,255,255,0.28); }
+    .print-bar-label { position: relative; z-index: 1; display: block; padding: 7px 10px 0; font-size: 11px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .print-today-line { position: absolute; top: 0; bottom: 0; width: 2px; background: #dc2626; }
+    .print-today-line span { position: absolute; top: 4px; left: 5px; color: #dc2626; font-size: 10px; font-weight: 800; }
+    .print-small { margin-top: 12px; font-size: 11px; color: #64748b; }
+    .print-instruction { margin-top: 18px; font-size: 11px; color: #64748b; }
+    @media print {
+      @page { size: landscape; margin: 0.35in; }
+      body { padding: 0; }
+      .print-instruction { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(project.name)} — Gantt chart</h1>
+  <p>${escapeHtml(project.location || 'No location set')} · ${escapeHtml(formatDate(rangeStart))} to ${escapeHtml(formatDate(rangeEnd))}</p>
+  <div class="print-meta">
+    <span>${printableTasks.length} task${printableTasks.length === 1 ? '' : 's'}</span>
+    <span>${dependencies.length} dependenc${dependencies.length === 1 ? 'y' : 'ies'}</span>
+    <span>Exported ${escapeHtml(new Date().toLocaleString())}</span>
+  </div>
+  <div class="print-gantt">
+    <div class="print-labels">
+      <div class="print-label-header">Task / assignment</div>
+      ${labelRows}
+    </div>
+    <div class="print-timeline">
+      ${headerTicks}
+      ${gridLines}
+      ${rowLines}
+      ${todayLine}
+      ${bars}
+    </div>
+  </div>
+  ${dependencyNote}
+  <p class="print-instruction">Use your browser print window and choose Save as PDF. Landscape orientation is recommended.</p>
+  <script>
+    window.onload = function () {
+      window.focus();
+      window.setTimeout(function () { window.print(); }, 250);
+    };
+  </script>
+</body>
+</html>`;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
   }
 
   return (
@@ -122,12 +274,11 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
           <button className="ghost-button compact" onClick={zoomOut} disabled={zoomIndex === 0} type="button">Zoom out</button>
           <button className="ghost-button compact" onClick={resetZoom} type="button">Reset zoom</button>
           <button className="ghost-button compact" onClick={zoomIn} disabled={zoomIndex === zoomLevels.length - 1} type="button">Zoom in</button>
-          <button className="primary-button compact" onClick={exportPdf} disabled={isExportingPdf} type="button">{isExportingPdf ? 'Exporting...' : 'Export PDF'}</button>
+          <button className="primary-button compact" onClick={exportGanttPdf} type="button">Export PDF</button>
         </div>
       </div>
 
-      <p className="gantt-navigation-help">Use the buttons or horizontal scroll bar to move through the schedule. Click a task name or bar to edit it. Export PDF creates a landscape schedule file of the full Gantt timeline.</p>
-      {exportError && <p className="error-box gantt-export-error">{exportError}</p>}
+      <p className="gantt-navigation-help">Use the buttons or horizontal scroll bar to move through the schedule. Click a task name or bar to edit it. Export PDF opens a printable Gantt view.</p>
 
       <div className="gantt-shell expanded-gantt-shell">
         <div className="gantt-label-column" style={{ paddingTop: headerHeight }}>

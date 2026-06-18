@@ -124,14 +124,14 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
           <label>
             Trade
             <select disabled={!canEdit} value={form.trade} onChange={(event) => updateField('trade', event.target.value)}>
-              <option value="">Select trade</option>
+              <option value=""> </option>
               {tradeOptions.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
             </select>
           </label>
           <label>
             Vendor
             <select disabled={!canEdit} value={form.vendor} onChange={(event) => updateField('vendor', event.target.value)}>
-              <option value="">Select vendor</option>
+              <option value=""> </option>
               {vendorOptions.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
             </select>
           </label>
@@ -150,14 +150,14 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
           <label>
             Security Team Member
             <select disabled={!canEdit} value={form.security_team_member} onChange={(event) => updateField('security_team_member', event.target.value)}>
-              <option value="">Select security team member</option>
+              <option value=""> </option>
               {securityTeamOptions.map((member) => <option key={member} value={member}>{member}</option>)}
             </select>
           </label>
           <label>
             PM
             <select disabled={!canEdit} value={form.pm} onChange={(event) => updateField('pm', event.target.value)}>
-              <option value="">Select PM</option>
+              <option value=""> </option>
               {pmOptions.map((pm) => <option key={pm} value={pm}>{pm}</option>)}
             </select>
           </label>

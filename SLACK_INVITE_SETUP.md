@@ -9,7 +9,7 @@ The normal flow is now:
 3. Add or update the member.
 4. PSG and SS Tracking creates a one-use project invite code for that member.
 5. PSG and SS Tracking posts the code into your chosen Slack channel.
-6. The Slack message calls out the assigned PSG and SS Tracking email.
+6. The Slack message calls out the assigned email address.
 
 The user still needs a PSG and SS Tracking account. The code is targeted to that PSG and SS Tracking user/email.
 
@@ -144,7 +144,7 @@ The Slack channel message will include:
 - Project name
 - Project location
 - Project dates
-- Assigned PSG and SS Tracking email
+- Assigned email
 - Project role
 - Invitation code
 - Link to accept the invitation

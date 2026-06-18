@@ -7,7 +7,7 @@ PSG and SS Tracking is a construction project timeline tracking web app with mul
 - Active Projects and Completed tabs
 - Projects tab showing who is assigned to each project
 - Calendar overview showing all visible projects and project status
-- Larger Gantt chart with zoom controls, Start/Today navigation, Prev/Next 30-day pan buttons, dependencies, task progress, team/vendor labels, today marker, and PDF export
+- Larger Gantt chart with zoom controls, Start/Today navigation, Prev/Next 30-day pan buttons, dependencies, task progress, team/vendor labels, and today marker
 - Editable project notes section for assigned viewers, editors, managers, and owners
 - Viewer users can edit project notes only; other schedule/project controls stay read-only for viewers
 - Task dropdowns for Trade, Vendor, Security Team Member, and PM
@@ -22,7 +22,6 @@ PSG and SS Tracking is a construction project timeline tracking web app with mul
 - Site Members tab for site owners/managers to revoke access, restore access, delete users, and change site role
 - Viewers/editors only see assigned projects; managers/owners can see the portfolio
 - Header/banner image on login, dashboard, project, and loading pages
-- Project workspace side panes are compacted to avoid overlapping the task form and table
 
 ## Local demo login
 

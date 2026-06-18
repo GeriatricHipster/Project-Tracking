@@ -17,7 +17,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(220, 38, 38, 0.12), transparent 28rem),
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 28rem),
     #f3f4f6;
 }
 
@@ -123,9 +123,9 @@ p {
 }
 
 .auth-tabs button.active {
-  background: #dc2626;
-  color: #ffffff;
-  box-shadow: 0 6px 18px rgba(220, 38, 38, 0.16);
+  background: #ffffff;
+  color: #111827;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
 }
 
 .stack {
@@ -162,8 +162,8 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: #dc2626;
-  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.12);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
 }
 
 .primary-button,
@@ -177,9 +177,9 @@ textarea:focus {
 }
 
 .primary-button {
-  background: #dc2626;
+  background: #2563eb;
   color: #ffffff;
-  box-shadow: 0 14px 24px rgba(220, 38, 38, 0.2);
+  box-shadow: 0 14px 24px rgba(37, 99, 235, 0.2);
 }
 
 .primary-button:hover:not(:disabled),
@@ -512,7 +512,7 @@ textarea:focus {
 }
 
 .gantt-label-row:hover {
-  background: #fef2f2;
+  background: #eff6ff;
 }
 
 .gantt-empty-label {
@@ -533,7 +533,7 @@ textarea:focus {
 }
 
 .status-dot.status-in_progress {
-  background: #dc2626;
+  background: #2563eb;
 }
 
 .status-dot.status-blocked {
@@ -676,8 +676,8 @@ textarea:focus {
 
 .project-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(250px, 300px);
-  gap: 1.4rem;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 1rem;
   align-items: start;
 }
 
@@ -690,9 +690,6 @@ textarea:focus {
 .workspace-side {
   position: sticky;
   top: 1rem;
-  width: 100%;
-  max-width: 300px;
-  justify-self: end;
 }
 
 .table-scroll {
@@ -744,7 +741,7 @@ th {
 .mini-progress span {
   display: block;
   height: 100%;
-  background: #dc2626;
+  background: #2563eb;
 }
 
 .side-panel {
@@ -818,8 +815,6 @@ th {
   .create-panel,
   .workspace-side {
     position: static;
-    max-width: none;
-    justify-self: stretch;
   }
 }
 
@@ -866,9 +861,9 @@ th {
 }
 
 .dashboard-tabs button.active {
-  background: #dc2626;
-  color: #ffffff;
-  box-shadow: 0 8px 22px rgba(220, 38, 38, 0.16);
+  background: #ffffff;
+  color: #111827;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.09);
 }
 
 .dashboard-snapshot {
@@ -1133,7 +1128,7 @@ th {
 }
 
 .today-day {
-  box-shadow: inset 0 0 0 2px #dc2626;
+  box-shadow: inset 0 0 0 2px #2563eb;
 }
 
 .calendar-day-top {
@@ -1146,7 +1141,7 @@ th {
 }
 
 .calendar-day-top strong {
-  color: #dc2626;
+  color: #2563eb;
   font-size: 0.72rem;
 }
 
@@ -1248,9 +1243,9 @@ th {
 }
 
 .dashboard-tabs button.active {
-  background: #dc2626;
+  background: #111827;
   color: #ffffff;
-  box-shadow: 0 10px 24px rgba(220, 38, 38, 0.18);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
 }
 
 .dashboard-stack {
@@ -1373,7 +1368,7 @@ th {
 }
 
 .assigned-project-chip:hover {
-  background: #fef2f2;
+  background: #eff6ff;
 }
 
 .assigned-project-chip strong,
@@ -1684,7 +1679,7 @@ th {
 
 
 .notice-box {
-  background: #fef2f2;
+  background: #eff6ff;
   border: 1px solid #bfdbfe;
   color: #1e40af;
   border-radius: 14px;
@@ -1784,8 +1779,8 @@ th {
 }
 
 .drop-zone.dragging {
-  border-color: #dc2626;
-  background: #fef2f2;
+  border-color: #2563eb;
+  background: #eff6ff;
   transform: scale(1.01);
 }
 
@@ -1903,7 +1898,7 @@ th {
   gap: 0.25rem;
   border: 1px dashed #93c5fd;
   border-radius: 14px;
-  background: #fef2f2;
+  background: #eff6ff;
   padding: 0.85rem;
   color: #1e3a8a;
 }
@@ -1934,8 +1929,6 @@ th {
   display: block;
   width: 100%;
   height: auto;
-  object-fit: contain;
-  background: #020617;
 }
 
 .site-banner.compact {
@@ -2043,7 +2036,7 @@ th {
 
 /* Project notes, task dropdowns, and larger Gantt refinements */
 .project-notes-panel {
-  border-left: 6px solid #dc2626;
+  border-left: 6px solid #2563eb;
 }
 
 .project-notes-textarea {
@@ -2104,140 +2097,131 @@ th {
   }
 }
 
-/* PSG and SS Tracking layout refinements */
+/* PSG and SS Tracking layout updates */
 .brand-mark {
-  letter-spacing: 0;
-  font-size: 0.82rem;
+  width: 56px;
+  min-width: 56px;
+  letter-spacing: -0.03em;
 }
 
 .project-workspace {
-  grid-template-columns: minmax(0, 1.2fr) minmax(250px, 300px);
-  gap: 1.4rem;
+  grid-template-columns: minmax(0, 1.08fr) minmax(250px, 300px);
+  gap: 1rem;
 }
 
 .workspace-main,
 .workspace-side,
 .task-form-panel,
 .project-notes-panel,
-.table-scroll {
+.table-panel {
   min-width: 0;
 }
 
+.workspace-main {
+  margin-left: -0.55rem;
+}
+
 .workspace-side {
-  width: 100%;
-  max-width: 300px;
-  align-self: start;
-  justify-self: end;
+  margin-left: 0;
 }
 
 .workspace-side .panel {
-  padding: 0.7rem;
-  border-radius: 16px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  padding: 0.9rem;
+  border-radius: 18px;
 }
 
 .workspace-side .panel-heading {
-  margin-bottom: 0.6rem;
   gap: 0.55rem;
+  margin-bottom: 0.65rem;
 }
 
 .workspace-side .panel-heading h2 {
   font-size: 1rem;
-  line-height: 1.15;
 }
 
 .workspace-side .panel-heading p,
 .workspace-side .form-help,
-.workspace-side .dependency-item span,
-.workspace-side .member-item span,
-.workspace-side .activity-item span,
-.workspace-side .activity-item small,
-.workspace-side .blueprint-item span {
-  font-size: 0.76rem;
+.workspace-side small {
+  font-size: 0.78rem;
 }
 
-.workspace-side label {
-  font-size: 0.78rem;
+.workspace-side .two-col,
+.workspace-side .three-col {
+  grid-template-columns: 1fr;
+  gap: 0.55rem;
 }
 
 .workspace-side input,
 .workspace-side select,
 .workspace-side textarea {
-  padding: 0.52rem 0.62rem;
-  border-radius: 10px;
-  font-size: 0.86rem;
-}
-
-.workspace-side .dependency-list,
-.workspace-side .member-list,
-.workspace-side .activity-list,
-.workspace-side .blueprint-list {
-  gap: 0.5rem;
+  padding: 0.58rem 0.68rem;
+  font-size: 0.88rem;
 }
 
 .workspace-side .dependency-item,
 .workspace-side .member-item,
 .workspace-side .activity-item,
 .workspace-side .blueprint-item {
-  padding: 0.58rem;
-  border-radius: 12px;
+  padding: 0.62rem;
   gap: 0.55rem;
-}
-
-.workspace-side .member-item,
-.workspace-side .dependency-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  border-radius: 12px;
 }
 
 .workspace-side .member-actions,
 .workspace-side .row-actions {
-  width: 100%;
+  align-items: stretch;
   justify-content: flex-start;
-  gap: 0.35rem;
+  gap: 0.4rem;
 }
 
 .workspace-side .member-actions select {
-  min-width: 100px;
-  max-width: 150px;
+  min-width: 105px;
+  flex: 1 1 105px;
 }
 
-.workspace-side .drop-zone {
-  min-height: 84px;
-  padding: 0.7rem;
-  border-radius: 14px;
-}
-
-.workspace-side .drop-zone span {
-  font-size: 0.76rem;
-}
-
-.workspace-side .compact {
-  padding: 0.45rem 0.58rem;
+.workspace-side .ghost-button.compact,
+.workspace-side .danger-button.compact,
+.workspace-side .primary-button.compact {
+  padding: 0.48rem 0.62rem;
   font-size: 0.78rem;
 }
 
-.gantt-export-error {
-  margin-bottom: 0.85rem;
+.workspace-side .drop-zone {
+  min-height: 92px;
+  padding: 0.75rem;
+  border-radius: 14px;
 }
 
-.gantt-toolbar .primary-button {
-  box-shadow: 0 10px 20px rgba(220, 38, 38, 0.16);
+.project-notes-panel {
+  border-left: 6px solid #111827;
 }
 
-@media (max-width: 1320px) {
-  .project-workspace {
-    grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
-    gap: 1.15rem;
-  }
+.gantt-toolbar {
+  max-width: none;
 }
 
-@media (max-width: 1180px) {
+.gantt-toolbar .primary-button.compact {
+  white-space: nowrap;
+}
+
+@media (max-width: 1380px) {
   .project-workspace {
     grid-template-columns: 1fr;
   }
 
+  .workspace-main {
+    margin-left: 0;
+  }
+
   .workspace-side {
     position: static;
+    margin-left: 0;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace-side {
+    grid-template-columns: 1fr;
   }
 }

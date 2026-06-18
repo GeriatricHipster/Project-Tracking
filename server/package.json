@@ -1,5 +1,5 @@
 {
-  "name": "psg-ss-tracking-server",
+  "name": "buildtrack-server",
   "version": "1.0.0",
   "description": "Backend API for PSG and SS Tracking construction timeline tracking.",
   "main": "src/server.js",
