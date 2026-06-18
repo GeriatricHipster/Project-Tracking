@@ -1,24 +1,28 @@
 # Changes in this version
 
-This version adds Slack invitation codes for projects.
+This version keeps the Slack invitation-code features and fixes the Render migration error:
 
-## Added
+```text
+Migration failed: error: column "sort_order" of relation "project_checklist_items" does not exist
+```
+
+## Fixed
+
+- Added an upgrade-safe migration for older `project_checklist_items` tables that were created before `sort_order` existed.
+- Added compatibility migration for older checklist columns such as `checked_by`.
+- Added compatibility migration for older blueprint columns such as `file_name` and `file_size`.
+- Added a safer user-role migration for older versions that used `viewer`/`editor` as site roles.
+
+## Still included
 
 - Slack invitation code panel inside each project
 - Project invite codes that can be posted to a Slack channel using an Incoming Webhook
 - Join with invite code box on the main dashboard
 - Invite links that can add a logged-in or newly registered user to the project
 - Project invite code database table and migration
-- New setup guide: `SLACK_INVITE_SETUP.md`
+- Slack setup guide: `SLACK_INVITE_SETUP.md`
 
-## Access rules
-
-- Project managers can create editor/viewer invite codes.
-- Project owners can create manager/editor/viewer invite codes.
-- Owner invite codes are intentionally not supported for safety.
-- People still need a BuildTrack account before accepting a project code.
-
-## Setup required
+## Slack setup required
 
 Add these Render environment variables after deployment:
 
