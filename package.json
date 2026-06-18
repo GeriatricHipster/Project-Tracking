@@ -1,23 +1,23 @@
 {
-  "name": "buildtrack-cloud",
+  "name": "slack-task-notifier",
   "version": "1.0.0",
-  "private": true,
-  "description": "Construction project timeline tracking cloud application with Gantt chart.",
+  "description": "A small Render-ready API that sends Slack notifications when a task is assigned.",
+  "main": "server.js",
   "scripts": {
-    "install:all": "npm --prefix server install && npm --prefix client install",
-    "build": "npm --prefix client run build",
-    "start": "npm --prefix server run migrate && npm --prefix server start",
-    "seed": "npm --prefix server run seed",
-    "check": "bash scripts/check-project.sh",
-    "check:tools": "bash scripts/check-project.sh",
-    "check:code": "npm --prefix server run check && npm --prefix client run build",
-    "start:local": "bash scripts/start-local.sh",
-    "stop:local": "bash scripts/stop-local.sh",
-    "reset:local": "bash scripts/reset-local-data.sh",
-    "push:github": "bash scripts/push-to-github.sh",
-    "validate:render": "bash scripts/validate-render-blueprint.sh"
+    "start": "node server.js",
+    "check": "node --check server.js"
   },
   "engines": {
     "node": ">=20"
-  }
+  },
+  "keywords": [
+    "slack",
+    "webhook",
+    "render",
+    "github",
+    "tasks",
+    "notifications"
+  ],
+  "author": "",
+  "license": "MIT"
 }
