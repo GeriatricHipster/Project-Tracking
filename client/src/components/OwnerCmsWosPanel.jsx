@@ -1,33 +1,17 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import {
+  buildBlankOwnerCmsGrid,
+  normalizeOwnerCmsGrid,
+  ownerCmsColumnCount,
+  ownerCmsColumns,
+  ownerCmsRowCount
+} from '../lib/ownerCmsWorkbook';
 
 const SHEETS = [
   { sheet_key: 'kurts_cms_wos', sheet_name: 'Kurts CMS WOs' },
   { sheet_key: 'austins_cms_wos', sheet_name: 'Austins CMS WOs' }
 ];
-
-const ROW_COUNT = 60;
-const COL_COUNT = 60;
-
-function buildBlankGrid() {
-  return Array.from({ length: ROW_COUNT }, () => Array.from({ length: COL_COUNT }, () => ''));
-}
-
-function normalizeGrid(cells) {
-  const grid = buildBlankGrid();
-  if (!Array.isArray(cells)) return grid;
-
-  for (let rowIndex = 0; rowIndex < Math.min(cells.length, ROW_COUNT); rowIndex += 1) {
-    const row = cells[rowIndex];
-    if (!Array.isArray(row)) continue;
-    for (let colIndex = 0; colIndex < Math.min(row.length, COL_COUNT); colIndex += 1) {
-      const value = row[colIndex];
-      grid[rowIndex][colIndex] = value === null || value === undefined ? '' : String(value);
-    }
-  }
-
-  return grid;
-}
 
 function titleize(value) {
   return String(value || '')
@@ -35,16 +19,74 @@ function titleize(value) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-const SpreadsheetCell = memo(function SpreadsheetCell({ sheetKey, rowIndex, colIndex, value, onChange, onCommit, disabled }) {
+const SpreadsheetCell = memo(function SpreadsheetCell({ sheetKey, rowIndex, column, value, onCellChange, onCellCommit, disabled }) {
+  const commonProps = {
+    'aria-label': `${column.label} row ${rowIndex + 1}`,
+    disabled,
+    value: value ?? ''
+  };
+
+  if (column.type === 'select') {
+    return (
+      <td className="cms-grid-cell" style={{ minWidth: column.width, width: column.width }}>
+        <select
+          className="cms-grid-editor"
+          {...commonProps}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            onCellChange(sheetKey, rowIndex, column.index, nextValue);
+            onCellCommit(sheetKey, rowIndex, column.index, nextValue);
+          }}
+        >
+          <option value=""> </option>
+          {column.options.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+      </td>
+    );
+  }
+
+  if (column.type === 'date') {
+    return (
+      <td className="cms-grid-cell" style={{ minWidth: column.width, width: column.width }}>
+        <input
+          className="cms-grid-editor"
+          type="date"
+          {...commonProps}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            onCellChange(sheetKey, rowIndex, column.index, nextValue);
+            onCellCommit(sheetKey, rowIndex, column.index, nextValue);
+          }}
+        />
+      </td>
+    );
+  }
+
+  if (column.type === 'textarea') {
+    return (
+      <td className="cms-grid-cell" style={{ minWidth: column.width, width: column.width }}>
+        <textarea
+          className="cms-grid-editor cms-grid-textarea"
+          rows={2}
+          placeholder={column.placeholder || ''}
+          {...commonProps}
+          onChange={(event) => onCellChange(sheetKey, rowIndex, column.index, event.target.value)}
+          onBlur={(event) => onCellCommit(sheetKey, rowIndex, column.index, event.currentTarget.value)}
+        />
+      </td>
+    );
+  }
+
   return (
-    <td className="cms-grid-cell">
+    <td className="cms-grid-cell" style={{ minWidth: column.width, width: column.width }}>
       <input
-        aria-label={`${sheetKey} row ${rowIndex + 1} column ${colIndex + 1}`}
-        className="cms-grid-input"
-        disabled={disabled}
-        value={value}
-        onBlur={() => onCommit(sheetKey, rowIndex, colIndex, value)}
-        onChange={(event) => onChange(sheetKey, rowIndex, colIndex, event.target.value)}
+        className="cms-grid-editor"
+        placeholder={column.placeholder || ''}
+        {...commonProps}
+        onBlur={(event) => onCellCommit(sheetKey, rowIndex, column.index, event.currentTarget.value)}
+        onChange={(event) => onCellChange(sheetKey, rowIndex, column.index, event.target.value)}
         spellCheck={false}
       />
     </td>
@@ -52,17 +94,18 @@ const SpreadsheetCell = memo(function SpreadsheetCell({ sheetKey, rowIndex, colI
 });
 
 function SheetGrid({ sheet, savingCell, onCellChange, onCellCommit }) {
-  const columnLabels = useMemo(() => Array.from({ length: COL_COUNT }, (_, index) => index + 1), []);
-  const rows = sheet?.cells || buildBlankGrid();
+  const rows = sheet?.cells || buildBlankOwnerCmsGrid();
 
   return (
     <div className="cms-grid-wrap">
       <table className="cms-grid-table">
         <thead>
           <tr>
-            <th className="cms-grid-corner">Row / Col</th>
-            {columnLabels.map((label) => (
-              <th key={label} className="cms-grid-col-header">{label}</th>
+            <th className="cms-grid-corner">#</th>
+            {ownerCmsColumns.map((column) => (
+              <th key={column.key} className="cms-grid-col-header" style={{ minWidth: column.width, width: column.width }}>
+                {column.label}
+              </th>
             ))}
           </tr>
         </thead>
@@ -70,15 +113,15 @@ function SheetGrid({ sheet, savingCell, onCellChange, onCellCommit }) {
           {rows.map((row, rowIndex) => (
             <tr key={rowIndex}>
               <th className="cms-grid-row-header">{rowIndex + 1}</th>
-              {Array.from({ length: COL_COUNT }, (_, colIndex) => (
+              {ownerCmsColumns.map((column, colIndex) => (
                 <SpreadsheetCell
-                  key={`${rowIndex}-${colIndex}`}
+                  key={`${rowIndex}-${column.key}`}
                   sheetKey={sheet.sheet_key}
                   rowIndex={rowIndex}
-                  colIndex={colIndex}
+                  column={{ ...column, index: colIndex }}
                   value={row[colIndex] ?? ''}
-                  onChange={onCellChange}
-                  onCommit={onCellCommit}
+                  onCellChange={onCellChange}
+                  onCellCommit={onCellCommit}
                   disabled={savingCell === `${sheet.sheet_key}-${rowIndex}-${colIndex}`}
                 />
               ))}
@@ -102,7 +145,7 @@ export default function OwnerCmsWosPanel({ user }) {
   const activeSheet = sheets[activeSheetKey] || {
     sheet_key: activeSheetKey,
     sheet_name: SHEETS.find((sheet) => sheet.sheet_key === activeSheetKey)?.sheet_name || titleize(activeSheetKey),
-    cells: buildBlankGrid()
+    cells: buildBlankOwnerCmsGrid()
   };
 
   const refreshSheets = useCallback(async () => {
@@ -114,7 +157,7 @@ export default function OwnerCmsWosPanel({ user }) {
       for (const sheet of data.sheets || []) {
         nextSheets[sheet.sheet_key] = {
           ...sheet,
-          cells: normalizeGrid(sheet.cells)
+          cells: normalizeOwnerCmsGrid(sheet.cells)
         };
       }
       setSheets(nextSheets);
@@ -123,7 +166,7 @@ export default function OwnerCmsWosPanel({ user }) {
     } finally {
       setLoading(false);
     }
-  }, [activeSheetKey]);
+  }, []);
 
   useEffect(() => {
     if (!canAccess) return;
@@ -157,9 +200,9 @@ export default function OwnerCmsWosPanel({ user }) {
       const currentSheet = next[sheetKey] || {
         sheet_key: sheetKey,
         sheet_name: SHEETS.find((sheet) => sheet.sheet_key === sheetKey)?.sheet_name || titleize(sheetKey),
-        cells: buildBlankGrid()
+        cells: buildBlankOwnerCmsGrid()
       };
-      const nextCells = normalizeGrid(currentSheet.cells);
+      const nextCells = normalizeOwnerCmsGrid(currentSheet.cells);
       nextCells[rowIndex][colIndex] = value;
       next[sheetKey] = { ...currentSheet, cells: nextCells };
       return next;
@@ -189,7 +232,7 @@ export default function OwnerCmsWosPanel({ user }) {
         <div className="panel-heading">
           <div>
             <h2>CMS WOs</h2>
-            <p>Owner-only work order spreadsheets. Changes save when you leave a cell.</p>
+            <p>Owner-only work order spreadsheets. Use the dropdowns and date fields in the table below.</p>
           </div>
         </div>
 
@@ -212,7 +255,9 @@ export default function OwnerCmsWosPanel({ user }) {
         <div className="cms-sheet-meta">
           <div>
             <strong>{activeSheet.sheet_name}</strong>
-            <p className="muted">60 rows and 60 columns. Use horizontal scroll to move across the sheet.</p>
+            <p className="muted">
+              {ownerCmsRowCount} rows, {ownerCmsColumnCount} columns. Blank values stay blank until you choose something.
+            </p>
           </div>
           <button className="ghost-button compact" onClick={refreshSheets} type="button">
             Refresh sheet

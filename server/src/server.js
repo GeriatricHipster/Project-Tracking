@@ -557,18 +557,21 @@ function requireSiteOwner(user) {
   return siteRole;
 }
 
+const OWNER_CMS_ROW_COUNT = 60;
+const OWNER_CMS_COLUMN_COUNT = 19;
+
 function buildBlankOwnerCmsGrid() {
-  return Array.from({ length: 60 }, () => Array.from({ length: 60 }, () => ''));
+  return Array.from({ length: OWNER_CMS_ROW_COUNT }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
 }
 
 function normalizeOwnerCmsGrid(cells) {
   const blank = buildBlankOwnerCmsGrid();
   if (!Array.isArray(cells)) return blank;
 
-  for (let rowIndex = 0; rowIndex < Math.min(cells.length, 60); rowIndex += 1) {
+  for (let rowIndex = 0; rowIndex < Math.min(cells.length, OWNER_CMS_ROW_COUNT); rowIndex += 1) {
     const row = cells[rowIndex];
     if (!Array.isArray(row)) continue;
-    for (let colIndex = 0; colIndex < Math.min(row.length, 60); colIndex += 1) {
+    for (let colIndex = 0; colIndex < Math.min(row.length, OWNER_CMS_COLUMN_COUNT); colIndex += 1) {
       const value = row[colIndex];
       blank[rowIndex][colIndex] = value === null || value === undefined ? '' : String(value);
     }
@@ -1081,13 +1084,13 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
     label: 'row_index',
     defaultValue: 0,
     min: 0,
-    max: 59
+    max: OWNER_CMS_ROW_COUNT - 1
   });
   const colIndex = clampInteger(req.body.col_index ?? req.body.colIndex, {
     label: 'col_index',
     defaultValue: 0,
     min: 0,
-    max: 59
+    max: OWNER_CMS_COLUMN_COUNT - 1
   });
   const cellValue = String(req.body.value ?? '');
 
