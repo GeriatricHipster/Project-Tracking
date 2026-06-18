@@ -23,6 +23,7 @@ export default function TaskTable({ tasks, canEdit, onEdit, onDelete }) {
             <tr>
               <th>Task</th>
               <th>Trade</th>
+              <th>Vendor</th>
               <th>Assignee</th>
               <th>Status</th>
               <th>Dates</th>
@@ -39,6 +40,7 @@ export default function TaskTable({ tasks, canEdit, onEdit, onDelete }) {
                   {task.description && <span className="table-subtext">{task.description}</span>}
                 </td>
                 <td>{task.trade || '-'}</td>
+                <td>{task.vendor || '-'}</td>
                 <td>{task.assigned_to_name || '-'}</td>
                 <td><span className={`status-pill status-${task.status}`}>{statusLabel[task.status] || task.status}</span></td>
                 <td>{formatDate(task.start_date)} - {formatDate(task.end_date)}</td>
@@ -57,7 +59,7 @@ export default function TaskTable({ tasks, canEdit, onEdit, onDelete }) {
             ))}
             {tasks.length === 0 && (
               <tr>
-                <td colSpan="8">
+                <td colSpan="9">
                   <div className="empty-state table-empty">
                     <h3>No tasks yet</h3>
                     <p>Add the first schedule item to start building the Gantt chart.</p>

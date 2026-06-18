@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
+import SiteBanner from './SiteBanner';
 
 export default function AuthScreen({ onAuth, pendingInviteCode }) {
   const [mode, setMode] = useState('login');
@@ -30,6 +31,7 @@ export default function AuthScreen({ onAuth, pendingInviteCode }) {
 
   return (
     <main className="auth-page">
+      <SiteBanner compact />
       <section className="auth-card">
         <div className="brand-lockup">
           <span className="brand-mark">BT</span>

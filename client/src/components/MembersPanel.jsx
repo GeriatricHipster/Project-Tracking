@@ -2,12 +2,25 @@ import { useState } from 'react';
 
 const allRoles = ['owner', 'manager', 'editor', 'viewer'];
 
+function describeSlack(result, baseMessage) {
+  const slack = result?.slack;
+  const code = result?.invite?.formatted_code;
+  if (!slack) return baseMessage;
+  if (slack.sent) {
+    const destination = slack.mode === 'direct_message' ? 'Slack direct message' : 'Slack channel message';
+    const warning = slack.warning ? ` Note: ${slack.warning}` : '';
+    return `${baseMessage} ${destination} sent${code ? ` with code ${code}` : ''}.${warning}`;
+  }
+  return `${baseMessage} Slack invite was not sent: ${slack.error || 'check Slack setup.'}`;
+}
+
 export default function MembersPanel({ currentUser, projectRole, members, canManage, onAddMember, onUpdateMember, onRemoveMember }) {
   const canOwner = projectRole === 'owner';
   const [form, setForm] = useState({ email: '', role: 'editor' });
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
+  const [updatingUserId, setUpdatingUserId] = useState(null);
 
   const roleOptions = canOwner ? allRoles : allRoles.filter((role) => role !== 'owner');
 
@@ -17,13 +30,27 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
     setNotice('');
     setSaving(true);
     try {
-      await onAddMember(form);
-      setNotice('Member added or updated.');
+      const result = await onAddMember(form);
+      setNotice(describeSlack(result, 'Member added or updated.'));
       setForm({ email: '', role: 'editor' });
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function changeMemberRole(member, role) {
+    setError('');
+    setNotice('');
+    setUpdatingUserId(member.user_id);
+    try {
+      const result = await onUpdateMember(member, role);
+      setNotice(describeSlack(result, `${member.name} updated to ${role}.`));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUpdatingUserId(null);
     }
   }
 
@@ -47,7 +74,7 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
             {roleOptions.map((role) => <option key={role} value={role}>{role}</option>)}
           </select>
         </label>
-        <p className="form-help">The user must already have a registered BuildTrack account.</p>
+        <p className="form-help">The user must already have a BuildTrack account. When Slack is set up, an invite code is sent automatically after add/update.</p>
         {error && <p className="error-box">{error}</p>}
         {notice && <p className="notice-box">{notice}</p>}
         <button className="primary-button compact" disabled={!canManage || saving}>{saving ? 'Adding...' : 'Add / update member'}</button>
@@ -62,7 +89,7 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
             </div>
             <div className="member-actions">
               {canOwner ? (
-                <select value={member.role} onChange={(event) => onUpdateMember(member, event.target.value)}>
+                <select disabled={updatingUserId === member.user_id} value={member.role} onChange={(event) => changeMemberRole(member, event.target.value)}>
                   {allRoles.map((role) => <option key={role} value={role}>{role}</option>)}
                 </select>
               ) : (

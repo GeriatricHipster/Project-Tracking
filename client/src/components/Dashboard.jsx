@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { addDays, formatDate, todayIso } from '../lib/dates';
 import SiteMembersPanel from './SiteMembersPanel';
+import SiteBanner from './SiteBanner';
 
 const dashboardTabs = [
   { id: 'projects', label: 'Active projects' },
   { id: 'completed', label: 'Completed' },
-  { id: 'assignments', label: 'Projects / assignments' },
+  { id: 'assignments', label: 'Projects' },
   { id: 'calendar', label: 'Calendar overview' },
   { id: 'site-members', label: 'Site members', managersOnly: true }
 ];
@@ -616,6 +617,7 @@ export default function Dashboard({
 
   return (
     <main className="app-page">
+      <SiteBanner />
       <header className="topbar">
         <div className="brand-lockup small">
           <span className="brand-mark">BT</span>

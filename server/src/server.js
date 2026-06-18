@@ -18,6 +18,9 @@ const PORT = Number(process.env.PORT || 4000);
 const JWT_SECRET = process.env.JWT_SECRET || 'local-development-secret-change-me';
 const APP_NAME = process.env.APP_NAME || 'BuildTrack Cloud';
 const SLACK_WEBHOOK_URL = String(process.env.SLACK_WEBHOOK_URL || '').trim();
+const SLACK_BOT_TOKEN = String(process.env.SLACK_BOT_TOKEN || '').trim();
+const SLACK_DM_FALLBACK_TO_WEBHOOK = String(process.env.SLACK_DM_FALLBACK_TO_WEBHOOK || 'false').trim().toLowerCase() === 'true';
+const SLACK_ASSIGNMENT_INVITE_DAYS = Number(process.env.SLACK_ASSIGNMENT_INVITE_DAYS || 7);
 const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
@@ -36,6 +39,7 @@ const projectLifecycleStatuses = new Set(['active', 'completed']);
 const priorities = new Set(['low', 'normal', 'high', 'critical']);
 const roles = new Set(['owner', 'manager', 'editor', 'viewer']);
 const inviteRoles = new Set(['manager', 'editor', 'viewer']);
+const vendors = new Set(['Everbase', 'IES', 'Ideacom', 'Utah Yamas', 'Convergint', 'Pavion', 'Beacon', 'Stone Security', 'S101']);
 const siteRoles = new Set(['owner', 'manager', 'member']);
 const dependencyTypes = new Set(['FS', 'SS', 'FF', 'SF']);
 const managerSiteRoles = new Set(['owner', 'manager']);
@@ -169,26 +173,77 @@ function buildInviteUrl(req, code) {
   return appUrl ? `${appUrl}/?invite=${encodeURIComponent(code)}` : '';
 }
 
+function buildProjectUrl(req, projectId) {
+  const appUrl = getAppUrl(req);
+  return appUrl ? `${appUrl}/?project=${encodeURIComponent(projectId)}` : '';
+}
+
 function slackSafeText(value, fallback = 'Not set') {
   const text = String(value || '').trim();
   return text || fallback;
 }
 
-async function sendSlackInviteMessage({ req, project, invite, actor }) {
-  if (!SLACK_WEBHOOK_URL) {
-    throw httpError(400, 'Slack is not set up yet. Add SLACK_WEBHOOK_URL in Render first.');
+async function slackApiJson(method, payload) {
+  if (!SLACK_BOT_TOKEN) {
+    throw httpError(400, 'Slack direct messages require SLACK_BOT_TOKEN in Render. Add a Slack Bot User OAuth Token first.');
   }
 
+  const response = await fetch(`https://slack.com/api/${method}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+      'Content-Type': 'application/json; charset=utf-8'
+    },
+    body: JSON.stringify(payload || {})
+  });
+
+  const data = await response.json().catch(() => null);
+  if (!response.ok || !data?.ok) {
+    const errorCode = data?.error || `HTTP ${response.status}`;
+    throw httpError(502, `Slack ${method} failed: ${errorCode}`);
+  }
+  return data;
+}
+
+async function slackApiGet(method, params = {}) {
+  if (!SLACK_BOT_TOKEN) {
+    throw httpError(400, 'Slack direct messages require SLACK_BOT_TOKEN in Render. Add a Slack Bot User OAuth Token first.');
+  }
+
+  const url = new URL(`https://slack.com/api/${method}`);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value);
+  }
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}` }
+  });
+
+  const data = await response.json().catch(() => null);
+  if (!response.ok || !data?.ok) {
+    const errorCode = data?.error || `HTTP ${response.status}`;
+    throw httpError(502, `Slack ${method} failed: ${errorCode}`);
+  }
+  return data;
+}
+
+function buildSlackInvitePayload({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
   const formattedCode = formatInviteCode(invite.code);
   const inviteUrl = buildInviteUrl(req, invite.code);
   const expiresAt = invite.expires_at ? new Date(invite.expires_at).toLocaleString('en-US', { timeZone: 'UTC', timeZoneName: 'short' }) : 'No expiration';
+  const roleText = assignmentRole || invite.role;
+  const targetIntro = targetUser
+    ? `You have been assigned to *${slackSafeText(project.name)}* as *${roleText}*.`
+    : `${actor.name} created an invitation code for *${slackSafeText(project.name)}*.`;
+
   const fields = [
     { type: 'mrkdwn', text: `*Project:*\n${slackSafeText(project.name)}` },
     { type: 'mrkdwn', text: `*Location:*\n${slackSafeText(project.location)}` },
     { type: 'mrkdwn', text: `*Dates:*\n${project.start_date} to ${project.end_date}` },
-    { type: 'mrkdwn', text: `*Role:*\n${invite.role}` },
-    { type: 'mrkdwn', text: `*Expires:*\n${expiresAt}` },
-    { type: 'mrkdwn', text: `*Uses:*\n${invite.max_uses}` }
+    { type: 'mrkdwn', text: `*Project role:*\n${roleText}` },
+    { type: 'mrkdwn', text: `*Code expires:*\n${expiresAt}` },
+    { type: 'mrkdwn', text: `*Code uses:*\n${invite.max_uses}` }
   ];
 
   const blocks = [
@@ -196,7 +251,7 @@ async function sendSlackInviteMessage({ req, project, invite, actor }) {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*${APP_NAME} project invitation*\n${actor.name} created an invitation code for *${slackSafeText(project.name)}*.`
+        text: `*${APP_NAME} project invitation*\n${targetIntro}`
       }
     },
     { type: 'section', fields },
@@ -204,7 +259,7 @@ async function sendSlackInviteMessage({ req, project, invite, actor }) {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*Invitation code:* \`${formattedCode}\`\nCopy this code into ${APP_NAME}, or use the button below.`
+        text: `*Invitation code:* \`${formattedCode}\`\nOpen the invitation link below or copy this code into ${APP_NAME}.`
       }
     }
   ];
@@ -215,7 +270,7 @@ async function sendSlackInviteMessage({ req, project, invite, actor }) {
       elements: [
         {
           type: 'button',
-          text: { type: 'plain_text', text: 'Open invitation', emoji: true },
+          text: { type: 'plain_text', text: 'Open project invitation', emoji: true },
           url: inviteUrl
         }
       ]
@@ -225,25 +280,144 @@ async function sendSlackInviteMessage({ req, project, invite, actor }) {
   blocks.push({
     type: 'context',
     elements: [
-      { type: 'mrkdwn', text: `Only people with a BuildTrack account can accept this code. Created by ${actor.name}.` }
+      {
+        type: 'mrkdwn',
+        text: targetUser
+          ? `Sent by ${actor.name}. Use the same email in BuildTrack and Slack for direct messages.`
+          : `Only people with a BuildTrack account can accept this code. Created by ${actor.name}.`
+      }
     ]
   });
 
+  return {
+    text: `${APP_NAME} project invitation for ${project.name}. Code: ${formattedCode}`,
+    blocks
+  };
+}
+
+async function sendSlackWebhookInviteMessage({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
+  if (!SLACK_WEBHOOK_URL) {
+    throw httpError(400, 'Slack channel fallback is not set up. Add SLACK_WEBHOOK_URL in Render if you want channel fallback messages.');
+  }
+
+  const payload = buildSlackInvitePayload({ req, project, invite, actor, targetUser, assignmentRole });
   const response = await fetch(SLACK_WEBHOOK_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      text: `${APP_NAME} project invitation for ${project.name}. Code: ${formattedCode}`,
-      blocks
-    })
+    body: JSON.stringify(payload)
   });
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
-    const message = body ? `Slack returned ${response.status}: ${body}` : `Slack returned ${response.status}.`;
+    const message = body ? `Slack webhook returned ${response.status}: ${body}` : `Slack webhook returned ${response.status}.`;
     throw httpError(502, message);
   }
+
+  return { sent: true, mode: 'channel_webhook' };
 }
+
+async function sendSlackDirectInviteMessage({ req, project, invite, actor, targetUser, assignmentRole = null }) {
+  if (!targetUser?.email) {
+    throw httpError(400, 'Cannot send a Slack direct message without the assigned user email.');
+  }
+
+  const lookup = await slackApiGet('users.lookupByEmail', { email: targetUser.email });
+  const slackUserId = lookup.user?.id;
+  if (!slackUserId) throw httpError(502, 'Slack user lookup did not return a user ID.');
+
+  const opened = await slackApiJson('conversations.open', { users: slackUserId });
+  const channelId = opened.channel?.id;
+  if (!channelId) throw httpError(502, 'Slack did not return a direct message channel ID.');
+
+  const payload = buildSlackInvitePayload({ req, project, invite, actor, targetUser, assignmentRole });
+  await slackApiJson('chat.postMessage', { channel: channelId, ...payload });
+
+  return { sent: true, mode: 'direct_message', slack_user_id: slackUserId };
+}
+
+async function sendSlackInviteMessage({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
+  const errors = [];
+
+  if (targetUser && SLACK_BOT_TOKEN) {
+    try {
+      return await sendSlackDirectInviteMessage({ req, project, invite, actor, targetUser, assignmentRole });
+    } catch (error) {
+      errors.push(error.message || 'Slack direct message failed.');
+    }
+  } else if (targetUser && !SLACK_BOT_TOKEN) {
+    errors.push('Slack direct message is not set up. Add SLACK_BOT_TOKEN in Render.');
+  }
+
+  if ((!targetUser || SLACK_DM_FALLBACK_TO_WEBHOOK) && SLACK_WEBHOOK_URL) {
+    try {
+      const fallback = await sendSlackWebhookInviteMessage({ req, project, invite, actor, targetUser, assignmentRole });
+      return errors.length ? { ...fallback, warning: errors.join(' ') } : fallback;
+    } catch (error) {
+      errors.push(error.message || 'Slack channel fallback failed.');
+    }
+  }
+
+  return {
+    sent: false,
+    mode: targetUser ? 'direct_message' : 'channel_webhook',
+    error: errors.join(' ') || 'Slack is not configured yet. Add SLACK_BOT_TOKEN for direct messages or SLACK_WEBHOOK_URL for channel fallback.'
+  };
+}
+
+async function selectProjectForInvite(client, projectId) {
+  const projectResult = await client.query(
+    `SELECT id, name, location, description, project_status,
+      to_char(start_date, 'YYYY-MM-DD') AS start_date,
+      to_char(end_date, 'YYYY-MM-DD') AS end_date
+     FROM projects
+     WHERE id = $1`,
+    [projectId]
+  );
+  if (!projectResult.rowCount) throw httpError(404, 'Project not found.');
+  return projectResult.rows[0];
+}
+
+async function createInviteCode(client, { projectId, role, maxUses, expiresInDays, actorId, targetUserId = null, targetEmail = null, auditAction = 'slack_invite_code_created' }) {
+  let invite;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const code = generateInviteCode();
+    const insertResult = await client.query(
+      `INSERT INTO project_invite_codes
+        (project_id, code, role, max_uses, expires_at, created_by, target_user_id, target_email)
+       VALUES ($1, $2, $3, $4, now() + ($5::int * interval '1 day'), $6, $7, $8)
+       ON CONFLICT (code) DO NOTHING
+       RETURNING id, project_id, code, role, max_uses, uses_count, expires_at, revoked_at, created_by, target_user_id, target_email, created_at`,
+      [projectId, code, role, maxUses, expiresInDays, actorId, targetUserId, targetEmail]
+    );
+    if (insertResult.rowCount) {
+      invite = insertResult.rows[0];
+      break;
+    }
+  }
+
+  if (!invite) throw httpError(500, 'Could not create a unique invitation code. Please try again.');
+
+  await writeAudit(client, {
+    projectId,
+    userId: actorId,
+    action: auditAction,
+    entityType: 'project_invite_code',
+    entityId: invite.id,
+    after: { ...invite, formatted_code: formatInviteCode(invite.code) }
+  });
+
+  return invite;
+}
+
+function publicInvite(req, invite) {
+  if (!invite) return null;
+  return {
+    ...invite,
+    formatted_code: formatInviteCode(invite.code),
+    invite_url: buildInviteUrl(req, invite.code)
+  };
+}
+
 
 
 function cleanText(value) {
@@ -298,6 +472,16 @@ function normalizeOptionalEnum(value, allowed, label) {
   const text = String(value || '').trim();
   if (!text || !allowed.has(text)) {
     throw httpError(400, `${label} must be one of: ${Array.from(allowed).join(', ')}.`);
+  }
+  return text;
+}
+
+function normalizeVendor(value, partial = false) {
+  if (partial && value === undefined) return undefined;
+  const text = cleanText(value);
+  if (!text) return null;
+  if (!vendors.has(text)) {
+    throw httpError(400, `vendor must be one of: ${Array.from(vendors).join(', ')}.`);
   }
   return text;
 }
@@ -579,6 +763,7 @@ const taskSelect = `
   t.name,
   t.description,
   t.trade,
+  t.vendor,
   t.assigned_to,
   assignee.name AS assigned_to_name,
   assignee.email AS assigned_to_email,
@@ -731,6 +916,7 @@ function buildTaskInput(body, partial = false) {
   if (!partial || body.name !== undefined) input.name = requireText(body.name, 'Task name');
   if (!partial || body.description !== undefined) input.description = cleanText(body.description);
   if (!partial || body.trade !== undefined) input.trade = cleanText(body.trade);
+  if (!partial || body.vendor !== undefined) input.vendor = normalizeVendor(body.vendor, partial);
   if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeOptionalId(body.assigned_to, 'assigned_to');
   if (!partial || body.parent_task_id !== undefined) input.parent_task_id = normalizeOptionalId(body.parent_task_id, 'parent_task_id');
 
@@ -1257,12 +1443,13 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
   const email = normalizeEmail(req.body.email);
   const role = requireEnum(req.body.role || 'editor', roles, 'role');
 
-  const member = await tx(async (client) => {
+  const created = await tx(async (client) => {
     const membership = await requireProjectMembership(projectId, req.user.id, 'manager', client);
     if (role === 'owner' && membership.role !== 'owner') {
       throw httpError(403, 'Only project owners can add another owner.');
     }
 
+    const project = await selectProjectForInvite(client, projectId);
     const userResult = await client.query('SELECT id, name, email, access_revoked FROM users WHERE email = $1', [email]);
     if (!userResult.rowCount) {
       throw httpError(404, 'That user has not registered yet. Ask them to create an account first, then add them again.');
@@ -1272,6 +1459,9 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
       throw httpError(400, 'That user is currently revoked at the site level. Restore site access before assigning them to a project.');
     }
 
+    const beforeMember = await client.query('SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2', [projectId, user.id]);
+    const action = beforeMember.rowCount ? 'member_updated' : 'member_added';
+
     await client.query(
       `INSERT INTO project_members (project_id, user_id, role)
        VALUES ($1, $2, $3)
@@ -1280,20 +1470,46 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
     );
 
     const row = { project_id: projectId, user_id: user.id, role, name: user.name, email: user.email, access_revoked: false };
+    let invite = null;
+    if (inviteRoles.has(role)) {
+      invite = await createInviteCode(client, {
+        projectId,
+        role,
+        maxUses: 1,
+        expiresInDays: Number.isFinite(SLACK_ASSIGNMENT_INVITE_DAYS) ? SLACK_ASSIGNMENT_INVITE_DAYS : 7,
+        actorId: req.user.id,
+        targetUserId: user.id,
+        targetEmail: user.email,
+        auditAction: 'member_assignment_invite_code_created'
+      });
+    }
+
     await writeAudit(client, {
       projectId,
       userId: req.user.id,
-      action: 'member_added',
+      action,
       entityType: 'project_member',
       entityId: user.id,
-      after: row
+      before: beforeMember.rows[0] || null,
+      after: { ...row, invite_id: invite?.id || null }
     });
 
-    return row;
+    return { member: row, project, invite, action };
   });
 
+  const slack = created.invite
+    ? await sendSlackInviteMessage({
+        req,
+        project: created.project,
+        invite: created.invite,
+        actor: req.user,
+        targetUser: created.member,
+        assignmentRole: created.member.role
+      })
+    : { sent: false, mode: 'not_created', error: 'No invitation code was created for owner role.' };
+
   emitProjectChange(projectId, { actorId: req.user.id, message: 'Project member updated.' });
-  res.status(201).json({ member });
+  res.status(201).json({ member: created.member, invite: publicInvite(req, created.invite), slack });
 }));
 
 app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(async (req, res) => {
@@ -1301,7 +1517,7 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
   const targetUserId = parseId(req.params.userId, 'userId');
   const role = requireEnum(req.body.role, roles, 'role');
 
-  const updatedMember = await tx(async (client) => {
+  const updated = await tx(async (client) => {
     await requireProjectMembership(projectId, req.user.id, 'owner', client);
 
     const before = await client.query('SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2', [
@@ -1309,6 +1525,11 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
       targetUserId
     ]);
     if (!before.rowCount) throw httpError(404, 'Project member not found.');
+
+    const project = await selectProjectForInvite(client, projectId);
+    const targetResult = await client.query('SELECT id, name, email, access_revoked FROM users WHERE id = $1', [targetUserId]);
+    if (!targetResult.rowCount) throw httpError(404, 'User not found.');
+    const targetUser = targetResult.rows[0];
 
     if (before.rows[0].role === 'owner' && role !== 'owner') {
       const ownerCount = await client.query(
@@ -1324,6 +1545,21 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
       [role, projectId, targetUserId]
     );
 
+    const row = { ...result.rows[0], name: targetUser.name, email: targetUser.email, access_revoked: targetUser.access_revoked };
+    let invite = null;
+    if (!targetUser.access_revoked && inviteRoles.has(role)) {
+      invite = await createInviteCode(client, {
+        projectId,
+        role,
+        maxUses: 1,
+        expiresInDays: Number.isFinite(SLACK_ASSIGNMENT_INVITE_DAYS) ? SLACK_ASSIGNMENT_INVITE_DAYS : 7,
+        actorId: req.user.id,
+        targetUserId,
+        targetEmail: targetUser.email,
+        auditAction: 'member_assignment_invite_code_created'
+      });
+    }
+
     await writeAudit(client, {
       projectId,
       userId: req.user.id,
@@ -1331,14 +1567,25 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
       entityType: 'project_member',
       entityId: targetUserId,
       before: before.rows[0],
-      after: result.rows[0]
+      after: { ...row, invite_id: invite?.id || null }
     });
 
-    return result.rows[0];
+    return { member: row, project, invite };
   });
 
+  const slack = updated.invite
+    ? await sendSlackInviteMessage({
+        req,
+        project: updated.project,
+        invite: updated.invite,
+        actor: req.user,
+        targetUser: updated.member,
+        assignmentRole: updated.member.role
+      })
+    : { sent: false, mode: 'not_created', error: 'No invitation code was created for owner role or a revoked user.' };
+
   emitProjectChange(projectId, { actorId: req.user.id, message: 'Project member role changed.' });
-  res.json({ member: updatedMember });
+  res.json({ member: updated.member, invite: publicInvite(req, updated.invite), slack });
 }));
 
 app.delete('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(async (req, res) => {
@@ -1440,13 +1687,7 @@ app.post('/api/projects/:projectId/slack-invites', requireAuth, asyncHandler(asy
     return { project: projectResult.rows[0], invite };
   });
 
-  let slack = { sent: false };
-  try {
-    await sendSlackInviteMessage({ req, project: created.project, invite: created.invite, actor: req.user });
-    slack = { sent: true };
-  } catch (error) {
-    slack = { sent: false, error: error.message || 'Slack message could not be sent.' };
-  }
+  const slack = await sendSlackInviteMessage({ req, project: created.project, invite: created.invite, actor: req.user });
 
   const responseInvite = {
     ...created.invite,
@@ -1476,6 +1717,8 @@ app.post('/api/invites/:code/accept', requireAuth, asyncHandler(async (req, res)
          pic.uses_count,
          pic.expires_at,
          pic.revoked_at,
+         pic.target_user_id,
+         pic.target_email,
          p.name,
          p.location,
          p.project_status,
@@ -1492,6 +1735,12 @@ app.post('/api/invites/:code/accept', requireAuth, asyncHandler(async (req, res)
     const invite = inviteResult.rows[0];
 
     if (invite.revoked_at) throw httpError(400, 'This invitation code has been revoked.');
+    if (invite.target_user_id && Number(invite.target_user_id) !== Number(req.user.id)) {
+      throw httpError(403, 'This invitation code was issued to a different BuildTrack user.');
+    }
+    if (invite.target_email && normalizeEmail(invite.target_email) !== normalizeEmail(req.user.email)) {
+      throw httpError(403, 'This invitation code was issued to a different email address.');
+    }
     if (invite.expires_at && new Date(invite.expires_at).getTime() < Date.now()) {
       throw httpError(400, 'This invitation code has expired. Ask a project manager for a new one.');
     }
@@ -1520,6 +1769,9 @@ app.post('/api/invites/:code/accept', requireAuth, asyncHandler(async (req, res)
         'INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3)',
         [invite.project_id, req.user.id, invite.role]
       );
+    }
+
+    if (!alreadyMember || invite.target_user_id) {
       await client.query('UPDATE project_invite_codes SET uses_count = uses_count + 1 WHERE id = $1', [invite.id]);
     }
 
@@ -1706,9 +1958,9 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
 
     const insertResult = await client.query(
       `INSERT INTO tasks
-        (project_id, parent_task_id, name, description, trade, assigned_to, status, priority, start_date, end_date,
+        (project_id, parent_task_id, name, description, trade, vendor, assigned_to, status, priority, start_date, end_date,
          percent_complete, color, sort_order, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING id`,
       [
         projectId,
@@ -1716,6 +1968,7 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
         input.name,
         input.description,
         input.trade,
+        input.vendor,
         input.assigned_to ?? null,
         input.status,
         input.priority,

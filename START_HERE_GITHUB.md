@@ -162,9 +162,9 @@ CCure Operator established
 
 Users with edit access can check or uncheck these items.
 
-## Optional Slack invite code setup
+## Optional Slack direct-message invite setup
 
-After the updated app is deployed, you can connect a Slack channel so project managers can send invitation codes from inside a project.
+After the updated app is deployed, you can connect Slack so project managers and owners automatically send an invitation code when they add or update a project member. There is no separate Slack invite-code panel anymore.
 
 Open this file for the plain-English setup steps:
 
@@ -172,9 +172,16 @@ Open this file for the plain-English setup steps:
 SLACK_INVITE_SETUP.md
 ```
 
-The only Render keys you need for Slack are:
+The main Render keys you need for Slack direct messages are:
+
+```text
+SLACK_BOT_TOKEN
+APP_URL
+```
+
+Optional channel fallback keys are:
 
 ```text
 SLACK_WEBHOOK_URL
-APP_URL
+SLACK_DM_FALLBACK_TO_WEBHOOK
 ```

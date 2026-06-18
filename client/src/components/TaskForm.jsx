@@ -15,12 +15,15 @@ const priorityOptions = [
   ['critical', 'Critical']
 ];
 
+const vendorOptions = ['Everbase', 'IES', 'Ideacom', 'Utah Yamas', 'Convergint', 'Pavion', 'Beacon', 'Stone Security', 'S101'];
+
 function blankTask(project) {
   const start = project?.start_date || todayIso();
   return {
     name: '',
     description: '',
     trade: '',
+    vendor: vendorOptions[0],
     assigned_to: '',
     parent_task_id: '',
     status: 'not_started',
@@ -44,6 +47,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         name: editingTask.name || '',
         description: editingTask.description || '',
         trade: editingTask.trade || '',
+        vendor: editingTask.vendor || vendorOptions[0],
         assigned_to: editingTask.assigned_to || '',
         parent_task_id: editingTask.parent_task_id || '',
         status: editingTask.status || 'not_started',
@@ -94,7 +98,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       <div className="panel-heading">
         <div>
           <h2>{editingTask ? 'Edit task' : 'Add task'}</h2>
-          <p>{canEdit ? 'Update dates, status, responsibility, and progress.' : 'Viewer access is read-only.'}</p>
+          <p>{canEdit ? 'Update dates, vendor, status, responsibility, and progress.' : 'Viewer access is read-only.'}</p>
         </div>
         {editingTask && <button className="ghost-button" onClick={onCancel} type="button">Cancel edit</button>}
       </div>
@@ -102,13 +106,19 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       <form className="stack" onSubmit={submit}>
         <label>
           Task name
-          <input disabled={!canEdit} value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Concrete slab pour" />
+          <input disabled={!canEdit} value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Panel installation" />
         </label>
 
-        <div className="two-col">
+        <div className="three-col">
           <label>
             Trade
-            <input disabled={!canEdit} value={form.trade} onChange={(event) => updateField('trade', event.target.value)} placeholder="Concrete, Electrical, HVAC" />
+            <input disabled={!canEdit} value={form.trade} onChange={(event) => updateField('trade', event.target.value)} placeholder="Access control, Electrical, Security" />
+          </label>
+          <label>
+            Vendor
+            <select disabled={!canEdit} value={form.vendor} onChange={(event) => updateField('vendor', event.target.value)}>
+              {vendorOptions.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
+            </select>
           </label>
           <label>
             Assignee

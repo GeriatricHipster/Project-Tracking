@@ -8,7 +8,7 @@ import DependencyPanel from './DependencyPanel';
 import GanttChart from './GanttChart';
 import GanttChecklist from './GanttChecklist';
 import MembersPanel from './MembersPanel';
-import SlackInvitePanel from './SlackInvitePanel';
+import SiteBanner from './SiteBanner';
 import TaskForm from './TaskForm';
 import TaskTable from './TaskTable';
 
@@ -125,8 +125,9 @@ export default function ProjectView({ projectId, user, onBack }) {
   }
 
   async function updateMember(member, role) {
-    await api(`/projects/${projectId}/members/${member.user_id}`, { method: 'PATCH', body: { role } });
+    const result = await api(`/projects/${projectId}/members/${member.user_id}`, { method: 'PATCH', body: { role } });
     await loadProject({ quiet: true });
+    return result;
   }
 
   async function removeMember(member) {
@@ -157,15 +158,12 @@ export default function ProjectView({ projectId, user, onBack }) {
   }
 
 
-  async function sendSlackInvite(payload) {
-    const result = await api(`/projects/${projectId}/slack-invites`, { method: 'POST', body: payload });
-    await loadProject({ quiet: true });
-    return result;
-  }
+
 
   if (loading && !data) {
     return (
       <main className="app-page">
+        <SiteBanner />
         <button className="ghost-button" onClick={onBack} type="button">Back to projects</button>
         <div className="panel loading-panel">Loading project...</div>
       </main>
@@ -175,6 +173,7 @@ export default function ProjectView({ projectId, user, onBack }) {
   if (error && !data) {
     return (
       <main className="app-page">
+        <SiteBanner />
         <button className="ghost-button" onClick={onBack} type="button">Back to projects</button>
         <div className="error-box">{error}</div>
       </main>
@@ -185,6 +184,7 @@ export default function ProjectView({ projectId, user, onBack }) {
 
   return (
     <main className="app-page project-view">
+      <SiteBanner />
       <header className="project-header panel">
         <button className="ghost-button" onClick={onBack} type="button">Back to projects</button>
         <div className="project-title-block">
@@ -233,13 +233,6 @@ export default function ProjectView({ projectId, user, onBack }) {
             onUpload={uploadBlueprint}
             onDelete={deleteBlueprint}
           />
-          {canManage && (
-            <SlackInvitePanel
-              canManage={canManage}
-              projectRole={project.role}
-              onSendSlackInvite={sendSlackInvite}
-            />
-          )}
           <MembersPanel
             currentUser={user}
             projectRole={project.role}
