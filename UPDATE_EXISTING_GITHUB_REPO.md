@@ -1,6 +1,6 @@
 # Update an Existing GitHub Repo
 
-Use these steps if you already uploaded an older BuildTrack Cloud version.
+Use these steps if you already uploaded an older PSG and SS Tracking version.
 
 ## What changed
 
@@ -14,7 +14,9 @@ This version adds or updates:
 - Trade dropdown with CCure, Cameras, and CCure & Cameras
 - Security Team Member dropdown with Derick, Eric, James, Justin, Kenna, Kyra, Ryan, and Suvam
 - PM dropdown with Kurt and Austin
-- Bigger Gantt chart with zoom, Start, Today, Prev/Next 30-day pan buttons, and larger rows
+- Bigger Gantt chart with zoom, Start, Today, Prev/Next 30-day pan buttons, larger rows, and Export PDF
+- Project Notes moved below the Add/Edit Task pane
+- Dependencies, Blueprints, Project Members, and Activity side panes condensed to avoid overlap
 - Header/banner image on login, dashboard, project, and loading pages
 - Gantt checklist
 - Drag-and-drop blueprint uploads
@@ -23,7 +25,7 @@ This version adds or updates:
 
 ## Update steps without Terminal
 
-1. Download and unzip the new BuildTrack ZIP.
+1. Download and unzip the new PSG and SS Tracking ZIP.
 2. Open your existing GitHub repository.
 3. Click **Add file**.
 4. Click **Upload files**.
@@ -32,7 +34,7 @@ This version adds or updates:
 7. Use this commit message:
 
 ```text
-Add Slack channel invites notes task dropdowns and larger Gantt
+Rename app improve layout and add Gantt PDF export
 ```
 
 8. Click **Commit changes**.
@@ -51,7 +53,7 @@ Open the app and check:
 - Gantt checklist inside a project
 - Blueprint drag-and-drop upload inside a project
 - Trade, Vendor, Security Team Member, and PM dropdowns when adding or editing a task
-- Bigger Gantt chart controls: Start, Today, Prev/Next 30 days, Zoom out, Reset zoom, Zoom in
+- Bigger Gantt chart controls: Start, Today, Prev/Next 30 days, Zoom out, Reset zoom, Zoom in, Export PDF
 - Project Members add/update flow posting a Slack channel invitation
 
 ## Slack setup

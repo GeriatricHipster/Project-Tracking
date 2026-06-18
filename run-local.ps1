@@ -36,7 +36,7 @@ if (-not (Test-Path "client/.env")) {
   Write-Host "Created client/.env from client/.env.example"
 }
 
-Write-Host "Starting BuildTrack Cloud locally..."
+Write-Host "Starting PSG and SS Tracking locally..."
 Write-Host "Open http://localhost:5173 after the containers finish starting."
 Write-Host "Demo login: admin@demo.com / Construction123!"
 

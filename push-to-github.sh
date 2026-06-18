@@ -26,7 +26,7 @@ git add .
 if git diff --cached --quiet; then
   echo "No file changes to commit."
 else
-  git commit -m "Initial BuildTrack Cloud deployment"
+  git commit -m "Initial PSG and SS Tracking deployment"
 fi
 
 if git remote get-url origin >/dev/null 2>&1; then

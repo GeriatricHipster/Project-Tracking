@@ -1,5 +1,5 @@
 {
-  "name": "buildtrack-cloud",
+  "name": "psg-ss-tracking",
   "version": "1.0.0",
   "private": true,
   "description": "Construction project timeline tracking cloud application with Gantt chart.",

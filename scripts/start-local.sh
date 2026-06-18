@@ -29,7 +29,7 @@ if [ ! -f client/.env ]; then
   echo "Created client/.env from client/.env.example"
 fi
 
-echo "Starting BuildTrack Cloud locally..."
+echo "Starting PSG and SS Tracking locally..."
 echo "Open http://localhost:5173 after the containers finish starting."
 echo "Demo login: admin@demo.com / Construction123!"
 $compose_cmd up --build

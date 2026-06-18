@@ -7,17 +7,17 @@ The normal flow is now:
 1. Open a project.
 2. Use **Project members**.
 3. Add or update the member.
-4. BuildTrack creates a one-use project invite code for that member.
-5. BuildTrack posts the code into your chosen Slack channel.
-6. The Slack message calls out the assigned BuildTrack email.
+4. PSG and SS Tracking creates a one-use project invite code for that member.
+5. PSG and SS Tracking posts the code into your chosen Slack channel.
+6. The Slack message calls out the assigned PSG and SS Tracking email.
 
-The user still needs a BuildTrack account. The code is targeted to that BuildTrack user/email.
+The user still needs a PSG and SS Tracking account. The code is targeted to that PSG and SS Tracking user/email.
 
 ---
 
 ## What you need from Slack
 
-You need a Slack **Incoming Webhook**. A webhook is a special Slack URL that lets BuildTrack post a message into one Slack channel.
+You need a Slack **Incoming Webhook**. A webhook is a special Slack URL that lets PSG and SS Tracking post a message into one Slack channel.
 
 You do **not** need Slack direct messages, `SLACK_BOT_TOKEN`, or the `users:read.email` permission for this version.
 
@@ -33,7 +33,7 @@ Go to:
 https://api.slack.com/apps
 ```
 
-Open your existing **BuildTrack Cloud** Slack app, or create a new app.
+Open your existing **PSG and SS Tracking** Slack app, or create a new app.
 
 If creating a new app:
 
@@ -42,7 +42,7 @@ If creating a new app:
 3. Name it:
 
 ```text
-BuildTrack Cloud
+PSG and SS Tracking
 ```
 
 4. Choose your company Slack workspace.
@@ -57,7 +57,7 @@ Inside the Slack app settings:
 1. Click **Incoming Webhooks** in the left menu.
 2. Turn **Activate Incoming Webhooks** to **On**.
 3. Click **Add New Webhook to Workspace**.
-4. Choose the Slack channel where BuildTrack should post project invitation codes.
+4. Choose the Slack channel where PSG and SS Tracking should post project invitation codes.
 
 A good channel name would be:
 
@@ -80,7 +80,7 @@ Treat this URL like a password. Do not paste it into GitHub.
 
 # Part 2: Add the Slack webhook to Render
 
-Open Render and go to your BuildTrack web service, usually:
+Open Render and go to your PSG and SS Tracking web service, usually:
 
 ```text
 buildtrack-cloud
@@ -97,7 +97,7 @@ Add these environment variables:
 | Key | Value |
 |---|---|
 | `SLACK_WEBHOOK_URL` | Paste the Slack webhook URL that starts with `https://hooks.slack.com/services/` |
-| `APP_URL` | Your live BuildTrack app URL |
+| `APP_URL` | Your live PSG and SS Tracking app URL |
 
 Example:
 
@@ -130,11 +130,11 @@ Save, rebuild, and deploy
 
 # Part 3: Test it
 
-1. Open BuildTrack.
+1. Open PSG and SS Tracking.
 2. Open a project.
 3. Find **Project members**.
 4. Add or update a registered user.
-5. Use the email address registered in BuildTrack.
+5. Use the email address registered in PSG and SS Tracking.
 6. Click **Add / update member**.
 
 A notice should appear telling you whether the Slack channel invitation was sent.
@@ -144,7 +144,7 @@ The Slack channel message will include:
 - Project name
 - Project location
 - Project dates
-- Assigned BuildTrack email
+- Assigned PSG and SS Tracking email
 - Project role
 - Invitation code
 - Link to accept the invitation
@@ -185,8 +185,8 @@ Check this Render key:
 APP_URL
 ```
 
-It should be your live BuildTrack URL.
+It should be your live PSG and SS Tracking URL.
 
 ## Owner role did not get an invite code
 
-BuildTrack does not create owner invite codes. Owner access is powerful, so owner assignment is handled directly in the app.
+PSG and SS Tracking does not create owner invite codes. Owner access is powerful, so owner assignment is handled directly in the app.

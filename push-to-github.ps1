@@ -26,7 +26,7 @@ git diff --cached --quiet
 if ($LASTEXITCODE -eq 0) {
   Write-Host "No file changes to commit."
 } else {
-  git commit -m "Initial BuildTrack Cloud deployment"
+  git commit -m "Initial PSG and SS Tracking deployment"
 }
 
 git remote get-url origin *> $null

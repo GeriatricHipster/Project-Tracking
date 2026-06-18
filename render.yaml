@@ -18,7 +18,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: APP_NAME
-        value: BuildTrack Cloud
+        value: PSG and SS Tracking
       - key: MAX_BLUEPRINT_BYTES
         value: "26214400"
       - key: PGSSLMODE

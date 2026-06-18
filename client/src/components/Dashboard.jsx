@@ -620,9 +620,9 @@ export default function Dashboard({
       <SiteBanner />
       <header className="topbar">
         <div className="brand-lockup small">
-          <span className="brand-mark">BT</span>
+          <span className="brand-mark">PSG</span>
           <div>
-            <strong>BuildTrack Cloud</strong>
+            <strong>PSG and SS Tracking</strong>
             <span>{user?.name} · {titleCase(user?.site_role || 'member')}</span>
           </div>
         </div>

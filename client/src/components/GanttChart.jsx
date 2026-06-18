@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { exportGanttChartPdf } from '../lib/ganttPdf';
 import { addDays, daysBetween, formatDate, maxIsoDate, minIsoDate, todayIso } from '../lib/dates';
 
 function getScale(totalDays) {
@@ -27,6 +28,8 @@ function taskMeta(task) {
 export default function GanttChart({ project, tasks, dependencies, onEditTask }) {
   const scrollRef = useRef(null);
   const [zoomIndex, setZoomIndex] = useState(2);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [exportError, setExportError] = useState('');
   const allStartDates = [project.start_date, ...tasks.map((task) => task.start_date)];
   const allEndDates = [project.end_date, ...tasks.map((task) => task.end_date)];
   const rangeStart = minIsoDate(allStartDates) || project.start_date;
@@ -92,6 +95,18 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
     scrollRef.current.scrollBy({ left: pixels, behavior: 'smooth' });
   }
 
+  async function exportPdf() {
+    setExportError('');
+    setIsExportingPdf(true);
+    try {
+      await exportGanttChartPdf({ project, tasks, dependencies });
+    } catch (error) {
+      setExportError(error.message || 'Could not export the Gantt chart PDF.');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  }
+
   return (
     <section className="panel gantt-panel expanded-gantt-panel">
       <div className="panel-heading gantt-heading">
@@ -107,10 +122,12 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
           <button className="ghost-button compact" onClick={zoomOut} disabled={zoomIndex === 0} type="button">Zoom out</button>
           <button className="ghost-button compact" onClick={resetZoom} type="button">Reset zoom</button>
           <button className="ghost-button compact" onClick={zoomIn} disabled={zoomIndex === zoomLevels.length - 1} type="button">Zoom in</button>
+          <button className="primary-button compact" onClick={exportPdf} disabled={isExportingPdf} type="button">{isExportingPdf ? 'Exporting...' : 'Export PDF'}</button>
         </div>
       </div>
 
-      <p className="gantt-navigation-help">Use the buttons or horizontal scroll bar to move through the schedule. Click a task name or bar to edit it.</p>
+      <p className="gantt-navigation-help">Use the buttons or horizontal scroll bar to move through the schedule. Click a task name or bar to edit it. Export PDF creates a landscape schedule file of the full Gantt timeline.</p>
+      {exportError && <p className="error-box gantt-export-error">{exportError}</p>}
 
       <div className="gantt-shell expanded-gantt-shell">
         <div className="gantt-label-column" style={{ paddingTop: headerHeight }}>

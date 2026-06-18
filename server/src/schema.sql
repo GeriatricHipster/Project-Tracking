@@ -173,7 +173,7 @@ CREATE TABLE IF NOT EXISTS project_checklist_items (
   UNIQUE (project_id, item_key)
 );
 
--- Upgrade older BuildTrack databases that created this table before sort_order,
+-- Upgrade older PSG and SS Tracking databases that created this table before sort_order,
 -- updated_by, created_at, or id existed. This keeps Render redeploys safe.
 DO $$
 DECLARE

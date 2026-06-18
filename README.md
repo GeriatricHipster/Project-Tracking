@@ -1,13 +1,13 @@
-# BuildTrack Cloud
+# PSG and SS Tracking
 
-BuildTrack Cloud is a construction project timeline tracking web app with multi-user project access, task tracking, dependencies, audit history, live update notifications, dashboard tabs, active/completed project filing, owner delete controls, all-project calendar/status overview, project assignment lists, manager/owner-only site member management, blueprint uploads, checklist tracking, Slack channel invitation codes, project notes, and a larger Gantt-style schedule view.
+PSG and SS Tracking is a construction project timeline tracking web app with multi-user project access, task tracking, dependencies, audit history, live update notifications, dashboard tabs, active/completed project filing, owner delete controls, all-project calendar/status overview, project assignment lists, manager/owner-only site member management, blueprint uploads, checklist tracking, Slack channel invitation codes, project notes, and a larger Gantt-style schedule view.
 
 ## Main features
 
 - Active Projects and Completed tabs
 - Projects tab showing who is assigned to each project
 - Calendar overview showing all visible projects and project status
-- Larger Gantt chart with zoom controls, Start/Today navigation, Prev/Next 30-day pan buttons, dependencies, task progress, team/vendor labels, and today marker
+- Larger Gantt chart with zoom controls, Start/Today navigation, Prev/Next 30-day pan buttons, dependencies, task progress, team/vendor labels, today marker, and PDF export
 - Editable project notes section for assigned viewers, editors, managers, and owners
 - Viewer users can edit project notes only; other schedule/project controls stay read-only for viewers
 - Task dropdowns for Trade, Vendor, Security Team Member, and PM
@@ -22,6 +22,7 @@ BuildTrack Cloud is a construction project timeline tracking web app with multi-
 - Site Members tab for site owners/managers to revoke access, restore access, delete users, and change site role
 - Viewers/editors only see assigned projects; managers/owners can see the portfolio
 - Header/banner image on login, dashboard, project, and loading pages
+- Project workspace side panes are compacted to avoid overlapping the task form and table
 
 ## Local demo login
 
@@ -66,7 +67,7 @@ Set these environment variables in Render:
 
 ```text
 SLACK_WEBHOOK_URL=your Slack Incoming Webhook URL
-APP_URL=your live BuildTrack URL
+APP_URL=your live PSG and SS Tracking URL
 ```
 
 Detailed non-coder setup steps are in:

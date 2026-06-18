@@ -141,7 +141,7 @@ export default function App() {
   }
 
   if (booting) {
-    return <main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting BuildTrack Cloud...</div></main>;
+    return <main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main>;
   }
 
   if (!token || !user) {

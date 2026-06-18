@@ -1,4 +1,4 @@
-# Start Here: Create and Deploy BuildTrack Cloud Without Terminal
+# Start Here: Create and Deploy PSG and SS Tracking Without Terminal
 
 These steps are written for GitHub's website and Render. You do not need to run Terminal commands.
 
@@ -10,10 +10,11 @@ This app tracks construction project timelines and includes:
 - Completed Projects tab
 - Projects / assignments tab showing who is assigned to each project
 - Calendar overview of projects and status
-- Gantt chart for each project
+- Gantt chart for each project with Export PDF
 - Gantt checklist for IPs, panels, clearances, doors, and CCure operator setup
 - Drag-and-drop blueprint uploads
 - Project member assignments
+- Compact project side panes to reduce overlap with task fields
 - Site member management for managers and owners
 
 GitHub stores the code. Render runs the live website, backend, and PostgreSQL database.
@@ -65,7 +66,7 @@ buildtrack-cloud
 5. At the bottom, enter this commit message:
 
 ```text
-Upload BuildTrack Cloud
+Upload PSG and SS Tracking
 ```
 
 6. Click **Commit changes**.

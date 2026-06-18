@@ -34,9 +34,9 @@ export default function AuthScreen({ onAuth, pendingInviteCode }) {
       <SiteBanner compact />
       <section className="auth-card">
         <div className="brand-lockup">
-          <span className="brand-mark">BT</span>
+          <span className="brand-mark">PSG</span>
           <div>
-            <h1>BuildTrack Cloud</h1>
+            <h1>PSG and SS Tracking</h1>
             <p>Construction project timelines, live task tracking, and Gantt schedules.</p>
           </div>
         </div>
@@ -44,7 +44,7 @@ export default function AuthScreen({ onAuth, pendingInviteCode }) {
 
         {pendingInviteCode && (
           <div className="notice-box auth-invite-note">
-            You opened a project invitation code. Log in or register first, then BuildTrack will add you to the project automatically.
+            You opened a project invitation code. Log in or register first, then PSG and SS Tracking will add you to the project automatically.
           </div>
         )}
 

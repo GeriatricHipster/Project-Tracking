@@ -16,7 +16,7 @@ const { pool, query, tx } = require('./db');
 
 const PORT = Number(process.env.PORT || 4000);
 const JWT_SECRET = process.env.JWT_SECRET || 'local-development-secret-change-me';
-const APP_NAME = process.env.APP_NAME || 'BuildTrack Cloud';
+const APP_NAME = process.env.APP_NAME || 'PSG and SS Tracking';
 const SLACK_WEBHOOK_URL = String(process.env.SLACK_WEBHOOK_URL || '').trim();
 const SLACK_ASSIGNMENT_INVITE_DAYS = Number(process.env.SLACK_ASSIGNMENT_INVITE_DAYS || 7);
 const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
@@ -201,7 +201,7 @@ function buildSlackInvitePayload({ req, project, invite, actor, targetUser = nul
     { type: 'mrkdwn', text: `*Location:*\n${slackSafeText(project.location)}` },
     { type: 'mrkdwn', text: `*Dates:*\n${project.start_date} to ${project.end_date}` },
     { type: 'mrkdwn', text: `*Project role:*\n${roleText}` },
-    { type: 'mrkdwn', text: `*Assigned BuildTrack email:*\n${targetEmail ? targetCallout : 'Not targeted'}` },
+    { type: 'mrkdwn', text: `*Assigned PSG and SS Tracking email:*\n${targetEmail ? targetCallout : 'Not targeted'}` },
     { type: 'mrkdwn', text: `*Code expires:*\n${expiresAt}` },
     { type: 'mrkdwn', text: `*Code uses:*\n${invite.max_uses}` }
   ];
@@ -243,8 +243,8 @@ function buildSlackInvitePayload({ req, project, invite, actor, targetUser = nul
       {
         type: 'mrkdwn',
         text: targetUser
-          ? `Sent by ${actor.name}. This code is intended for ${targetEmail || targetName}. Only that BuildTrack user can accept it.`
-          : `Only people with a BuildTrack account can accept this code. Created by ${actor.name}.`
+          ? `Sent by ${actor.name}. This code is intended for ${targetEmail || targetName}. Only that PSG and SS Tracking user can accept it.`
+          : `Only people with a PSG and SS Tracking account can accept this code. Created by ${actor.name}.`
       }
     ]
   });
@@ -1721,7 +1721,7 @@ app.post('/api/invites/:code/accept', requireAuth, asyncHandler(async (req, res)
 
     if (invite.revoked_at) throw httpError(400, 'This invitation code has been revoked.');
     if (invite.target_user_id && Number(invite.target_user_id) !== Number(req.user.id)) {
-      throw httpError(403, 'This invitation code was issued to a different BuildTrack user.');
+      throw httpError(403, 'This invitation code was issued to a different PSG and SS Tracking user.');
     }
     if (invite.target_email && normalizeEmail(invite.target_email) !== normalizeEmail(req.user.email)) {
       throw httpError(403, 'This invitation code was issued to a different email address.');
@@ -2250,7 +2250,7 @@ app.use((error, req, res, next) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`BuildTrack server listening on port ${PORT}`);
+  console.log(`PSG and SS Tracking server listening on port ${PORT}`);
 });
 
 process.on('SIGTERM', async () => {
