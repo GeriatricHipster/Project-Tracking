@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { addDays, todayIso } from '../lib/dates';
 
 const statusOptions = [
+  ['', 'Unassigned'],
   ['not_started', 'Not started'],
   ['in_progress', 'In progress'],
   ['blocked', 'Blocked'],
@@ -9,6 +10,7 @@ const statusOptions = [
 ];
 
 const priorityOptions = [
+  ['', 'Unassigned'],
   ['low', 'Low'],
   ['normal', 'Normal'],
   ['high', 'High'],
@@ -16,9 +18,85 @@ const priorityOptions = [
 ];
 
 const tradeOptions = ['CCure', 'Cameras', 'CCure & Cameras'];
-const vendorOptions = ['Everbase', 'IES', 'Ideacom', 'Utah Yamas', 'Convergint', 'Pavion', 'Beacon', 'Stone Security', 'S101'];
-const securityTeamOptions = ['Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam'];
-const pmOptions = ['Kurt', 'Austin'];
+const vendorOptions = [...new Set([
+  'Accent Automatic',
+  'Accent Auto',
+  'Beacon',
+  'Convergint',
+  'DSI',
+  'EverBase',
+  'Everbase',
+  'G4S',
+  'IC&E',
+  'Ideacom',
+  'IES',
+  'Nelson Fire',
+  'OTIS',
+  'Pavion',
+  'Pye Barker',
+  'S101',
+  'SMT',
+  'Stone',
+  'Stone Security',
+  'USHOP',
+  'Utah Yamas',
+  'Yamas'
+])].sort((a, b) => a.localeCompare(b));
+const pmOptions = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));
+const presetAssigneeNames = [
+  'Bennett',
+  'Bill',
+  'Chris',
+  'Derick',
+  'Derick & James',
+  'Derick & Justin',
+  'Derick & Justin, Suvam',
+  'Derick & Kenna',
+  'Derick & Kyra',
+  'Derick & Locksmiths',
+  'Derick & Ryan',
+  'Derick & Suvam',
+  'James',
+  'James & Derick',
+  'James & Justin',
+  'James & Justin, Suvam',
+  'James & Kenna',
+  'James & Kyra',
+  'James & Locksmiths',
+  'James & Ryan',
+  'James & Suvam',
+  'Jim',
+  'Justin',
+  'Justin & Derick',
+  'Justin & James',
+  'Justin & Kenna',
+  'Justin & Kyra',
+  'Justin & Locksmiths',
+  'Justin & Ryan',
+  'Justin & Suvam',
+  'Kenna',
+  'Kenna & Derick',
+  'Kenna & Justin',
+  'Kenna & Justin, Suvam',
+  'Kenna & Kyra',
+  'Kenna & Locksmiths',
+  'Kenna & Ryan',
+  'Kenna & Suvam',
+  'Kyra',
+  'Ryan',
+  'Suvam',
+  'Suvam & Derick',
+  'Suvam & James',
+  'Suvam & Justin',
+  'Suvam & Kenna',
+  'Suvam & Kyra',
+  'Suvam & Locksmiths',
+  'Suvam & Ryan'
+];
+
+function sortUnique(values) {
+  return [...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
+}
 
 function blankTask(project) {
   const start = project?.start_date || todayIso();
@@ -27,12 +105,15 @@ function blankTask(project) {
     description: '',
     trade: '',
     vendor: '',
-    security_team_member: '',
+    vendor_secondary: '',
     pm: '',
     assigned_to: '',
+    assignee_secondary: '',
+    assignee_tertiary: '',
+    assignee_quaternary: '',
     parent_task_id: '',
-    status: 'not_started',
-    priority: 'normal',
+    status: '',
+    priority: '',
     start_date: start,
     end_date: addDays(start, 5),
     percent_complete: 0,
@@ -53,12 +134,15 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         description: editingTask.description || '',
         trade: editingTask.trade || '',
         vendor: editingTask.vendor || '',
-        security_team_member: editingTask.security_team_member || '',
+        vendor_secondary: editingTask.vendor_secondary || '',
         pm: editingTask.pm || '',
         assigned_to: editingTask.assigned_to || '',
+        assignee_secondary: editingTask.assignee_secondary || '',
+        assignee_tertiary: editingTask.assignee_tertiary || '',
+        assignee_quaternary: editingTask.assignee_quaternary || '',
         parent_task_id: editingTask.parent_task_id || '',
-        status: editingTask.status || 'not_started',
-        priority: editingTask.priority || 'normal',
+        status: editingTask.status || '',
+        priority: editingTask.priority || '',
         start_date: editingTask.start_date || project?.start_date || todayIso(),
         end_date: editingTask.end_date || project?.start_date || todayIso(),
         percent_complete: editingTask.percent_complete || 0,
@@ -76,6 +160,14 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     [tasks, editingTask]
   );
 
+  const assigneeOptions = useMemo(
+    () => sortUnique([
+      ...members.map((member) => member.name).filter(Boolean),
+      ...presetAssigneeNames
+    ]),
+    [members]
+  );
+
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
   }
@@ -89,10 +181,15 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         ...form,
         trade: form.trade || null,
         vendor: form.vendor || null,
-        security_team_member: form.security_team_member || null,
+        vendor_secondary: form.vendor_secondary || null,
         pm: form.pm || null,
         assigned_to: form.assigned_to || null,
+        assignee_secondary: form.assignee_secondary || null,
+        assignee_tertiary: form.assignee_tertiary || null,
+        assignee_quaternary: form.assignee_quaternary || null,
         parent_task_id: form.parent_task_id || null,
+        status: form.status || 'not_started',
+        priority: form.priority || 'normal',
         percent_complete: Number(form.percent_complete),
         sort_order: form.sort_order === '' ? undefined : Number(form.sort_order)
       });
@@ -120,55 +217,80 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
           <input disabled={!canEdit} value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Panel installation" />
         </label>
 
-        <div className="three-col">
+        <div className="two-col">
           <label>
             Trade
             <select disabled={!canEdit} value={form.trade} onChange={(event) => updateField('trade', event.target.value)}>
-              <option value=""> </option>
-              {tradeOptions.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
-            </select>
-          </label>
-          <label>
-            Vendor
-            <select disabled={!canEdit} value={form.vendor} onChange={(event) => updateField('vendor', event.target.value)}>
-              <option value=""> </option>
-              {vendorOptions.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
-            </select>
-          </label>
-          <label>
-            Assignee
-            <select disabled={!canEdit} value={form.assigned_to} onChange={(event) => updateField('assigned_to', event.target.value)}>
               <option value="">Unassigned</option>
-              {members.map((member) => (
-                <option key={member.user_id} value={member.user_id}>{member.name}</option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="three-col">
-          <label>
-            Security Team Member
-            <select disabled={!canEdit} value={form.security_team_member} onChange={(event) => updateField('security_team_member', event.target.value)}>
-              <option value=""> </option>
-              {securityTeamOptions.map((member) => <option key={member} value={member}>{member}</option>)}
-            </select>
-          </label>
-          <label>
-            PM
-            <select disabled={!canEdit} value={form.pm} onChange={(event) => updateField('pm', event.target.value)}>
-              <option value=""> </option>
-              {pmOptions.map((pm) => <option key={pm} value={pm}>{pm}</option>)}
+              {tradeOptions.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
             </select>
           </label>
           <label>
             Parent task
             <select disabled={!canEdit} value={form.parent_task_id} onChange={(event) => updateField('parent_task_id', event.target.value)}>
-              <option value="">None</option>
+              <option value="">Unassigned</option>
               {parentTaskOptions.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}
             </select>
           </label>
         </div>
+
+        <div className="two-col">
+          <label>
+            Vendor
+            <select disabled={!canEdit} value={form.vendor} onChange={(event) => updateField('vendor', event.target.value)}>
+              <option value="">Unassigned</option>
+              {vendorOptions.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
+            </select>
+          </label>
+          <label>
+            Vendor 2
+            <select disabled={!canEdit} value={form.vendor_secondary} onChange={(event) => updateField('vendor_secondary', event.target.value)}>
+              <option value="">Unassigned</option>
+              {vendorOptions.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
+            </select>
+          </label>
+        </div>
+
+        <div className="four-col">
+          <label>
+            Assignee
+            <select disabled={!canEdit} value={form.assigned_to} onChange={(event) => updateField('assigned_to', event.target.value)}>
+              <option value="">Unassigned</option>
+              {assigneeOptions.map((member) => (
+                <option key={member} value={member}>{member}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Assignee 2
+            <select disabled={!canEdit} value={form.assignee_secondary} onChange={(event) => updateField('assignee_secondary', event.target.value)}>
+              <option value="">Unassigned</option>
+              {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
+            </select>
+          </label>
+          <label>
+            Assignee 3
+            <select disabled={!canEdit} value={form.assignee_tertiary} onChange={(event) => updateField('assignee_tertiary', event.target.value)}>
+              <option value="">Unassigned</option>
+              {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
+            </select>
+          </label>
+          <label>
+            Assignee 4
+            <select disabled={!canEdit} value={form.assignee_quaternary} onChange={(event) => updateField('assignee_quaternary', event.target.value)}>
+              <option value="">Unassigned</option>
+              {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
+            </select>
+          </label>
+        </div>
+
+        <label>
+          PM
+          <select disabled={!canEdit} value={form.pm} onChange={(event) => updateField('pm', event.target.value)}>
+            <option value="">Unassigned</option>
+            {pmOptions.map((pm) => <option key={pm} value={pm}>{pm}</option>)}
+          </select>
+        </label>
 
         <label>
           Description

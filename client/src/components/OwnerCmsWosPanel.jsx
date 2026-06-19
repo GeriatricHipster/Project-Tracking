@@ -162,7 +162,7 @@ function GridFilterRow({ filters, onFilterChange }) {
   );
 }
 
-function ActiveSheetGrid({ sheetKey, rows, filters, savingCell, onCellChange, onCellCommit, onArchiveRow, onInsertRow, onFilterChange }) {
+function ActiveSheetGrid({ sheetKey, rows, filters, savingCell, onCellChange, onCellCommit, onArchiveRow, onFilterChange }) {
   const visibleRows = rows
     .map((row, rowIndex) => ({ row, rowIndex }))
     .filter(({ row }) => rowMatchesFilters(row, filters));
@@ -179,14 +179,9 @@ function ActiveSheetGrid({ sheetKey, rows, filters, savingCell, onCellChange, on
             <tr key={rowIndex}>
               <th className="cms-grid-row-header">
                 <span>{rowIndex + 1}</span>
-                <div className="row-actions cms-row-actions">
-                  <button className="ghost-button compact" type="button" onClick={() => onInsertRow(rowIndex)}>
-                    Insert above
-                  </button>
-                  <button className="danger-button compact" type="button" onClick={() => onArchiveRow(rowIndex)}>
-                    Delete / archive
-                  </button>
-                </div>
+                <button className="danger-button compact" type="button" onClick={() => onArchiveRow(rowIndex)}>
+                  Delete row / archive
+                </button>
               </th>
               {ownerCmsColumns.map((column, colIndex) => (
                 <SpreadsheetCell
@@ -287,7 +282,6 @@ export default function OwnerCmsWosPanel({ user }) {
   const [savingCell, setSavingCell] = useState('');
   const [error, setError] = useState('');
   const [filters, setFilters] = useState({});
-  const [isFullScreen, setIsFullScreen] = useState(false);
 
   const canAccess = user?.site_role === 'owner' && !user?.access_revoked;
 
@@ -410,19 +404,6 @@ export default function OwnerCmsWosPanel({ user }) {
     }
   }
 
-  async function insertRow(rowIndex) {
-    setError('');
-    setSavingCell(`${activeSheetKey}-insert-${rowIndex}`);
-    try {
-      await api(`/owner/cms-wos/${activeSheetKey}/rows`, { method: 'POST', body: { row_index: rowIndex } });
-      await refreshSheets();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSavingCell('');
-    }
-  }
-
   function updateFilter(columnKey, value) {
     setFilters((current) => {
       const next = { ...current };
@@ -456,7 +437,7 @@ export default function OwnerCmsWosPanel({ user }) {
   }
 
   return (
-    <section className={`dashboard-stack owner-cms-panel${isFullScreen ? ' is-fullscreen' : ''}`.trim()}>
+    <section className="dashboard-stack owner-cms-panel">
       <section className="panel">
         <div className="panel-heading">
           <div>
@@ -495,18 +476,10 @@ export default function OwnerCmsWosPanel({ user }) {
         {loading && <p className="muted">Loading owner work orders...</p>}
 
         <div className="cms-sheet-meta">
-          <div className="cms-sheet-meta-actions">
-            <button className="ghost-button compact" onClick={() => setIsFullScreen((current) => !current)} type="button">
-              {isFullScreen ? 'Exit full screen' : 'Full screen'}
-            </button>
-            <button className="primary-button compact" onClick={() => insertRow(activeRows.length)} type="button">
-              Insert row
-            </button>
-          </div>
           <div>
             <strong>{activeSheet.sheet_name}</strong>
             <p className="muted">
-              {Math.max(ownerCmsRowCount, activeRows.length)} rows total, {ownerCmsColumnCount} columns. Deleted rows are archived in the second tab.
+              {ownerCmsRowCount} active rows, {ownerCmsColumnCount} columns. Deleted rows are archived in the second tab.
             </p>
           </div>
           <button className="ghost-button compact" onClick={refreshSheets} type="button">
@@ -523,7 +496,6 @@ export default function OwnerCmsWosPanel({ user }) {
             onCellChange={updateCell}
             onCellCommit={saveCell}
             onArchiveRow={archiveRow}
-            onInsertRow={insertRow}
             onFilterChange={updateFilter}
           />
         ) : (
