@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import {
   buildBlankOwnerCmsGrid,
@@ -17,17 +17,6 @@ function titleize(value) {
   return String(value || '')
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function cellMatchesFilter(cellValue, filterValue, column) {
-  const needle = String(filterValue ?? '').trim().toLowerCase();
-  if (!needle) return true;
-  const value = String(cellValue ?? '').trim();
-  if (!value) return false;
-  if (column.type === 'select' || column.type === 'date') {
-    return value.toLowerCase() === needle;
-  }
-  return value.toLowerCase().includes(needle);
 }
 
 const SpreadsheetCell = memo(function SpreadsheetCell({ sheetKey, rowIndex, column, value, onCellChange, onCellCommit, disabled }) {
@@ -104,63 +93,11 @@ const SpreadsheetCell = memo(function SpreadsheetCell({ sheetKey, rowIndex, colu
   );
 });
 
-const FilterCell = memo(function FilterCell({ column, value, onChange }) {
-  if (column.type === 'select') {
-    return (
-      <th className="cms-grid-filter-cell" style={{ minWidth: column.width, width: column.width }}>
-        <select
-          className="cms-grid-filter-input"
-          value={value}
-          onChange={(event) => onChange(column.key, event.target.value)}
-        >
-          <option value="">All</option>
-          {column.options.map((option) => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </select>
-      </th>
-    );
-  }
-
-  if (column.type === 'date') {
-    return (
-      <th className="cms-grid-filter-cell" style={{ minWidth: column.width, width: column.width }}>
-        <input
-          className="cms-grid-filter-input"
-          type="date"
-          value={value}
-          onChange={(event) => onChange(column.key, event.target.value)}
-        />
-      </th>
-    );
-  }
-
-  return (
-    <th className="cms-grid-filter-cell" style={{ minWidth: column.width, width: column.width }}>
-      <input
-        className="cms-grid-filter-input"
-        type="text"
-        placeholder="Filter"
-        value={value}
-        onChange={(event) => onChange(column.key, event.target.value)}
-      />
-    </th>
-  );
-});
-
-function SheetGrid({ sheet, savingCell, filters, onFilterChange, onClearFilters, onCellChange, onCellCommit }) {
+function SheetGrid({ sheet, savingCell, onCellChange, onCellCommit }) {
   const rows = sheet?.cells || buildBlankOwnerCmsGrid();
-  const visibleRows = useMemo(
-    () => rows.filter((row) => ownerCmsColumns.every((column, index) => cellMatchesFilter(row[index], filters[column.key], column))),
-    [rows, filters]
-  );
 
   return (
     <div className="cms-grid-wrap">
-      <div className="cms-grid-toolbar">
-        <div className="muted">Showing {visibleRows.length} of {rows.length} rows. Use the row under the headers to filter the sheet.</div>
-        <button className="ghost-button compact" onClick={onClearFilters} type="button">Clear filters</button>
-      </div>
       <table className="cms-grid-table">
         <thead>
           <tr>
@@ -171,20 +108,9 @@ function SheetGrid({ sheet, savingCell, filters, onFilterChange, onClearFilters,
               </th>
             ))}
           </tr>
-          <tr className="cms-grid-filter-row">
-            <th className="cms-grid-corner cms-grid-filter-corner">Filter</th>
-            {ownerCmsColumns.map((column) => (
-              <FilterCell
-                key={`${column.key}-filter`}
-                column={column}
-                value={filters[column.key] ?? ''}
-                onChange={onFilterChange}
-              />
-            ))}
-          </tr>
         </thead>
         <tbody>
-          {visibleRows.map((row, rowIndex) => (
+          {rows.map((row, rowIndex) => (
             <tr key={rowIndex}>
               <th className="cms-grid-row-header">{rowIndex + 1}</th>
               {ownerCmsColumns.map((column, colIndex) => (
@@ -201,11 +127,6 @@ function SheetGrid({ sheet, savingCell, filters, onFilterChange, onClearFilters,
               ))}
             </tr>
           ))}
-          {visibleRows.length === 0 && (
-            <tr>
-              <td className="cms-grid-empty" colSpan={ownerCmsColumnCount + 1}>No rows match the current filters.</td>
-            </tr>
-          )}
         </tbody>
       </table>
     </div>
@@ -218,7 +139,6 @@ export default function OwnerCmsWosPanel({ user }) {
   const [loading, setLoading] = useState(true);
   const [savingCell, setSavingCell] = useState('');
   const [error, setError] = useState('');
-  const [filters, setFilters] = useState({});
 
   const canAccess = user?.site_role === 'owner' && !user?.access_revoked;
 
@@ -289,17 +209,6 @@ export default function OwnerCmsWosPanel({ user }) {
     });
   }, []);
 
-  const updateFilter = useCallback((columnKey, value) => {
-    setFilters((current) => ({
-      ...current,
-      [columnKey]: value
-    }));
-  }, []);
-
-  const clearFilters = useCallback(() => {
-    setFilters({});
-  }, []);
-
   if (!canAccess) {
     return (
       <section className="panel owner-cms-panel">
@@ -358,9 +267,6 @@ export default function OwnerCmsWosPanel({ user }) {
         <SheetGrid
           sheet={activeSheet}
           savingCell={savingCell}
-          filters={filters}
-          onFilterChange={updateFilter}
-          onClearFilters={clearFilters}
           onCellChange={updateCell}
           onCellCommit={saveCell}
         />

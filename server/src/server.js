@@ -17,8 +17,8 @@ const { pool, query, tx } = require('./db');
 const PORT = Number(process.env.PORT || 4000);
 const JWT_SECRET = process.env.JWT_SECRET || 'local-development-secret-change-me';
 const APP_NAME = process.env.APP_NAME || 'PSG and SS Tracking';
-const SLACK_WEBHOOK_URL = String(process.env.SLACK_WEBHOOK_URL || '').trim();
-const SLACK_ASSIGNMENT_INVITE_DAYS = Number(process.env.SLACK_ASSIGNMENT_INVITE_DAYS || 7);
+const TEAMS_WEBHOOK_URL = String(process.env.TEAMS_WEBHOOK_URL || '').trim();
+const TEAMS_ASSIGNMENT_INVITE_DAYS = Number(process.env.TEAMS_ASSIGNMENT_INVITE_DAYS || 7);
 const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
@@ -184,26 +184,26 @@ function buildProjectUrl(req, projectId) {
   return appUrl ? `${appUrl}/?project=${encodeURIComponent(projectId)}` : '';
 }
 
-function slackSafeText(value, fallback = 'Not set') {
+function teamsSafeText(value, fallback = 'Not set') {
   const text = String(value || '').trim();
   return text || fallback;
 }
 
-function buildSlackInvitePayload({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
+function buildTeamsInvitePayload({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
   const formattedCode = formatInviteCode(invite.code);
   const inviteUrl = buildInviteUrl(req, invite.code);
   const expiresAt = invite.expires_at ? new Date(invite.expires_at).toLocaleString('en-US', { timeZone: 'UTC', timeZoneName: 'short' }) : 'No expiration';
   const roleText = assignmentRole || invite.role;
   const targetEmail = targetUser?.email ? normalizeEmail(targetUser.email) : '';
-  const targetName = slackSafeText(targetUser?.name, 'Assigned user');
+  const targetName = teamsSafeText(targetUser?.name, 'Assigned user');
   const targetCallout = targetEmail ? `<mailto:${targetEmail}|${targetEmail}>` : targetName;
   const targetIntro = targetUser
-    ? `${actor.name} assigned *${targetName}* (${targetCallout}) to *${slackSafeText(project.name)}* as *${roleText}*.`
-    : `${actor.name} created an invitation code for *${slackSafeText(project.name)}*.`;
+    ? `${actor.name} assigned *${targetName}* (${targetCallout}) to *${teamsSafeText(project.name)}* as *${roleText}*.`
+    : `${actor.name} created an invitation code for *${teamsSafeText(project.name)}*.`;
 
   const fields = [
-    { type: 'mrkdwn', text: `*Project:*\n${slackSafeText(project.name)}` },
-    { type: 'mrkdwn', text: `*Location:*\n${slackSafeText(project.location)}` },
+    { type: 'mrkdwn', text: `*Project:*\n${teamsSafeText(project.name)}` },
+    { type: 'mrkdwn', text: `*Location:*\n${teamsSafeText(project.location)}` },
     { type: 'mrkdwn', text: `*Dates:*\n${project.start_date} to ${project.end_date}` },
     { type: 'mrkdwn', text: `*Project role:*\n${roleText}` },
     { type: 'mrkdwn', text: `*Assigned email:*\n${targetEmail ? targetCallout : 'Not targeted'}` },
@@ -260,13 +260,13 @@ function buildSlackInvitePayload({ req, project, invite, actor, targetUser = nul
   };
 }
 
-async function sendSlackWebhookInviteMessage({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
-  if (!SLACK_WEBHOOK_URL) {
-    throw httpError(400, 'Slack channel invitations are not set up. Add SLACK_WEBHOOK_URL in Render and redeploy.');
+async function sendTeamsWebhookInviteMessage({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
+  if (!TEAMS_WEBHOOK_URL) {
+    throw httpError(400, 'Teams channel invitations are not set up. Add TEAMS_WEBHOOK_URL in Render and redeploy.');
   }
 
-  const payload = buildSlackInvitePayload({ req, project, invite, actor, targetUser, assignmentRole });
-  const response = await fetch(SLACK_WEBHOOK_URL, {
+  const payload = buildTeamsInvitePayload({ req, project, invite, actor, targetUser, assignmentRole });
+  const response = await fetch(TEAMS_WEBHOOK_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
@@ -274,29 +274,29 @@ async function sendSlackWebhookInviteMessage({ req, project, invite, actor, targ
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
-    const message = body ? `Slack webhook returned ${response.status}: ${body}` : `Slack webhook returned ${response.status}.`;
+    const message = body ? `Teams webhook returned ${response.status}: ${body}` : `Teams webhook returned ${response.status}.`;
     throw httpError(502, message);
   }
 
   return { sent: true, mode: 'channel_webhook' };
 }
 
-async function sendSlackInviteMessage({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
-  if (!SLACK_WEBHOOK_URL) {
+async function sendTeamsInviteMessage({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
+  if (!TEAMS_WEBHOOK_URL) {
     return {
       sent: false,
       mode: 'channel_webhook',
-      error: 'Slack channel invitations are not set up. Add SLACK_WEBHOOK_URL in Render and redeploy.'
+      error: 'Teams channel invitations are not set up. Add TEAMS_WEBHOOK_URL in Render and redeploy.'
     };
   }
 
   try {
-    return await sendSlackWebhookInviteMessage({ req, project, invite, actor, targetUser, assignmentRole });
+    return await sendTeamsWebhookInviteMessage({ req, project, invite, actor, targetUser, assignmentRole });
   } catch (error) {
     return {
       sent: false,
       mode: 'channel_webhook',
-      error: error.message || 'Slack channel message failed.'
+      error: error.message || 'Teams channel message failed.'
     };
   }
 }
@@ -314,7 +314,7 @@ async function selectProjectForInvite(client, projectId) {
   return projectResult.rows[0];
 }
 
-async function createInviteCode(client, { projectId, role, maxUses, expiresInDays, actorId, targetUserId = null, targetEmail = null, auditAction = 'slack_invite_code_created' }) {
+async function createInviteCode(client, { projectId, role, maxUses, expiresInDays, actorId, targetUserId = null, targetEmail = null, auditAction = 'teams_invite_code_created' }) {
   let invite;
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const code = generateInviteCode();
@@ -1661,7 +1661,7 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
         projectId,
         role,
         maxUses: 1,
-        expiresInDays: Number.isFinite(SLACK_ASSIGNMENT_INVITE_DAYS) ? SLACK_ASSIGNMENT_INVITE_DAYS : 7,
+        expiresInDays: Number.isFinite(TEAMS_ASSIGNMENT_INVITE_DAYS) ? TEAMS_ASSIGNMENT_INVITE_DAYS : 7,
         actorId: req.user.id,
         targetUserId: user.id,
         targetEmail: user.email,
@@ -1682,8 +1682,8 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
     return { member: row, project, invite, action };
   });
 
-  const slack = created.invite
-    ? await sendSlackInviteMessage({
+  const teams = created.invite
+    ? await sendTeamsInviteMessage({
         req,
         project: created.project,
         invite: created.invite,
@@ -1694,7 +1694,7 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
     : { sent: false, mode: 'not_created', error: 'No invitation code was created for owner role.' };
 
   emitProjectChange(projectId, { actorId: req.user.id, message: 'Project member updated.' });
-  res.status(201).json({ member: created.member, invite: publicInvite(req, created.invite), slack });
+  res.status(201).json({ member: created.member, invite: publicInvite(req, created.invite), teams });
 }));
 
 app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(async (req, res) => {
@@ -1737,7 +1737,7 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
         projectId,
         role,
         maxUses: 1,
-        expiresInDays: Number.isFinite(SLACK_ASSIGNMENT_INVITE_DAYS) ? SLACK_ASSIGNMENT_INVITE_DAYS : 7,
+        expiresInDays: Number.isFinite(TEAMS_ASSIGNMENT_INVITE_DAYS) ? TEAMS_ASSIGNMENT_INVITE_DAYS : 7,
         actorId: req.user.id,
         targetUserId,
         targetEmail: targetUser.email,
@@ -1758,8 +1758,8 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
     return { member: row, project, invite };
   });
 
-  const slack = updated.invite
-    ? await sendSlackInviteMessage({
+  const teams = updated.invite
+    ? await sendTeamsInviteMessage({
         req,
         project: updated.project,
         invite: updated.invite,
@@ -1770,7 +1770,7 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
     : { sent: false, mode: 'not_created', error: 'No invitation code was created for owner role or a revoked user.' };
 
   emitProjectChange(projectId, { actorId: req.user.id, message: 'Project member role changed.' });
-  res.json({ member: updated.member, invite: publicInvite(req, updated.invite), slack });
+  res.json({ member: updated.member, invite: publicInvite(req, updated.invite), teams });
 }));
 
 app.delete('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(async (req, res) => {
@@ -1809,7 +1809,7 @@ app.delete('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler
 }));
 
 
-app.post('/api/projects/:projectId/slack-invites', requireAuth, asyncHandler(async (req, res) => {
+app.post('/api/projects/:projectId/teams-invites', requireAuth, asyncHandler(async (req, res) => {
   const projectId = parseId(req.params.projectId, 'projectId');
   const role = requireEnum(req.body.role || 'viewer', inviteRoles, 'invite role');
   const expiresInDays = clampInteger(req.body.expires_in_days ?? req.body.expires_days, {
@@ -1863,7 +1863,7 @@ app.post('/api/projects/:projectId/slack-invites', requireAuth, asyncHandler(asy
     await writeAudit(client, {
       projectId,
       userId: req.user.id,
-      action: 'slack_invite_code_created',
+      action: 'teams_invite_code_created',
       entityType: 'project_invite_code',
       entityId: invite.id,
       after: { ...invite, formatted_code: formatInviteCode(invite.code) }
@@ -1872,7 +1872,7 @@ app.post('/api/projects/:projectId/slack-invites', requireAuth, asyncHandler(asy
     return { project: projectResult.rows[0], invite };
   });
 
-  const slack = await sendSlackInviteMessage({ req, project: created.project, invite: created.invite, actor: req.user });
+  const teams = await sendTeamsInviteMessage({ req, project: created.project, invite: created.invite, actor: req.user });
 
   const responseInvite = {
     ...created.invite,
@@ -1882,10 +1882,10 @@ app.post('/api/projects/:projectId/slack-invites', requireAuth, asyncHandler(asy
 
   emitProjectChange(projectId, {
     actorId: req.user.id,
-    message: slack.sent ? 'Slack invitation code sent.' : 'Invitation code created, but Slack did not send.'
+    message: teams.sent ? 'Teams invitation code sent.' : 'Invitation code created, but Teams did not send.'
   });
 
-  res.status(slack.sent ? 201 : 202).json({ invite: responseInvite, project: created.project, slack });
+  res.status(teams.sent ? 201 : 202).json({ invite: responseInvite, project: created.project, teams });
 }));
 
 app.post('/api/invites/:code/accept', requireAuth, asyncHandler(async (req, res) => {
