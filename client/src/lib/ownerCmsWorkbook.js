@@ -294,7 +294,7 @@ Utility Sytems
   { key: 'walk_scheduled', label: 'Walk Scheduled', type: 'date', width: 140 },
   { key: 'install_date', label: 'Install Date', type: 'date', width: 140 },
   { key: 'deadline', label: 'Deadline', type: 'date', width: 140 },
-  { key: 'bill_by_year_end', label: 'Bill by year end', type: 'select', width: 150, options: ['Yes', 'No', 'NA'] },
+  { key: 'bill_by_year_end', label: 'Bill by year end', type: 'date', width: 150 },
   { key: 'category', label: 'Category', type: 'select', width: 180, options: linesToOptions(`
 COST ESTIAMTE
 CCURE
@@ -387,15 +387,16 @@ Uploaded
 export const ownerCmsColumnCount = OWNER_CMS_COLUMN_COUNT;
 export const ownerCmsRowCount = OWNER_CMS_ROW_COUNT;
 
-export function buildBlankOwnerCmsGrid() {
-  return Array.from({ length: OWNER_CMS_ROW_COUNT }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+export function buildBlankOwnerCmsGrid(rowCount = OWNER_CMS_ROW_COUNT) {
+  return Array.from({ length: Math.max(0, Number(rowCount) || 0) }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
 }
 
 export function normalizeOwnerCmsGrid(cells) {
-  const grid = buildBlankOwnerCmsGrid();
+  const rowCount = Math.max(OWNER_CMS_ROW_COUNT, Array.isArray(cells) ? cells.length : 0);
+  const grid = buildBlankOwnerCmsGrid(rowCount);
   if (!Array.isArray(cells)) return grid;
 
-  for (let rowIndex = 0; rowIndex < Math.min(cells.length, OWNER_CMS_ROW_COUNT); rowIndex += 1) {
+  for (let rowIndex = 0; rowIndex < cells.length; rowIndex += 1) {
     const row = cells[rowIndex];
     if (!Array.isArray(row)) continue;
     for (let colIndex = 0; colIndex < Math.min(row.length, OWNER_CMS_COLUMN_COUNT); colIndex += 1) {
