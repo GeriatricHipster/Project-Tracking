@@ -328,8 +328,13 @@ textarea:focus {
   margin-bottom: 0.75rem;
 }
 
+.gap-tight {
+  gap: 0.25rem;
+}
+
 .two-col,
-.three-col {
+.three-col,
+.four-col {
   display: grid;
   gap: 0.85rem;
 }
@@ -340,6 +345,10 @@ textarea:focus {
 
 .three-col {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.four-col {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .project-card-list {
@@ -872,7 +881,8 @@ th {
   }
 
   .two-col,
-  .three-col {
+  .three-col,
+  .four-col {
     grid-template-columns: 1fr;
   }
 

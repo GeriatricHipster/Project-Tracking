@@ -46,7 +46,7 @@ const projectLifecycleStatuses = new Set(['active', 'completed', 'archived']);
 const priorities = new Set(['low', 'normal', 'high', 'critical']);
 const roles = new Set(['owner', 'manager', 'editor', 'viewer']);
 const inviteRoles = new Set(['manager', 'editor', 'viewer']);
-const vendors = new Set(['Everbase', 'IES', 'Ideacom', 'Utah Yamas', 'Convergint', 'Pavion', 'Beacon', 'Stone Security', 'S101']);
+const vendors = new Set(['Accent Automatic', 'Accent Auto', 'Beacon', 'Convergint', 'DSI', 'EverBase', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'S101', 'SMT', 'Stone', 'Stone Security', 'USHOP', 'Utah Yamas', 'Yamas']);
 const trades = new Set(['CCure', 'Cameras', 'CCure & Cameras']);
 const securityTeamMembers = new Set(['Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam']);
 const projectManagers = new Set(['Kurt', 'Austin']);
@@ -815,11 +815,15 @@ const taskSelect = `
   t.description,
   t.trade,
   t.vendor,
+  t.vendor_secondary,
   t.security_team_member,
   t.pm,
   t.assigned_to,
   assignee.name AS assigned_to_name,
   assignee.email AS assigned_to_email,
+  t.assignee_secondary,
+  t.assignee_tertiary,
+  t.assignee_quaternary,
   t.status,
   t.priority,
   to_char(t.start_date, 'YYYY-MM-DD') AS start_date,
@@ -992,9 +996,13 @@ function buildTaskInput(body, partial = false) {
   if (!partial || body.description !== undefined) input.description = cleanText(body.description);
   if (!partial || body.trade !== undefined) input.trade = normalizeTaskChoice(body.trade, trades, 'trade', partial);
   if (!partial || body.vendor !== undefined) input.vendor = normalizeVendor(body.vendor, partial);
+  if (!partial || body.vendor_secondary !== undefined) input.vendor_secondary = normalizeVendor(body.vendor_secondary, partial);
   if (!partial || body.security_team_member !== undefined) input.security_team_member = normalizeTaskChoice(body.security_team_member, securityTeamMembers, 'security_team_member', partial);
   if (!partial || body.pm !== undefined) input.pm = normalizeTaskChoice(body.pm, projectManagers, 'pm', partial);
   if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeOptionalId(body.assigned_to, 'assigned_to');
+  if (!partial || body.assignee_secondary !== undefined) input.assignee_secondary = cleanText(body.assignee_secondary);
+  if (!partial || body.assignee_tertiary !== undefined) input.assignee_tertiary = cleanText(body.assignee_tertiary);
+  if (!partial || body.assignee_quaternary !== undefined) input.assignee_quaternary = cleanText(body.assignee_quaternary);
   if (!partial || body.parent_task_id !== undefined) input.parent_task_id = normalizeOptionalId(body.parent_task_id, 'parent_task_id');
 
   if (!partial || body.status !== undefined) {
@@ -2127,9 +2135,9 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
 
     const insertResult = await client.query(
       `INSERT INTO tasks
-        (project_id, parent_task_id, name, description, trade, vendor, security_team_member, pm, assigned_to, status, priority, start_date, end_date,
+        (project_id, parent_task_id, name, description, trade, vendor, vendor_secondary, security_team_member, pm, assigned_to, assignee_secondary, assignee_tertiary, assignee_quaternary, status, priority, start_date, end_date,
          percent_complete, color, sort_order, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
        RETURNING id`,
       [
         projectId,
@@ -2138,9 +2146,13 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
         input.description,
         input.trade,
         input.vendor,
+        input.vendor_secondary,
         input.security_team_member,
         input.pm,
         input.assigned_to ?? null,
+        input.assignee_secondary ?? null,
+        input.assignee_tertiary ?? null,
+        input.assignee_quaternary ?? null,
         input.status,
         input.priority,
         input.start_date,

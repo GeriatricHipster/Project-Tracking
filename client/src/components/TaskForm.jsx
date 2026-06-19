@@ -16,9 +16,10 @@ const priorityOptions = [
 ];
 
 const tradeOptions = ['CCure', 'Cameras', 'CCure & Cameras'];
-const vendorOptions = ['Everbase', 'IES', 'Ideacom', 'Utah Yamas', 'Convergint', 'Pavion', 'Beacon', 'Stone Security', 'S101'];
+const vendorOptions = [...new Set(['Accent Automatic', 'Accent Auto', 'Beacon', 'Convergint', 'DSI', 'EverBase', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'S101', 'SMT', 'Stone', 'Stone Security', 'USHOP', 'Utah Yamas', 'Yamas'])].sort((a, b) => a.localeCompare(b));
 const securityTeamOptions = ['Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam'];
-const pmOptions = ['Kurt', 'Austin'];
+const pmOptions = ['Austin', 'Kurt'];
+const extraAssigneeNames = ['Bennett', 'Bill', 'Chris', 'Jim'];
 
 function blankTask(project) {
   const start = project?.start_date || todayIso();
@@ -27,9 +28,13 @@ function blankTask(project) {
     description: '',
     trade: '',
     vendor: '',
+    vendor_secondary: '',
     security_team_member: '',
     pm: '',
     assigned_to: '',
+    assignee_secondary: '',
+    assignee_tertiary: '',
+    assignee_quaternary: '',
     parent_task_id: '',
     status: 'not_started',
     priority: 'normal',
@@ -53,9 +58,13 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         description: editingTask.description || '',
         trade: editingTask.trade || '',
         vendor: editingTask.vendor || '',
+        vendor_secondary: editingTask.vendor_secondary || '',
         security_team_member: editingTask.security_team_member || '',
         pm: editingTask.pm || '',
         assigned_to: editingTask.assigned_to || '',
+        assignee_secondary: editingTask.assignee_secondary || '',
+        assignee_tertiary: editingTask.assignee_tertiary || '',
+        assignee_quaternary: editingTask.assignee_quaternary || '',
         parent_task_id: editingTask.parent_task_id || '',
         status: editingTask.status || 'not_started',
         priority: editingTask.priority || 'normal',
@@ -76,6 +85,19 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     [tasks, editingTask]
   );
 
+  const sortedMembers = useMemo(
+    () => [...members].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))),
+    [members]
+  );
+
+  const assigneeOptions = useMemo(
+    () => [...new Set([
+      ...sortedMembers.map((member) => member.name).filter(Boolean),
+      ...extraAssigneeNames
+    ])].sort((a, b) => a.localeCompare(b)),
+    [sortedMembers]
+  );
+
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
   }
@@ -89,9 +111,13 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         ...form,
         trade: form.trade || null,
         vendor: form.vendor || null,
+        vendor_secondary: form.vendor_secondary || null,
         security_team_member: form.security_team_member || null,
         pm: form.pm || null,
         assigned_to: form.assigned_to || null,
+        assignee_secondary: form.assignee_secondary || null,
+        assignee_tertiary: form.assignee_tertiary || null,
+        assignee_quaternary: form.assignee_quaternary || null,
         parent_task_id: form.parent_task_id || null,
         percent_complete: Number(form.percent_complete),
         sort_order: form.sort_order === '' ? undefined : Number(form.sort_order)
@@ -139,7 +165,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             Assignee
             <select disabled={!canEdit} value={form.assigned_to} onChange={(event) => updateField('assigned_to', event.target.value)}>
               <option value="">Unassigned</option>
-              {members.map((member) => (
+              {sortedMembers.map((member) => (
                 <option key={member.user_id} value={member.user_id}>{member.name}</option>
               ))}
             </select>
@@ -166,6 +192,37 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             <select disabled={!canEdit} value={form.parent_task_id} onChange={(event) => updateField('parent_task_id', event.target.value)}>
               <option value="">None</option>
               {parentTaskOptions.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}
+            </select>
+          </label>
+        </div>
+
+        <div className="four-col">
+          <label>
+            Vendor 2
+            <select disabled={!canEdit} value={form.vendor_secondary} onChange={(event) => updateField('vendor_secondary', event.target.value)}>
+              <option value=""> </option>
+              {vendorOptions.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
+            </select>
+          </label>
+          <label>
+            Assignee 2
+            <select disabled={!canEdit} value={form.assignee_secondary} onChange={(event) => updateField('assignee_secondary', event.target.value)}>
+              <option value=""> </option>
+              {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
+            </select>
+          </label>
+          <label>
+            Assignee 3
+            <select disabled={!canEdit} value={form.assignee_tertiary} onChange={(event) => updateField('assignee_tertiary', event.target.value)}>
+              <option value=""> </option>
+              {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
+            </select>
+          </label>
+          <label>
+            Assignee 4
+            <select disabled={!canEdit} value={form.assignee_quaternary} onChange={(event) => updateField('assignee_quaternary', event.target.value)}>
+              <option value=""> </option>
+              {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
             </select>
           </label>
         </div>
