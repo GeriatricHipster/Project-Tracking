@@ -403,7 +403,7 @@ export default function Dashboard({
 
           <div className="join-invite-card">
             <h3>Join with invite code</h3>
-            <p className="muted">Paste a project code from Teams to add yourself to that project.</p>
+            <p className="muted">Paste a project code from email to add yourself to that project.</p>
             <form className="stack compact-form" onSubmit={submitInviteCode}>
               <label>
                 Invite code

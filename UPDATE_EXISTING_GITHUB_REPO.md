@@ -6,8 +6,8 @@ Use these steps if you already uploaded an older PSG and SS Tracking version.
 
 This version adds or updates:
 
-- Teams channel invite codes sent from the Project Members add/update workflow
-- Separate Teams invite-code panel removed from the project screen
+- Gmail invitation emails sent from the Project Members add/update workflow
+- Separate invitation-code panel removed from the project screen
 - Project notes section editable by assigned viewers, editors, managers, and owners
 - Viewers can edit project notes only
 - Vendor dropdown now defaults to blank
@@ -32,7 +32,7 @@ This version adds or updates:
 7. Use this commit message:
 
 ```text
-Add Teams channel invites notes task dropdowns and larger Gantt
+Add Gmail invites notes task dropdowns and larger Gantt
 ```
 
 8. Click **Commit changes**.
@@ -52,21 +52,29 @@ Open the app and check:
 - Blueprint drag-and-drop upload inside a project
 - Trade, Vendor, Security Team Member, and PM dropdowns when adding or editing a task
 - Bigger Gantt chart controls: Start, Today, Prev/Next 30 days, Zoom out, Reset zoom, Zoom in
-- Project Members add/update flow posting a Teams channel invitation
+- Project Members add/update flow sending a Gmail invitation email
 
-## Teams setup
+## Gmail setup
 
 Open:
 
 ```text
-TEAMS_INVITE_SETUP.md
+GMAIL_INVITE_SETUP.md
 ```
 
-For Teams channel messages, add these environment variables in Render:
+For Gmail email sending, add these environment variables in Render:
 
 ```text
-TEAMS_WEBHOOK_URL
+EMAIL_PROVIDER
+SMTP_HOST
+SMTP_PORT
+SMTP_SECURE
+SMTP_REQUIRE_TLS
+SMTP_USER
+SMTP_PASS
+EMAIL_FROM
+EMAIL_FROM_NAME
 APP_URL
 ```
 
-You do not need `TEAMS_BOT_TOKEN` or direct-message scopes for this version.
+You do need `SMTP_PASS` for this version.

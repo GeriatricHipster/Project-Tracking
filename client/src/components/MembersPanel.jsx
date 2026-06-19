@@ -1,17 +1,12 @@
-import { useState } from 'react';
-
-const allRoles = ['owner', 'manager', 'editor', 'viewer'];
-
-function describeTeams(result, baseMessage) {
-  const teams = result?.teams;
+function describeNotification(result, baseMessage) {
+  const notification = result?.notification || result?.teams || result?.slack;
   const code = result?.invite?.formatted_code;
-  if (!teams) return baseMessage;
-  if (teams.sent) {
-    const destination = 'Teams channel invitation';
-    const warning = teams.warning ? ` Note: ${teams.warning}` : '';
-    return `${baseMessage} ${destination} sent${code ? ` with code ${code}` : ''}.${warning}`;
+  if (!notification) return baseMessage;
+  if (notification.sent) {
+    const destination = 'email invitation';
+    return `${baseMessage} ${destination} sent${code ? ` with code ${code}` : ''}.`;
   }
-  return `${baseMessage} Teams invite was not sent: ${teams.error || 'check Teams setup.'}`;
+  return `${baseMessage} Email invite was not sent: ${notification.error || 'check Gmail/SMTP setup.'}`;
 }
 
 export default function MembersPanel({ currentUser, projectRole, members, canManage, onAddMember, onUpdateMember, onRemoveMember }) {
@@ -31,7 +26,7 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
     setSaving(true);
     try {
       const result = await onAddMember(form);
-      setNotice(describeTeams(result, 'Member added or updated.'));
+      setNotice(describeNotification(result, 'Member added or updated.'));
       setForm({ email: '', role: 'editor' });
     } catch (err) {
       setError(err.message);
@@ -46,7 +41,7 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
     setUpdatingUserId(member.user_id);
     try {
       const result = await onUpdateMember(member, role);
-      setNotice(describeTeams(result, `${member.name} updated to ${role}.`));
+      setNotice(describeNotification(result, `${member.name} updated to ${role}.`));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -74,7 +69,7 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
             {roleOptions.map((role) => <option key={role} value={role}>{role}</option>)}
           </select>
         </label>
-        <p className="form-help">The user must already have a PSG and SS Tracking account. When Teams is set up, an invite code is posted to the project invite channel after add/update and calls out the assigned email address.</p>
+        <p className="form-help">The user must already have a PSG and SS Tracking account. When Gmail/SMTP is set up, an invitation code email is sent after add/update and calls out the assigned email address.</p>
         {error && <p className="error-box">{error}</p>}
         {notice && <p className="notice-box">{notice}</p>}
         <button className="primary-button compact" disabled={!canManage || saving}>{saving ? 'Adding...' : 'Add / update member'}</button>

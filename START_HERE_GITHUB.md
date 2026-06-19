@@ -162,21 +162,29 @@ CCure Operator established
 
 Users with edit access can check or uncheck these items.
 
-## Optional Teams channel invite setup
+## Optional Gmail invitation setup
 
-After the updated app is deployed, you can connect Teams so project managers and owners automatically post an invitation code into a specific Teams channel when they add or update a project member. There is no separate Teams invite-code panel anymore.
+After the updated app is deployed, you can connect Gmail so project managers and owners automatically send an invitation code by email when they add or update a project member. There is no separate invite-code panel anymore.
 
 Open this file for the plain-English setup steps:
 
 ```text
-TEAMS_INVITE_SETUP.md
+GMAIL_INVITE_SETUP.md
 ```
 
 The main Render keys you need are:
 
 ```text
-TEAMS_WEBHOOK_URL
+EMAIL_PROVIDER
+SMTP_HOST
+SMTP_PORT
+SMTP_SECURE
+SMTP_REQUIRE_TLS
+SMTP_USER
+SMTP_PASS
+EMAIL_FROM
+EMAIL_FROM_NAME
 APP_URL
 ```
 
-You do not need Teams direct-message scopes or `TEAMS_BOT_TOKEN` for this version.
+You do need a Gmail App Password for this version.

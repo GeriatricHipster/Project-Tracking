@@ -24,7 +24,7 @@ services:
       PORT: 4000
       NODE_ENV: development
       APP_URL: http://localhost:5173
-      TEAMS_WEBHOOK_URL: ${TEAMS_WEBHOOK_URL:-}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
     ports:
       - "4000:4000"
     depends_on:

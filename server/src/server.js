@@ -11,14 +11,23 @@ const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
 const morgan = require('morgan');
 const multer = require('multer');
+const nodemailer = require('nodemailer');
 const { Server } = require('socket.io');
 const { pool, query, tx } = require('./db');
 
 const PORT = Number(process.env.PORT || 4000);
 const JWT_SECRET = process.env.JWT_SECRET || 'local-development-secret-change-me';
 const APP_NAME = process.env.APP_NAME || 'PSG and SS Tracking';
-const TEAMS_WEBHOOK_URL = String(process.env.TEAMS_WEBHOOK_URL || '').trim();
-const TEAMS_ASSIGNMENT_INVITE_DAYS = Number(process.env.TEAMS_ASSIGNMENT_INVITE_DAYS || 7);
+const EMAIL_PROVIDER = String(process.env.EMAIL_PROVIDER || 'gmail').trim().toLowerCase();
+const SMTP_HOST = String(process.env.SMTP_HOST || 'smtp.gmail.com').trim();
+const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
+const SMTP_SECURE = String(process.env.SMTP_SECURE || 'false').trim().toLowerCase() === 'true';
+const SMTP_REQUIRE_TLS = String(process.env.SMTP_REQUIRE_TLS || 'true').trim().toLowerCase() !== 'false';
+const SMTP_USER = String(process.env.SMTP_USER || '').trim();
+const SMTP_PASS = String(process.env.SMTP_PASS || '').trim();
+const EMAIL_FROM = String(process.env.EMAIL_FROM || SMTP_USER).trim();
+const EMAIL_FROM_NAME = String(process.env.EMAIL_FROM_NAME || APP_NAME).trim();
+const EMAIL_ASSIGNMENT_INVITE_DAYS = Number(process.env.EMAIL_ASSIGNMENT_INVITE_DAYS || 7);
 const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
@@ -184,119 +193,122 @@ function buildProjectUrl(req, projectId) {
   return appUrl ? `${appUrl}/?project=${encodeURIComponent(projectId)}` : '';
 }
 
-function teamsSafeText(value, fallback = 'Not set') {
-  const text = String(value || '').trim();
-  return text || fallback;
+
+function safeText(value, fallback = 'Not set') {
+  const textValue = String(value || '').trim();
+  return textValue || fallback;
 }
 
-function buildTeamsInvitePayload({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
+function buildEmailInviteMessage({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
   const formattedCode = formatInviteCode(invite.code);
   const inviteUrl = buildInviteUrl(req, invite.code);
   const expiresAt = invite.expires_at ? new Date(invite.expires_at).toLocaleString('en-US', { timeZone: 'UTC', timeZoneName: 'short' }) : 'No expiration';
   const roleText = assignmentRole || invite.role;
   const targetEmail = targetUser?.email ? normalizeEmail(targetUser.email) : '';
-  const targetName = teamsSafeText(targetUser?.name, 'Assigned user');
-  const targetCallout = targetEmail ? `<mailto:${targetEmail}|${targetEmail}>` : targetName;
-  const targetIntro = targetUser
-    ? `${actor.name} assigned *${targetName}* (${targetCallout}) to *${teamsSafeText(project.name)}* as *${roleText}*.`
-    : `${actor.name} created an invitation code for *${teamsSafeText(project.name)}*.`;
+  const targetName = safeText(targetUser?.name, 'Assigned user');
+  const subject = `${APP_NAME} project invitation: ${safeText(project.name)}`;
+  const intro = targetUser
+    ? `${actor.name} assigned ${targetName} (${targetEmail || 'no email on file'}) to ${safeText(project.name)} as ${roleText}.`
+    : `${actor.name} created an invitation code for ${safeText(project.name)}.`;
 
-  const fields = [
-    { type: 'mrkdwn', text: `*Project:*\n${teamsSafeText(project.name)}` },
-    { type: 'mrkdwn', text: `*Location:*\n${teamsSafeText(project.location)}` },
-    { type: 'mrkdwn', text: `*Dates:*\n${project.start_date} to ${project.end_date}` },
-    { type: 'mrkdwn', text: `*Project role:*\n${roleText}` },
-    { type: 'mrkdwn', text: `*Assigned email:*\n${targetEmail ? targetCallout : 'Not targeted'}` },
-    { type: 'mrkdwn', text: `*Code expires:*\n${expiresAt}` },
-    { type: 'mrkdwn', text: `*Code uses:*\n${invite.max_uses}` }
-  ];
+  const textBody = [
+    `${APP_NAME} project invitation`,
+    intro,
+    `Project: ${safeText(project.name)}`,
+    `Location: ${safeText(project.location)}`,
+    `Dates: ${project.start_date} to ${project.end_date}`,
+    `Project role: ${roleText}`,
+    `Assigned email: ${targetEmail || 'Not targeted'}`,
+    `Code: ${formattedCode}`,
+    `Expires: ${expiresAt}`,
+    `Uses: ${invite.max_uses}`,
+    inviteUrl ? `Open invite: ${inviteUrl}` : null,
+    targetUser ? `This invitation is intended for ${targetEmail || targetName}.` : 'Only people with a PSG and SS Tracking account can accept this code.'
+  ].filter(Boolean).join('\n');
 
-  const blocks = [
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `*${APP_NAME} project invitation*\n${targetIntro}`
-      }
-    },
-    { type: 'section', fields },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `*Invitation code:* \`${formattedCode}\`\nOpen the invitation link below or copy this code into ${APP_NAME}.`
-      }
-    }
-  ];
-
-  if (inviteUrl) {
-    blocks.push({
-      type: 'actions',
-      elements: [
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: 'Open project invitation', emoji: true },
-          url: inviteUrl
-        }
-      ]
-    });
-  }
-
-  blocks.push({
-    type: 'context',
-    elements: [
-      {
-        type: 'mrkdwn',
-        text: targetUser
-          ? `Sent by ${actor.name}. This code is intended for ${targetEmail || targetName}. Only that assigned user can accept it.`
-          : `Only people with a PSG and SS Tracking account can accept this code. Created by ${actor.name}.`
-      }
-    ]
-  });
+  const htmlLines = [
+    `<h2>${APP_NAME} project invitation</h2>`,
+    `<p>${intro}</p>`,
+    '<table style="border-collapse:collapse;line-height:1.5">',
+    `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Project</td><td>${safeText(project.name)}</td></tr>`,
+    `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Location</td><td>${safeText(project.location)}</td></tr>`,
+    `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Dates</td><td>${project.start_date} to ${project.end_date}</td></tr>`,
+    `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Project role</td><td>${roleText}</td></tr>`,
+    `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Assigned email</td><td>${targetEmail || 'Not targeted'}</td></tr>`,
+    `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Code</td><td style="font-size:20px;letter-spacing:2px">${formattedCode}</td></tr>`,
+    `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Expires</td><td>${expiresAt}</td></tr>`,
+    `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Uses</td><td>${invite.max_uses}</td></tr>`,
+    inviteUrl ? `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Invite link</td><td><a href="${inviteUrl}">${inviteUrl}</a></td></tr>` : '',
+    '</table>',
+    `<p>${targetUser ? `This invitation is intended for ${targetEmail || targetName}.` : 'Only people with a PSG and SS Tracking account can accept this code.'}</p>`
+  ].filter(Boolean);
 
   return {
-    text: `${APP_NAME} project invitation for ${project.name}. ${targetEmail ? `Assigned to ${targetEmail}. ` : ''}Code: ${formattedCode}`,
-    blocks
+    subject,
+    text: textBody,
+    html: htmlLines.join('')
   };
 }
 
-async function sendTeamsWebhookInviteMessage({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
-  if (!TEAMS_WEBHOOK_URL) {
-    throw httpError(400, 'Teams channel invitations are not set up. Add TEAMS_WEBHOOK_URL in Render and redeploy.');
+let cachedEmailTransport = null;
+
+function getEmailTransport() {
+  if (EMAIL_PROVIDER !== 'gmail' && EMAIL_PROVIDER !== 'smtp') {
+    throw httpError(400, 'Email invitations are not set up. Set EMAIL_PROVIDER to gmail and add SMTP settings in Render.');
   }
-
-  const payload = buildTeamsInvitePayload({ req, project, invite, actor, targetUser, assignmentRole });
-  const response = await fetch(TEAMS_WEBHOOK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    const message = body ? `Teams webhook returned ${response.status}: ${body}` : `Teams webhook returned ${response.status}.`;
-    throw httpError(502, message);
+  if (!SMTP_USER || !SMTP_PASS) {
+    throw httpError(400, 'Email invitations are not set up. Add SMTP_USER and SMTP_PASS in Render and redeploy.');
   }
-
-  return { sent: true, mode: 'channel_webhook' };
+  if (!cachedEmailTransport) {
+    cachedEmailTransport = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_SECURE,
+      requireTLS: SMTP_REQUIRE_TLS,
+      auth: {
+        user: SMTP_USER,
+        pass: SMTP_PASS
+      }
+    });
+  }
+  return cachedEmailTransport;
 }
 
-async function sendTeamsInviteMessage({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
-  if (!TEAMS_WEBHOOK_URL) {
+async function sendEmailInviteMessage({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
+  if (!SMTP_USER || !SMTP_PASS) {
     return {
       sent: false,
-      mode: 'channel_webhook',
-      error: 'Teams channel invitations are not set up. Add TEAMS_WEBHOOK_URL in Render and redeploy.'
+      mode: 'smtp',
+      error: 'Email invitations are not set up. Add SMTP_USER and SMTP_PASS in Render and redeploy.'
+    };
+  }
+
+  const recipient = normalizeEmail(targetUser?.email || invite.target_email);
+  if (!recipient) {
+    return {
+      sent: false,
+      mode: 'smtp',
+      error: 'No email address was found for this invitation.'
     };
   }
 
   try {
-    return await sendTeamsWebhookInviteMessage({ req, project, invite, actor, targetUser, assignmentRole });
+    const transport = getEmailTransport();
+    const message = buildEmailInviteMessage({ req, project, invite, actor, targetUser, assignmentRole });
+    await transport.sendMail({
+      from: EMAIL_FROM_NAME ? `"${EMAIL_FROM_NAME}" <${EMAIL_FROM || SMTP_USER}>` : (EMAIL_FROM || SMTP_USER),
+      to: recipient,
+      replyTo: EMAIL_FROM || SMTP_USER,
+      subject: message.subject,
+      text: message.text,
+      html: message.html
+    });
+    return { sent: true, mode: 'smtp', recipient };
   } catch (error) {
     return {
       sent: false,
-      mode: 'channel_webhook',
-      error: error.message || 'Teams channel message failed.'
+      mode: 'smtp',
+      error: error.message || 'Email send failed.'
     };
   }
 }
@@ -314,7 +326,7 @@ async function selectProjectForInvite(client, projectId) {
   return projectResult.rows[0];
 }
 
-async function createInviteCode(client, { projectId, role, maxUses, expiresInDays, actorId, targetUserId = null, targetEmail = null, auditAction = 'teams_invite_code_created' }) {
+async function createInviteCode(client, { projectId, role, maxUses, expiresInDays, actorId, targetUserId = null, targetEmail = null, auditAction = 'email_invite_code_created' }) {
   let invite;
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const code = generateInviteCode();
@@ -1661,7 +1673,7 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
         projectId,
         role,
         maxUses: 1,
-        expiresInDays: Number.isFinite(TEAMS_ASSIGNMENT_INVITE_DAYS) ? TEAMS_ASSIGNMENT_INVITE_DAYS : 7,
+        expiresInDays: Number.isFinite(EMAIL_ASSIGNMENT_INVITE_DAYS) ? EMAIL_ASSIGNMENT_INVITE_DAYS : 7,
         actorId: req.user.id,
         targetUserId: user.id,
         targetEmail: user.email,
@@ -1683,7 +1695,7 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
   });
 
   const teams = created.invite
-    ? await sendTeamsInviteMessage({
+    ? await sendEmailInviteMessage({
         req,
         project: created.project,
         invite: created.invite,
@@ -1694,7 +1706,7 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
     : { sent: false, mode: 'not_created', error: 'No invitation code was created for owner role.' };
 
   emitProjectChange(projectId, { actorId: req.user.id, message: 'Project member updated.' });
-  res.status(201).json({ member: created.member, invite: publicInvite(req, created.invite), teams });
+  res.status(201).json({ member: created.member, invite: publicInvite(req, created.invite), teams, slack: teams });
 }));
 
 app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(async (req, res) => {
@@ -1737,7 +1749,7 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
         projectId,
         role,
         maxUses: 1,
-        expiresInDays: Number.isFinite(TEAMS_ASSIGNMENT_INVITE_DAYS) ? TEAMS_ASSIGNMENT_INVITE_DAYS : 7,
+        expiresInDays: Number.isFinite(EMAIL_ASSIGNMENT_INVITE_DAYS) ? EMAIL_ASSIGNMENT_INVITE_DAYS : 7,
         actorId: req.user.id,
         targetUserId,
         targetEmail: targetUser.email,
@@ -1759,7 +1771,7 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
   });
 
   const teams = updated.invite
-    ? await sendTeamsInviteMessage({
+    ? await sendEmailInviteMessage({
         req,
         project: updated.project,
         invite: updated.invite,
@@ -1770,7 +1782,7 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
     : { sent: false, mode: 'not_created', error: 'No invitation code was created for owner role or a revoked user.' };
 
   emitProjectChange(projectId, { actorId: req.user.id, message: 'Project member role changed.' });
-  res.json({ member: updated.member, invite: publicInvite(req, updated.invite), teams });
+  res.json({ member: updated.member, invite: publicInvite(req, updated.invite), teams, slack: teams });
 }));
 
 app.delete('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(async (req, res) => {
@@ -1809,7 +1821,7 @@ app.delete('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler
 }));
 
 
-app.post('/api/projects/:projectId/teams-invites', requireAuth, asyncHandler(async (req, res) => {
+app.post('/api/projects/:projectId/email-invites', requireAuth, asyncHandler(async (req, res) => {
   const projectId = parseId(req.params.projectId, 'projectId');
   const role = requireEnum(req.body.role || 'viewer', inviteRoles, 'invite role');
   const expiresInDays = clampInteger(req.body.expires_in_days ?? req.body.expires_days, {
@@ -1863,7 +1875,7 @@ app.post('/api/projects/:projectId/teams-invites', requireAuth, asyncHandler(asy
     await writeAudit(client, {
       projectId,
       userId: req.user.id,
-      action: 'teams_invite_code_created',
+      action: 'email_invite_code_created',
       entityType: 'project_invite_code',
       entityId: invite.id,
       after: { ...invite, formatted_code: formatInviteCode(invite.code) }
@@ -1872,7 +1884,7 @@ app.post('/api/projects/:projectId/teams-invites', requireAuth, asyncHandler(asy
     return { project: projectResult.rows[0], invite };
   });
 
-  const teams = await sendTeamsInviteMessage({ req, project: created.project, invite: created.invite, actor: req.user });
+  const notification = await sendEmailInviteMessage({ req, project: created.project, invite: created.invite, actor: req.user });
 
   const responseInvite = {
     ...created.invite,
@@ -1882,10 +1894,10 @@ app.post('/api/projects/:projectId/teams-invites', requireAuth, asyncHandler(asy
 
   emitProjectChange(projectId, {
     actorId: req.user.id,
-    message: teams.sent ? 'Teams invitation code sent.' : 'Invitation code created, but Teams did not send.'
+    message: notification.sent ? 'Email invitation code sent.' : 'Invitation code created, but email did not send.'
   });
 
-  res.status(teams.sent ? 201 : 202).json({ invite: responseInvite, project: created.project, teams });
+  res.status(teams.sent ? 201 : 202).json({ invite: responseInvite, project: created.project, teams, slack: teams });
 }));
 
 app.post('/api/invites/:code/accept', requireAuth, asyncHandler(async (req, res) => {
