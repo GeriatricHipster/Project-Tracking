@@ -572,24 +572,26 @@ function requireSiteOwner(user) {
 const OWNER_CMS_ROW_COUNT = 150;
 const OWNER_CMS_COLUMN_COUNT = 20;
 
-function buildBlankOwnerCmsGrid() {
-  return Array.from({ length: OWNER_CMS_ROW_COUNT }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+function buildBlankOwnerCmsGrid(rowCount = OWNER_CMS_ROW_COUNT) {
+  const totalRows = Math.max(1, Number.isInteger(Number(rowCount)) ? Number(rowCount) : OWNER_CMS_ROW_COUNT);
+  return Array.from({ length: totalRows }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
 }
 
 function normalizeOwnerCmsGrid(cells) {
-  const blank = buildBlankOwnerCmsGrid();
-  if (!Array.isArray(cells)) return blank;
+  const sourceRows = Array.isArray(cells) ? cells : [];
+  const totalRows = Math.max(OWNER_CMS_ROW_COUNT, sourceRows.length);
+  const grid = buildBlankOwnerCmsGrid(totalRows);
 
-  for (let rowIndex = 0; rowIndex < Math.min(cells.length, OWNER_CMS_ROW_COUNT); rowIndex += 1) {
-    const row = cells[rowIndex];
+  for (let rowIndex = 0; rowIndex < Math.min(sourceRows.length, totalRows); rowIndex += 1) {
+    const row = sourceRows[rowIndex];
     if (!Array.isArray(row)) continue;
     for (let colIndex = 0; colIndex < Math.min(row.length, OWNER_CMS_COLUMN_COUNT); colIndex += 1) {
       const value = row[colIndex];
-      blank[rowIndex][colIndex] = value === null || value === undefined ? '' : String(value);
+      grid[rowIndex][colIndex] = value === null || value === undefined ? '' : String(value);
     }
   }
 
-  return blank;
+  return grid;
 }
 
 function normalizeOwnerCmsArchivedRows(rows) {
@@ -1143,7 +1145,7 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
     label: 'row_index',
     defaultValue: 0,
     min: 0,
-    max: OWNER_CMS_ROW_COUNT - 1
+    max: 999999
   });
   const colIndex = clampInteger(req.body.col_index ?? req.body.colIndex, {
     label: 'col_index',
@@ -1161,6 +1163,9 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
     if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
 
     const normalized = normalizeOwnerCmsGrid(current.rows[0].cells);
+    while (normalized.length <= rowIndex) {
+      normalized.push(Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+    }
     normalized[rowIndex][colIndex] = cellValue;
     const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
 
@@ -1183,6 +1188,47 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
   res.json({ sheet: updated });
 }));
 
+app.post('/api/owner/cms-wos/:sheetKey/rows', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
+  const rowIndex = clampInteger(req.body.row_index ?? req.body.rowIndex, {
+    label: 'row_index',
+    defaultValue: OWNER_CMS_ROW_COUNT,
+    min: 0,
+    max: 999999
+  });
+
+  const updated = await tx(async (client) => {
+    const current = await client.query(
+      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      [sheet.sheet_key]
+    );
+    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
+
+    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
+    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
+    const insertIndex = Math.max(0, Math.min(rowIndex, activeRows.length));
+    activeRows.splice(insertIndex, 0, Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+
+    const saveResult = await client.query(
+      `UPDATE owner_cms_work_orders
+       SET cells = $1,
+           archived_cells = $2
+       WHERE sheet_key = $3
+       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
+      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
+    );
+
+    return {
+      ...saveResult.rows[0],
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
+    };
+  });
+
+  res.json({ sheet: updated });
+}));
+
 app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/archive', requireAuth, asyncHandler(async (req, res) => {
   requireSiteOwner(req.user);
   const sheet = requireOwnerCmsSheet(req.params.sheetKey);
@@ -1190,7 +1236,7 @@ app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/archive', requireAuth, asy
     label: 'rowIndex',
     defaultValue: 0,
     min: 0,
-    max: OWNER_CMS_ROW_COUNT - 1
+    max: 999999
   });
 
   const updated = await tx(async (client) => {
@@ -1204,6 +1250,10 @@ app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/archive', requireAuth, asy
     const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
     const row = activeRows[rowIndex];
     if (!row) throw httpError(404, 'Row not found.');
+
+    if (!rowHasContent(row)) {
+      throw httpError(400, 'That row is already blank.');
+    }
 
     archivedRows.unshift({
       row_number: rowIndex + 1,
@@ -1254,10 +1304,13 @@ app.post('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex/restore', requireA
     if (!archivedRow) throw httpError(404, 'Archived row not found.');
 
     let targetIndex = archivedRow.row_number ? Number(archivedRow.row_number) - 1 : activeRows.findIndex((row) => !rowHasContent(row));
-    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= OWNER_CMS_ROW_COUNT || rowHasContent(activeRows[targetIndex])) {
+    if (!Number.isInteger(targetIndex) || targetIndex < 0 || rowHasContent(activeRows[targetIndex])) {
       targetIndex = activeRows.findIndex((row) => !rowHasContent(row));
     }
-    if (targetIndex < 0) throw httpError(400, 'No empty rows are available to restore this entry.');
+    if (targetIndex < 0) {
+      targetIndex = activeRows.length;
+      activeRows.push(Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+    }
 
     activeRows[targetIndex] = [...archivedRow.cells];
     archivedRows.splice(archiveIndex, 1);
