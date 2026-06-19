@@ -77,12 +77,11 @@ ALTER TABLE projects ADD COLUMN IF NOT EXISTS completed_at timestamptz;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 DO $$
 BEGIN
-  IF EXISTS (
+  IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'projects_project_status_check'
   ) THEN
-    ALTER TABLE projects DROP CONSTRAINT projects_project_status_check;
+    ALTER TABLE projects ADD CONSTRAINT projects_project_status_check CHECK (project_status IN ('active', 'completed', 'archived'));
   END IF;
-  ALTER TABLE projects ADD CONSTRAINT projects_project_status_check CHECK (project_status IN ('active', 'completed', 'archived'));
 END $$;
 
 CREATE TABLE IF NOT EXISTS project_members (
@@ -400,28 +399,6 @@ ON CONFLICT (sheet_key) DO UPDATE SET
 ALTER TABLE owner_cms_work_orders ADD COLUMN IF NOT EXISTS archived_cells jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_owner_cms_work_orders_sheet_key ON owner_cms_work_orders(sheet_key);
-
-CREATE TABLE IF NOT EXISTS owner_markup_calculators (
-  calculator_key text PRIMARY KEY,
-  title text NOT NULL,
-  data jsonb NOT NULL DEFAULT '{}'::jsonb,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-
-INSERT INTO owner_markup_calculators (calculator_key, title, data)
-VALUES
-  (
-    'default',
-    'Markup Calculator',
-    '{"sections":[
-      {"key":"material_47","title":"MATERIAL (+4.7%)","rate":0.047,"items":[6557.743,736.2,null,null,null,null]},
-      {"key":"material_50","title":"MATERIAL (+5.0%)","rate":0.05,"items":[16.32,2317,null,null,null,null]}
-    ]}'::jsonb
-  )
-ON CONFLICT (calculator_key) DO NOTHING;
-
-CREATE INDEX IF NOT EXISTS idx_owner_markup_calculators_key ON owner_markup_calculators(calculator_key);
 CREATE INDEX IF NOT EXISTS idx_audit_log_project ON audit_log(project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_task_comments_task ON task_comments(task_id, created_at DESC);
 
@@ -461,12 +438,6 @@ EXECUTE FUNCTION set_updated_at();
 DROP TRIGGER IF EXISTS trg_owner_cms_work_orders_updated_at ON owner_cms_work_orders;
 CREATE TRIGGER trg_owner_cms_work_orders_updated_at
 BEFORE UPDATE ON owner_cms_work_orders
-FOR EACH ROW
-EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_owner_markup_calculators_updated_at ON owner_markup_calculators;
-CREATE TRIGGER trg_owner_markup_calculators_updated_at
-BEFORE UPDATE ON owner_markup_calculators
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 

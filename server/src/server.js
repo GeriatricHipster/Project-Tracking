@@ -571,18 +571,16 @@ function requireSiteOwner(user) {
 
 const OWNER_CMS_ROW_COUNT = 150;
 const OWNER_CMS_COLUMN_COUNT = 20;
-const OWNER_MARKUP_CALCULATOR_KEY = 'default';
 
-function buildBlankOwnerCmsGrid(rowCount = OWNER_CMS_ROW_COUNT) {
-  return Array.from({ length: rowCount }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+function buildBlankOwnerCmsGrid() {
+  return Array.from({ length: OWNER_CMS_ROW_COUNT }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
 }
 
 function normalizeOwnerCmsGrid(cells) {
-  const rowCount = Math.max(OWNER_CMS_ROW_COUNT, Array.isArray(cells) ? cells.length : 0);
-  const blank = buildBlankOwnerCmsGrid(rowCount);
+  const blank = buildBlankOwnerCmsGrid();
   if (!Array.isArray(cells)) return blank;
 
-  for (let rowIndex = 0; rowIndex < cells.length; rowIndex += 1) {
+  for (let rowIndex = 0; rowIndex < Math.min(cells.length, OWNER_CMS_ROW_COUNT); rowIndex += 1) {
     const row = cells[rowIndex];
     if (!Array.isArray(row)) continue;
     for (let colIndex = 0; colIndex < Math.min(row.length, OWNER_CMS_COLUMN_COUNT); colIndex += 1) {
@@ -626,37 +624,6 @@ function normalizeOwnerCmsArchivedRows(rows) {
 
 function rowHasContent(row) {
   return Array.isArray(row) && row.some((value) => String(value || '').trim().length > 0);
-}
-
-function buildDefaultMarkupCalculatorData() {
-  return {
-    sections: [
-      { key: 'material_47', title: 'MATERIAL (+4.7%)', rate: 0.047, items: [6557.743, 736.2, null, null, null, null] },
-      { key: 'material_50', title: 'MATERIAL (+5.0%)', rate: 0.05, items: [16.32, 2317, null, null, null, null] }
-    ]
-  };
-}
-
-function normalizeMarkupCalculatorData(data) {
-  const fallback = buildDefaultMarkupCalculatorData();
-  if (!data || typeof data !== 'object') return fallback;
-
-  const sections = Array.isArray(data.sections) ? data.sections : fallback.sections;
-  return {
-    sections: fallback.sections.map((fallbackSection, index) => {
-      const section = sections[index] && typeof sections[index] === 'object' ? sections[index] : fallbackSection;
-      const items = Array.isArray(section.items) ? section.items : fallbackSection.items;
-      return {
-        key: String(section.key || fallbackSection.key),
-        title: String(section.title || fallbackSection.title),
-        rate: Number.isFinite(Number(section.rate)) ? Number(section.rate) : fallbackSection.rate,
-        items: Array.from({ length: 6 }, (_, itemIndex) => {
-          const value = items[itemIndex];
-          return value === null || value === undefined || value === '' ? null : Number.isFinite(Number(value)) ? Number(value) : null;
-        })
-      };
-    })
-  };
 }
 
 async function archiveStaleCompletedProjects(db = { query }) {
@@ -1184,7 +1151,7 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
     label: 'row_index',
     defaultValue: 0,
     min: 0,
-    max: 999999
+    max: OWNER_CMS_ROW_COUNT - 1
   });
   const colIndex = clampInteger(req.body.col_index ?? req.body.colIndex, {
     label: 'col_index',
@@ -1202,9 +1169,6 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
     if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
 
     const normalized = normalizeOwnerCmsGrid(current.rows[0].cells);
-    while (normalized.length <= rowIndex) {
-      normalized.push(Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
-    }
     normalized[rowIndex][colIndex] = cellValue;
     const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
 
@@ -1227,47 +1191,6 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
   res.json({ sheet: updated });
 }));
 
-app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/insert', requireAuth, asyncHandler(async (req, res) => {
-  requireSiteOwner(req.user);
-  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
-  const rowIndex = clampInteger(req.params.rowIndex, {
-    label: 'rowIndex',
-    defaultValue: 0,
-    min: 0,
-    max: 999999
-  });
-
-  const updated = await tx(async (client) => {
-    const current = await client.query(
-      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
-      [sheet.sheet_key]
-    );
-    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
-
-    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
-    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
-    const insertionIndex = Math.min(rowIndex, activeRows.length);
-    activeRows.splice(insertionIndex, 0, Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
-
-    const saveResult = await client.query(
-      `UPDATE owner_cms_work_orders
-       SET cells = $1,
-           archived_cells = $2
-       WHERE sheet_key = $3
-       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
-      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
-    );
-
-    return {
-      ...saveResult.rows[0],
-      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
-      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
-    };
-  });
-
-  res.json({ sheet: updated });
-}));
-
 app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/archive', requireAuth, asyncHandler(async (req, res) => {
   requireSiteOwner(req.user);
   const sheet = requireOwnerCmsSheet(req.params.sheetKey);
@@ -1275,7 +1198,7 @@ app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/archive', requireAuth, asy
     label: 'rowIndex',
     defaultValue: 0,
     min: 0,
-    max: 999999
+    max: OWNER_CMS_ROW_COUNT - 1
   });
 
   const updated = await tx(async (client) => {
@@ -1342,24 +1265,11 @@ app.post('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex/restore', requireA
     const archivedRow = archivedRows[archiveIndex];
     if (!archivedRow) throw httpError(404, 'Archived row not found.');
 
-    const blankRow = () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => '');
-    let targetIndex = Number.isInteger(Number(archivedRow.row_number)) ? Number(archivedRow.row_number) - 1 : activeRows.findIndex((row) => !rowHasContent(row));
-    if (!Number.isInteger(targetIndex) || targetIndex < 0) {
+    let targetIndex = archivedRow.row_number ? Number(archivedRow.row_number) - 1 : activeRows.findIndex((row) => !rowHasContent(row));
+    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= OWNER_CMS_ROW_COUNT || rowHasContent(activeRows[targetIndex])) {
       targetIndex = activeRows.findIndex((row) => !rowHasContent(row));
     }
-    if (targetIndex < 0) {
-      targetIndex = activeRows.length;
-    }
-    while (activeRows.length <= targetIndex) {
-      activeRows.push(blankRow());
-    }
-    if (rowHasContent(activeRows[targetIndex])) {
-      const nextBlank = activeRows.findIndex((row) => !rowHasContent(row));
-      targetIndex = nextBlank >= 0 ? nextBlank : activeRows.length;
-      while (activeRows.length <= targetIndex) {
-        activeRows.push(blankRow());
-      }
-    }
+    if (targetIndex < 0) throw httpError(400, 'No empty rows are available to restore this entry.');
 
     activeRows[targetIndex] = [...archivedRow.cells];
     archivedRows.splice(archiveIndex, 1);
@@ -1422,51 +1332,6 @@ app.delete('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex', requireAuth, a
   });
 
   res.json({ sheet: updated });
-}));
-
-app.get('/api/owner/markup-calculator', requireAuth, asyncHandler(async (req, res) => {
-  requireSiteOwner(req.user);
-
-  const calculator = await tx(async (client) => {
-    await client.query(
-      `INSERT INTO owner_markup_calculators (calculator_key, title, data)
-       VALUES ($1, $2, $3::jsonb)
-       ON CONFLICT (calculator_key) DO UPDATE SET
-         title = EXCLUDED.title,
-         data = COALESCE(owner_markup_calculators.data, EXCLUDED.data)`,
-      [OWNER_MARKUP_CALCULATOR_KEY, 'Markup Calculator', JSON.stringify(buildDefaultMarkupCalculatorData())]
-    );
-
-    const result = await client.query(
-      'SELECT calculator_key, title, data, created_at, updated_at FROM owner_markup_calculators WHERE calculator_key = $1',
-      [OWNER_MARKUP_CALCULATOR_KEY]
-    );
-
-    if (!result.rowCount) throw httpError(404, 'Markup calculator not found.');
-    return { ...result.rows[0], data: normalizeMarkupCalculatorData(result.rows[0].data) };
-  });
-
-  res.json({ calculator });
-}));
-
-app.put('/api/owner/markup-calculator', requireAuth, asyncHandler(async (req, res) => {
-  requireSiteOwner(req.user);
-  const data = normalizeMarkupCalculatorData(req.body.data || req.body.calculator || req.body);
-
-  const updated = await tx(async (client) => {
-    const result = await client.query(
-      `INSERT INTO owner_markup_calculators (calculator_key, title, data)
-       VALUES ($1, $2, $3::jsonb)
-       ON CONFLICT (calculator_key) DO UPDATE SET
-         title = EXCLUDED.title,
-         data = EXCLUDED.data
-       RETURNING calculator_key, title, data, created_at, updated_at`,
-      [OWNER_MARKUP_CALCULATOR_KEY, 'Markup Calculator', JSON.stringify(data)]
-    );
-    return { ...result.rows[0], data: normalizeMarkupCalculatorData(result.rows[0].data) };
-  });
-
-  res.json({ calculator: updated });
 }));
 
 app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
