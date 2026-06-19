@@ -472,13 +472,6 @@ function normalizeOptionalId(value, label) {
   return parseId(value, label);
 }
 
-function normalizeAssignedToValue(value, partial = false) {
-  if (partial && value === undefined) return undefined;
-  if (value === undefined || value === null) return null;
-  const text = String(value).trim();
-  return text.length ? text : null;
-}
-
 function signToken(user) {
   return jwt.sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
 }
@@ -576,18 +569,19 @@ function requireSiteOwner(user) {
   return siteRole;
 }
 
-const OWNER_CMS_ROW_COUNT = 150;
+const OWNER_CMS_MIN_ROW_COUNT = 150;
 const OWNER_CMS_COLUMN_COUNT = 20;
 
-function buildBlankOwnerCmsGrid() {
-  return Array.from({ length: OWNER_CMS_ROW_COUNT }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+function buildBlankOwnerCmsGrid(rowCount = OWNER_CMS_MIN_ROW_COUNT) {
+  return Array.from({ length: rowCount }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
 }
 
 function normalizeOwnerCmsGrid(cells) {
-  const blank = buildBlankOwnerCmsGrid();
+  const rowCount = Math.max(OWNER_CMS_MIN_ROW_COUNT, Array.isArray(cells) ? cells.length : 0);
+  const blank = buildBlankOwnerCmsGrid(rowCount);
   if (!Array.isArray(cells)) return blank;
 
-  for (let rowIndex = 0; rowIndex < Math.min(cells.length, OWNER_CMS_ROW_COUNT); rowIndex += 1) {
+  for (let rowIndex = 0; rowIndex < Math.min(cells.length, rowCount); rowIndex += 1) {
     const row = cells[rowIndex];
     if (!Array.isArray(row)) continue;
     for (let colIndex = 0; colIndex < Math.min(row.length, OWNER_CMS_COLUMN_COUNT); colIndex += 1) {
@@ -862,33 +856,6 @@ async function verifyAssignee(db, projectId, assigneeId) {
   if (!member.rowCount) throw httpError(400, 'Assigned user must be a project member.');
 }
 
-async function resolveTaskAssigneeId(db, projectId, assigneeValue) {
-  if (assigneeValue === undefined) return undefined;
-  if (assigneeValue === null || assigneeValue === '') return null;
-
-  const text = String(assigneeValue).trim();
-  if (!text) return null;
-
-  if (/^\d+$/.test(text)) {
-    const assigneeId = parseId(text, 'assigned_to');
-    await verifyAssignee(db, projectId, assigneeId);
-    return assigneeId;
-  }
-
-  const byName = await db.query(
-    `SELECT pm.user_id
-     FROM project_members pm
-     JOIN users u ON u.id = pm.user_id
-     WHERE pm.project_id = $1 AND lower(u.name) = lower($2)
-     ORDER BY CASE pm.role WHEN 'owner' THEN 1 WHEN 'manager' THEN 2 WHEN 'editor' THEN 3 ELSE 4 END, u.name
-     LIMIT 1`,
-    [projectId, text]
-  );
-
-  if (byName.rowCount) return byName.rows[0].user_id;
-  return null;
-}
-
 async function verifyParentTask(db, projectId, parentTaskId, taskId = null) {
   if (!parentTaskId) return;
   if (taskId && parentTaskId === taskId) throw httpError(400, 'A task cannot be its own parent.');
@@ -1033,7 +1000,7 @@ function buildTaskInput(body, partial = false) {
   if (!partial || body.vendor_secondary !== undefined) input.vendor_secondary = normalizeVendor(body.vendor_secondary, partial);
   if (!partial || body.security_team_member !== undefined) input.security_team_member = normalizeTaskChoice(body.security_team_member, securityTeamMembers, 'security_team_member', partial);
   if (!partial || body.pm !== undefined) input.pm = normalizeTaskChoice(body.pm, projectManagers, 'pm', partial);
-  if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeAssignedToValue(body.assigned_to, partial);
+  if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeOptionalId(body.assigned_to, 'assigned_to');
   if (!partial || body.assignee_secondary !== undefined) input.assignee_secondary = cleanText(body.assignee_secondary);
   if (!partial || body.assignee_tertiary !== undefined) input.assignee_tertiary = cleanText(body.assignee_tertiary);
   if (!partial || body.assignee_quaternary !== undefined) input.assignee_quaternary = cleanText(body.assignee_quaternary);
@@ -1185,7 +1152,7 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
     label: 'row_index',
     defaultValue: 0,
     min: 0,
-    max: OWNER_CMS_ROW_COUNT - 1
+    max: 999999
   });
   const colIndex = clampInteger(req.body.col_index ?? req.body.colIndex, {
     label: 'col_index',
@@ -1203,6 +1170,7 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
     if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
 
     const normalized = normalizeOwnerCmsGrid(current.rows[0].cells);
+    if (!normalized[rowIndex]) throw httpError(404, 'Row not found.');
     normalized[rowIndex][colIndex] = cellValue;
     const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
 
@@ -1225,6 +1193,47 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
   res.json({ sheet: updated });
 }));
 
+app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/insert', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
+  const rowIndex = clampInteger(req.params.rowIndex, {
+    label: 'rowIndex',
+    defaultValue: 0,
+    min: 0,
+    max: 999999
+  });
+
+  const updated = await tx(async (client) => {
+    const current = await client.query(
+      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      [sheet.sheet_key]
+    );
+    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
+
+    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
+    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
+    const insertIndex = Math.max(0, Math.min(Number.isInteger(rowIndex) ? rowIndex : activeRows.length, activeRows.length));
+    activeRows.splice(insertIndex, 0, Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+
+    const saveResult = await client.query(
+      `UPDATE owner_cms_work_orders
+       SET cells = $1,
+           archived_cells = $2
+       WHERE sheet_key = $3
+       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
+      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
+    );
+
+    return {
+      ...saveResult.rows[0],
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
+    };
+  });
+
+  res.json({ sheet: updated });
+}));
+
 app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/archive', requireAuth, asyncHandler(async (req, res) => {
   requireSiteOwner(req.user);
   const sheet = requireOwnerCmsSheet(req.params.sheetKey);
@@ -1232,7 +1241,7 @@ app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/archive', requireAuth, asy
     label: 'rowIndex',
     defaultValue: 0,
     min: 0,
-    max: OWNER_CMS_ROW_COUNT - 1
+    max: 999999
   });
 
   const updated = await tx(async (client) => {
@@ -1300,7 +1309,7 @@ app.post('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex/restore', requireA
     if (!archivedRow) throw httpError(404, 'Archived row not found.');
 
     let targetIndex = archivedRow.row_number ? Number(archivedRow.row_number) - 1 : activeRows.findIndex((row) => !rowHasContent(row));
-    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= OWNER_CMS_ROW_COUNT || rowHasContent(activeRows[targetIndex])) {
+    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= activeRows.length || rowHasContent(activeRows[targetIndex])) {
       targetIndex = activeRows.findIndex((row) => !rowHasContent(row));
     }
     if (targetIndex < 0) throw httpError(400, 'No empty rows are available to restore this entry.');
@@ -2156,7 +2165,7 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
 
   const task = await tx(async (client) => {
     await requireProjectMembership(projectId, req.user.id, 'editor', client);
-    input.assigned_to = await resolveTaskAssigneeId(client, projectId, input.assigned_to);
+    await verifyAssignee(client, projectId, input.assigned_to);
     await verifyParentTask(client, projectId, input.parent_task_id);
 
     let sortOrder = input.sort_order;
@@ -2229,7 +2238,7 @@ app.patch('/api/tasks/:taskId', requireAuth, asyncHandler(async (req, res) => {
     const nextEnd = input.end_date !== undefined ? input.end_date : before.end_date;
     ensureDateOrder(nextStart, nextEnd);
 
-    input.assigned_to = await resolveTaskAssigneeId(client, before.project_id, input.assigned_to);
+    await verifyAssignee(client, before.project_id, input.assigned_to);
     await verifyParentTask(client, before.project_id, input.parent_task_id, taskId);
 
     const values = [];
