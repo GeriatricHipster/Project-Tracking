@@ -1,6 +1,6 @@
 # PSG and SS Tracking
 
-PSG and SS Tracking is a construction project timeline tracking web app with multi-user project access, task tracking, dependencies, audit history, live update notifications, dashboard tabs, active/completed project filing, owner delete controls, all-project calendar/status overview, project assignment lists, manager/owner-only site member management, blueprint uploads, checklist tracking, Gmail email invitation codes, project notes, and a larger Gantt-style schedule view.
+PSG and SS Tracking is a construction project timeline tracking web app with multi-user project access, task tracking, dependencies, audit history, live update notifications, dashboard tabs, active/completed project filing, owner delete controls, all-project calendar/status overview, project assignment lists, manager/owner-only site member management, blueprint uploads, checklist tracking, project access, project notes, and a larger Gantt-style schedule view.
 
 ## Main features
 
@@ -18,8 +18,7 @@ PSG and SS Tracking is a construction project timeline tracking web app with mul
 - Gantt checklist with IPs requested, Panel ordered, Clearances programmed, Doors programmed, and CCure Operator established
 - Drag-and-drop blueprint upload inside each project
 - Project members panel with project roles: owner, manager, editor, viewer
-- Email invitation codes are sent automatically through Gmail/SMTP when a project manager or owner adds/updates a non-owner project member
-- Site Members tab for site owners/managers to revoke access, restore access, delete users, and change site role
+- - Site Members tab for site owners/managers to revoke access, restore access, delete users, and change site role
 - Viewers/editors only see assigned projects; managers/owners can see the portfolio
 - Header/banner image on login, dashboard, project, and loading pages
 
@@ -56,34 +55,6 @@ Use `START_HERE_GITHUB.md` for no-terminal deployment instructions.
 - Site owners/managers can open the Site Members tab.
 - Blueprint files are stored in PostgreSQL for this MVP so they stay attached to the project after redeploys.
 - Default blueprint upload limit is 25 MB. Change `MAX_BLUEPRINT_BYTES` in Render if needed.
-- The Gmail setup is optional. Member assignments still save even if email is not configured; the app will show a notice that the email invite was not sent.
-
-## Gmail email invitation codes
-
-This version sends an email automatically through Gmail/SMTP when a manager or owner adds/updates a project member from the **Project members** panel.
-
-Set these environment variables in Render:
-
-```text
-EMAIL_PROVIDER=gmail
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_REQUIRE_TLS=true
-SMTP_USER=your-gmail-address@gmail.com
-SMTP_PASS=your-gmail-app-password
-EMAIL_FROM=your-gmail-address@gmail.com
-EMAIL_FROM_NAME=PSG and SS Tracking
-APP_URL=your live PSG and SS Tracking URL
-```
-
-Detailed non-coder setup steps are in:
-
-```text
-GMAIL_INVITE_SETUP.md
-```
-
-You do not need a custom domain for Gmail app-password SMTP.
 
 
 ## Latest update

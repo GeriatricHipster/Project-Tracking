@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 
-export default function AuthScreen({ onAuth, pendingInviteCode }) {
+export default function AuthScreen({ onAuth }) {
   const [mode, setMode] = useState('login');
   const [form, setForm] = useState({ name: '', email: 'admin@demo.com', password: 'Construction123!', rememberMe: true });
   const [error, setError] = useState('');
@@ -49,12 +49,6 @@ export default function AuthScreen({ onAuth, pendingInviteCode }) {
             <p>Construction project timelines, live task tracking, and Gantt schedules.</p>
           </div>
         </div>
-
-        {pendingInviteCode && (
-          <div className="notice-box auth-invite-note">
-            You opened a project invitation code. Log in or register first, then PSG and SS Tracking will add you to the project automatically.
-          </div>
-        )}
 
         <div className="auth-tabs" role="tablist" aria-label="Authentication mode">
           <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')} type="button">Login</button>

@@ -1,18 +1,6 @@
-import { useState } from 'react';
-
-function describeNotification(result, baseMessage) {
-  const notification = result?.notification || result?.teams || result?.slack;
-  const code = result?.invite?.formatted_code;
-  if (!notification) return baseMessage;
-  if (notification.sent) {
-    const destination = 'email invitation';
-    return `${baseMessage} ${destination} sent${code ? ` with code ${code}` : ''}.`;
-  }
-  return `${baseMessage} Email invite was not sent: ${notification.error || 'check Gmail/SMTP setup.'}`;
+function describeNotification(_result, baseMessage) {
+  return baseMessage;
 }
-
-const allRoles = ['viewer', 'editor', 'manager', 'owner'];
-
 
 export default function MembersPanel({ currentUser, projectRole, members, canManage, onAddMember, onUpdateMember, onRemoveMember }) {
   const canOwner = projectRole === 'owner';
@@ -74,7 +62,7 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
             {roleOptions.map((role) => <option key={role} value={role}>{role}</option>)}
           </select>
         </label>
-        <p className="form-help">The user must already have a PSG and SS Tracking account. When Gmail/SMTP is set up, an invitation code email is sent after add/update and calls out the assigned email address.</p>
+        <p className="form-help">The user must already have a PSG and SS Tracking account.</p>
         {error && <p className="error-box">{error}</p>}
         {notice && <p className="notice-box">{notice}</p>}
         <button className="primary-button compact" disabled={!canManage || saving}>{saving ? 'Adding...' : 'Add / update member'}</button>

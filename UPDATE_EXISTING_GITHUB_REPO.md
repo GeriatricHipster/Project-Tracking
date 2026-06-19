@@ -6,7 +6,6 @@ Use these steps if you already uploaded an older PSG and SS Tracking version.
 
 This version adds or updates:
 
-- Gmail invitation emails sent from the Project Members add/update workflow
 - Separate invitation-code panel removed from the project screen
 - Project notes section editable by assigned viewers, editors, managers, and owners
 - Viewers can edit project notes only
@@ -32,7 +31,7 @@ This version adds or updates:
 7. Use this commit message:
 
 ```text
-Add Gmail invites notes task dropdowns and larger Gantt
+Remove invitation workflow
 ```
 
 8. Click **Commit changes**.
@@ -52,29 +51,4 @@ Open the app and check:
 - Blueprint drag-and-drop upload inside a project
 - Trade, Vendor, Security Team Member, and PM dropdowns when adding or editing a task
 - Bigger Gantt chart controls: Start, Today, Prev/Next 30 days, Zoom out, Reset zoom, Zoom in
-- Project Members add/update flow sending a Gmail invitation email
 
-## Gmail setup
-
-Open:
-
-```text
-GMAIL_INVITE_SETUP.md
-```
-
-For Gmail email sending, add these environment variables in Render:
-
-```text
-EMAIL_PROVIDER
-SMTP_HOST
-SMTP_PORT
-SMTP_SECURE
-SMTP_REQUIRE_TLS
-SMTP_USER
-SMTP_PASS
-EMAIL_FROM
-EMAIL_FROM_NAME
-APP_URL
-```
-
-You do need `SMTP_PASS` for this version.

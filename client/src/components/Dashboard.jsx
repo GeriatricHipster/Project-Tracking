@@ -16,25 +16,6 @@ const dashboardTabs = [
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const managerRoles = new Set(['owner', 'manager']);
-const dashboardTabStorageKey = 'psg-dashboard-tab';
-
-function readInitialDashboardTab() {
-  if (typeof window === 'undefined') return 'projects';
-  const urlTab = new URLSearchParams(window.location.search).get('tab');
-  if (dashboardTabs.some((tab) => tab.id === urlTab)) return urlTab;
-  const savedTab = window.localStorage.getItem(dashboardTabStorageKey);
-  return dashboardTabs.some((tab) => tab.id === savedTab) ? savedTab : 'projects';
-}
-
-function syncDashboardTab(nextTab) {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(dashboardTabStorageKey, nextTab);
-  } catch {}
-  const params = new URLSearchParams(window.location.search);
-  params.set('tab', nextTab);
-  window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
-}
 
 function titleCase(value) {
   return String(value || '')
@@ -154,14 +135,11 @@ export default function Dashboard({
   onCreateProject,
   onUpdateProject,
   onDeleteProject,
-  onAcceptInvite,
-  inviteNotice,
-  inviteError,
   onRefresh,
   onLogout
 }) {
   const start = todayIso();
-  const [activeTab, setActiveTab] = useState(readInitialDashboardTab);
+  const [activeTab, setActiveTab] = useState('projects');
   const [calendarMonth, setCalendarMonth] = useState(start.slice(0, 7));
   const [searchTerm, setSearchTerm] = useState('');
   const [form, setForm] = useState({
@@ -172,9 +150,6 @@ export default function Dashboard({
     end_date: addDays(start, 90)
   });
   const [error, setError] = useState('');
-  const [inviteCode, setInviteCode] = useState('');
-  const [inviteJoinError, setInviteJoinError] = useState('');
-  const [joiningInvite, setJoiningInvite] = useState(false);
   const [saving, setSaving] = useState(false);
   const [actionProjectId, setActionProjectId] = useState(null);
 
@@ -190,10 +165,6 @@ export default function Dashboard({
       setActiveTab(visibleTabs[0]?.id || 'projects');
     }
   }, [activeTab, visibleTabs]);
-
-  useEffect(() => {
-    syncDashboardTab(activeTab);
-  }, [activeTab]);
 
   const visibleProjects = useMemo(
     () => projects.filter((project) => matchesProjectSearch(project, searchTerm)),
@@ -257,21 +228,6 @@ export default function Dashboard({
       setError(err.message);
     } finally {
       setSaving(false);
-    }
-  }
-
-
-  async function submitInviteCode(event) {
-    event.preventDefault();
-    setInviteJoinError('');
-    setJoiningInvite(true);
-    try {
-      await onAcceptInvite(inviteCode);
-      setInviteCode('');
-    } catch (err) {
-      setInviteJoinError(err.message);
-    } finally {
-      setJoiningInvite(false);
     }
   }
 
@@ -423,21 +379,6 @@ export default function Dashboard({
             {error && <p className="error-box">{error}</p>}
             <button className="primary-button" disabled={saving}>{saving ? 'Creating...' : 'Create project'}</button>
           </form>
-
-          <div className="join-invite-card">
-            <h3>Join with invite code</h3>
-            <p className="muted">Paste a project code from email to add yourself to that project.</p>
-            <form className="stack compact-form" onSubmit={submitInviteCode}>
-              <label>
-                Invite code
-                <input value={inviteCode} onChange={(event) => setInviteCode(event.target.value)} placeholder="ABCD-1234-EF" />
-              </label>
-              {inviteJoinError && <p className="error-box">{inviteJoinError}</p>}
-              <button className="ghost-button compact" disabled={!onAcceptInvite || joiningInvite || !inviteCode.trim()} type="submit">
-                {joiningInvite ? 'Joining...' : 'Join project'}
-              </button>
-            </form>
-          </div>
         </aside>
 
         <section className="panel project-list-panel">
@@ -721,8 +662,6 @@ export default function Dashboard({
         ))}
       </nav>
 
-      {inviteNotice && <p className="notice-box dashboard-error">{inviteNotice}</p>}
-      {inviteError && <p className="error-box dashboard-error">{inviteError}</p>}
       {activeTab !== 'projects' && activeTab !== 'completed' && error && <p className="error-box dashboard-error">{error}</p>}
       {activeTab === 'projects' && renderProjectsTab()}
       {activeTab === 'completed' && renderCompletedTab()}

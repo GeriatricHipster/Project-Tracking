@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import AuthScreen from './components/AuthScreen';
 import Dashboard from './components/Dashboard';
 import ProjectView from './components/ProjectView';
-import ErrorBoundary from './components/ErrorBoundary';
 import SiteBanner from './components/SiteBanner';
 import { api, getToken, setToken } from './lib/api';
 
@@ -16,29 +15,12 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [loadingProjects, setLoadingProjects] = useState(false);
-  const [inviteNotice, setInviteNotice] = useState('');
-  const [inviteError, setInviteError] = useState('');
   const [booting, setBooting] = useState(Boolean(getToken()));
 
   function projectIdFromUrl() {
     const value = new URLSearchParams(window.location.search).get('project');
     const id = Number(value);
     return Number.isInteger(id) && id > 0 ? id : null;
-  }
-
-
-  function inviteCodeFromUrl() {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('invite') || params.get('code') || '';
-  }
-
-  function clearInviteFromUrl() {
-    const params = new URLSearchParams(window.location.search);
-    params.delete('invite');
-    params.delete('code');
-    const query = params.toString();
-    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}`;
-    window.history.replaceState(null, '', nextUrl);
   }
 
   useEffect(() => {
@@ -67,34 +49,7 @@ export default function App() {
       setLoadingProjects(false);
     }
   }
-
-
-  async function acceptInviteCode(code) {
-    const inviteCode = String(code || '').trim();
-    if (!inviteCode) throw new Error('Enter an invitation code first.');
-
-    const data = await api(`/invites/${encodeURIComponent(inviteCode)}/accept`, { method: 'POST' });
-    await loadProjects();
-    setSelectedProjectId(data.project.id);
-    setInviteNotice(`Invitation accepted. You now have ${data.membership.role} access to ${data.project.name}.`);
-    setInviteError('');
-    clearInviteFromUrl();
-    return data;
-  }
-
-  async function routeAfterAuth(nextProjects) {
-    const inviteCode = inviteCodeFromUrl();
-    if (inviteCode) {
-      try {
-        await acceptInviteCode(inviteCode);
-      } catch (err) {
-        setInviteNotice('');
-        setInviteError(`Invitation code could not be accepted: ${err.message}`);
-        clearInviteFromUrl();
-        openProjectFromUrl(nextProjects);
-      }
-      return;
-    }
+  function routeAfterAuth(nextProjects) {
     openProjectFromUrl(nextProjects);
   }
 
@@ -167,17 +122,16 @@ export default function App() {
   }
 
   if (!token || !user) {
-    return <><button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button><ErrorBoundary><AuthScreen onAuth={handleAuth} pendingInviteCode={inviteCodeFromUrl()} /></ErrorBoundary></>;
+    return <><button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button><AuthScreen onAuth={handleAuth} /></>;
   }
 
   if (selectedProjectId) {
-    return <><button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button><ErrorBoundary fallback={<main className="app-page"><SiteBanner /><div className="panel error-fallback"><h2>Project view error</h2><p>The project screen ran into a problem.</p><button className="primary-button" type="button" onClick={() => { setSelectedProjectId(null); loadProjects(); }}>Back to projects</button></div></main>}><ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></ErrorBoundary></>;
+    return <><button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button><ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></>;
   }
 
   return (
     <>
       {themeToggle}
-      <ErrorBoundary fallback={<main className="app-page"><SiteBanner /><div className="panel error-fallback"><h2>Dashboard error</h2><p>The dashboard ran into a problem.</p><button className="primary-button" type="button" onClick={() => window.location.reload()}>Reload dashboard</button></div></main>}>
       <Dashboard
         user={user}
         projects={projects}
@@ -186,13 +140,9 @@ export default function App() {
         onCreateProject={createProject}
         onUpdateProject={updateProject}
         onDeleteProject={deleteProject}
-        onAcceptInvite={acceptInviteCode}
-        inviteNotice={inviteNotice}
-        inviteError={inviteError}
         onRefresh={loadProjects}
         onLogout={logout}
       />
-      </ErrorBoundary>
     </>
   );
 }

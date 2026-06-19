@@ -162,29 +162,3 @@ CCure Operator established
 
 Users with edit access can check or uncheck these items.
 
-## Optional Gmail invitation setup
-
-After the updated app is deployed, you can connect Gmail so project managers and owners automatically send an invitation code by email when they add or update a project member. There is no separate invite-code panel anymore.
-
-Open this file for the plain-English setup steps:
-
-```text
-GMAIL_INVITE_SETUP.md
-```
-
-The main Render keys you need are:
-
-```text
-EMAIL_PROVIDER
-SMTP_HOST
-SMTP_PORT
-SMTP_SECURE
-SMTP_REQUIRE_TLS
-SMTP_USER
-SMTP_PASS
-EMAIL_FROM
-EMAIL_FROM_NAME
-APP_URL
-```
-
-You do need a Gmail App Password for this version.

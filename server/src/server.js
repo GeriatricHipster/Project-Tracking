@@ -1646,7 +1646,6 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
       throw httpError(403, 'Only project owners can add another owner.');
     }
 
-    const project = await selectProjectForInvite(client, projectId);
     const userResult = await client.query('SELECT id, name, email, access_revoked FROM users WHERE email = $1', [email]);
     if (!userResult.rowCount) {
       throw httpError(404, 'That user has not registered yet. Ask them to create an account first, then add them again.');
@@ -1667,19 +1666,6 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
     );
 
     const row = { project_id: projectId, user_id: user.id, role, name: user.name, email: user.email, access_revoked: false };
-    let invite = null;
-    if (inviteRoles.has(role)) {
-      invite = await createInviteCode(client, {
-        projectId,
-        role,
-        maxUses: 1,
-        expiresInDays: Number.isFinite(EMAIL_ASSIGNMENT_INVITE_DAYS) ? EMAIL_ASSIGNMENT_INVITE_DAYS : 7,
-        actorId: req.user.id,
-        targetUserId: user.id,
-        targetEmail: user.email,
-        auditAction: 'member_assignment_invite_code_created'
-      });
-    }
 
     await writeAudit(client, {
       projectId,
@@ -1688,25 +1674,14 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
       entityType: 'project_member',
       entityId: user.id,
       before: beforeMember.rows[0] || null,
-      after: { ...row, invite_id: invite?.id || null }
+      after: row
     });
 
-    return { member: row, project, invite, action };
+    return { member: row };
   });
 
-  const teams = created.invite
-    ? await sendEmailInviteMessage({
-        req,
-        project: created.project,
-        invite: created.invite,
-        actor: req.user,
-        targetUser: created.member,
-        assignmentRole: created.member.role
-      })
-    : { sent: false, mode: 'not_created', error: 'No invitation code was created for owner role.' };
-
   emitProjectChange(projectId, { actorId: req.user.id, message: 'Project member updated.' });
-  res.status(201).json({ member: created.member, invite: publicInvite(req, created.invite), teams, slack: teams });
+  res.status(201).json({ member: created.member });
 }));
 
 app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(async (req, res) => {
@@ -1723,7 +1698,6 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
     ]);
     if (!before.rowCount) throw httpError(404, 'Project member not found.');
 
-    const project = await selectProjectForInvite(client, projectId);
     const targetResult = await client.query('SELECT id, name, email, access_revoked FROM users WHERE id = $1', [targetUserId]);
     if (!targetResult.rowCount) throw httpError(404, 'User not found.');
     const targetUser = targetResult.rows[0];
@@ -1743,19 +1717,6 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
     );
 
     const row = { ...result.rows[0], name: targetUser.name, email: targetUser.email, access_revoked: targetUser.access_revoked };
-    let invite = null;
-    if (!targetUser.access_revoked && inviteRoles.has(role)) {
-      invite = await createInviteCode(client, {
-        projectId,
-        role,
-        maxUses: 1,
-        expiresInDays: Number.isFinite(EMAIL_ASSIGNMENT_INVITE_DAYS) ? EMAIL_ASSIGNMENT_INVITE_DAYS : 7,
-        actorId: req.user.id,
-        targetUserId,
-        targetEmail: targetUser.email,
-        auditAction: 'member_assignment_invite_code_created'
-      });
-    }
 
     await writeAudit(client, {
       projectId,
@@ -1764,25 +1725,14 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
       entityType: 'project_member',
       entityId: targetUserId,
       before: before.rows[0],
-      after: { ...row, invite_id: invite?.id || null }
+      after: row
     });
 
-    return { member: row, project, invite };
+    return { member: row };
   });
 
-  const teams = updated.invite
-    ? await sendEmailInviteMessage({
-        req,
-        project: updated.project,
-        invite: updated.invite,
-        actor: req.user,
-        targetUser: updated.member,
-        assignmentRole: updated.member.role
-      })
-    : { sent: false, mode: 'not_created', error: 'No invitation code was created for owner role or a revoked user.' };
-
   emitProjectChange(projectId, { actorId: req.user.id, message: 'Project member role changed.' });
-  res.json({ member: updated.member, invite: publicInvite(req, updated.invite), teams, slack: teams });
+  res.json({ member: updated.member });
 }));
 
 app.delete('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(async (req, res) => {
@@ -1821,189 +1771,6 @@ app.delete('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler
 }));
 
 
-app.post('/api/projects/:projectId/email-invites', requireAuth, asyncHandler(async (req, res) => {
-  const projectId = parseId(req.params.projectId, 'projectId');
-  const role = requireEnum(req.body.role || 'viewer', inviteRoles, 'invite role');
-  const expiresInDays = clampInteger(req.body.expires_in_days ?? req.body.expires_days, {
-    label: 'expires_in_days',
-    defaultValue: 7,
-    min: 1,
-    max: 30
-  });
-  const maxUses = clampInteger(req.body.max_uses, {
-    label: 'max_uses',
-    defaultValue: 10,
-    min: 1,
-    max: 100
-  });
-
-  const created = await tx(async (client) => {
-    const membership = await requireProjectMembership(projectId, req.user.id, 'manager', client);
-    if (role === 'manager' && membership.role !== 'owner') {
-      throw httpError(403, 'Only project owners can create manager invitation codes.');
-    }
-
-    const projectResult = await client.query(
-      `SELECT id, name, location, description, project_status,
-        to_char(start_date, 'YYYY-MM-DD') AS start_date,
-        to_char(end_date, 'YYYY-MM-DD') AS end_date
-       FROM projects
-       WHERE id = $1`,
-      [projectId]
-    );
-    if (!projectResult.rowCount) throw httpError(404, 'Project not found.');
-
-    let invite;
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const code = generateInviteCode();
-      const insertResult = await client.query(
-        `INSERT INTO project_invite_codes
-          (project_id, code, role, max_uses, expires_at, created_by)
-         VALUES ($1, $2, $3, $4, now() + ($5::int * interval '1 day'), $6)
-         ON CONFLICT (code) DO NOTHING
-         RETURNING id, project_id, code, role, max_uses, uses_count, expires_at, created_by, created_at`,
-        [projectId, code, role, maxUses, expiresInDays, req.user.id]
-      );
-      if (insertResult.rowCount) {
-        invite = insertResult.rows[0];
-        break;
-      }
-    }
-
-    if (!invite) throw httpError(500, 'Could not create a unique invitation code. Please try again.');
-
-    await writeAudit(client, {
-      projectId,
-      userId: req.user.id,
-      action: 'email_invite_code_created',
-      entityType: 'project_invite_code',
-      entityId: invite.id,
-      after: { ...invite, formatted_code: formatInviteCode(invite.code) }
-    });
-
-    return { project: projectResult.rows[0], invite };
-  });
-
-  const notification = await sendEmailInviteMessage({ req, project: created.project, invite: created.invite, actor: req.user });
-
-  const responseInvite = {
-    ...created.invite,
-    formatted_code: formatInviteCode(created.invite.code),
-    invite_url: buildInviteUrl(req, created.invite.code)
-  };
-
-  emitProjectChange(projectId, {
-    actorId: req.user.id,
-    message: notification.sent ? 'Email invitation code sent.' : 'Invitation code created, but email did not send.'
-  });
-
-  res.status(teams.sent ? 201 : 202).json({ invite: responseInvite, project: created.project, teams, slack: teams });
-}));
-
-app.post('/api/invites/:code/accept', requireAuth, asyncHandler(async (req, res) => {
-  const code = normalizeInviteCode(req.params.code);
-
-  const result = await tx(async (client) => {
-    const inviteResult = await client.query(
-      `SELECT
-         pic.id,
-         pic.project_id,
-         pic.code,
-         pic.role,
-         pic.max_uses,
-         pic.uses_count,
-         pic.expires_at,
-         pic.revoked_at,
-         pic.target_user_id,
-         pic.target_email,
-         p.name,
-         p.location,
-         p.project_status,
-         to_char(p.start_date, 'YYYY-MM-DD') AS start_date,
-         to_char(p.end_date, 'YYYY-MM-DD') AS end_date
-       FROM project_invite_codes pic
-       JOIN projects p ON p.id = pic.project_id
-       WHERE pic.code = $1
-       FOR UPDATE OF pic`,
-      [code]
-    );
-
-    if (!inviteResult.rowCount) throw httpError(404, 'Invitation code not found. Check the code and try again.');
-    const invite = inviteResult.rows[0];
-
-    if (invite.revoked_at) throw httpError(400, 'This invitation code has been revoked.');
-    if (invite.target_user_id && Number(invite.target_user_id) !== Number(req.user.id)) {
-      throw httpError(403, 'This invitation code was issued to a different user.');
-    }
-    if (invite.target_email && normalizeEmail(invite.target_email) !== normalizeEmail(req.user.email)) {
-      throw httpError(403, 'This invitation code was issued to a different email address.');
-    }
-    if (invite.expires_at && new Date(invite.expires_at).getTime() < Date.now()) {
-      throw httpError(400, 'This invitation code has expired. Ask a project manager for a new one.');
-    }
-    if (Number(invite.uses_count) >= Number(invite.max_uses)) {
-      throw httpError(400, 'This invitation code has already been used the maximum number of times.');
-    }
-
-    const currentMembership = await client.query(
-      'SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2',
-      [invite.project_id, req.user.id]
-    );
-
-    let finalRole = invite.role;
-    let alreadyMember = false;
-    if (currentMembership.rowCount) {
-      alreadyMember = true;
-      finalRole = higherProjectRole(currentMembership.rows[0].role, invite.role);
-      if (finalRole !== currentMembership.rows[0].role) {
-        await client.query(
-          'UPDATE project_members SET role = $1 WHERE project_id = $2 AND user_id = $3',
-          [finalRole, invite.project_id, req.user.id]
-        );
-      }
-    } else {
-      await client.query(
-        'INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3)',
-        [invite.project_id, req.user.id, invite.role]
-      );
-    }
-
-    if (!alreadyMember || invite.target_user_id) {
-      await client.query('UPDATE project_invite_codes SET uses_count = uses_count + 1 WHERE id = $1', [invite.id]);
-    }
-
-    await writeAudit(client, {
-      projectId: invite.project_id,
-      userId: req.user.id,
-      action: 'invite_code_accepted',
-      entityType: 'project_invite_code',
-      entityId: invite.id,
-      after: {
-        invite_id: invite.id,
-        code: invite.code,
-        role: finalRole,
-        already_member: alreadyMember,
-        accepted_by: req.user.id
-      }
-    });
-
-    return {
-      project: {
-        id: invite.project_id,
-        name: invite.name,
-        location: invite.location,
-        project_status: invite.project_status,
-        start_date: invite.start_date,
-        end_date: invite.end_date,
-        role: finalRole
-      },
-      membership: { role: finalRole, already_member: alreadyMember }
-    };
-  });
-
-  emitProjectChange(result.project.id, { actorId: req.user.id, message: `${req.user.name} joined from an invitation code.` });
-  res.json(result);
-}));
 
 
 app.patch('/api/projects/:projectId/checklist/:itemKey', requireAuth, asyncHandler(async (req, res) => {
