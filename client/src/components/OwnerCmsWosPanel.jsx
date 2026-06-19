@@ -117,15 +117,27 @@ const SpreadsheetCell = memo(function SpreadsheetCell({ sheetKey, rowIndex, colu
   );
 });
 
-function FilterCell({ column, value, onChange }) {
+function FilterCell({ sheetKey, column, value, onChange }) {
+  const listId = column.type === 'select' ? `${sheetKey}-${column.key}-filter-options` : null;
+
   return (
     <th className="cms-grid-filter-cell" style={{ minWidth: column.width, width: column.width }}>
       <input
         className="cms-grid-filter-input"
-        placeholder={`Filter ${column.label}`}
+        autoComplete="off"
+        inputMode={column.type === 'date' ? 'numeric' : 'search'}
+        list={listId || undefined}
+        placeholder={column.type === 'select' ? `Search ${column.label}` : `Filter ${column.label}`}
         value={value || ''}
         onChange={(event) => onChange(event.target.value)}
       />
+      {listId && (
+        <datalist id={listId}>
+          {column.options.map((option) => (
+            <option key={option} value={option} />
+          ))}
+        </datalist>
+      )}
     </th>
   );
 }
@@ -144,13 +156,14 @@ function GridHeaderRow() {
   );
 }
 
-function GridFilterRow({ filters, onFilterChange }) {
+function GridFilterRow({ sheetKey, filters, onFilterChange }) {
   return (
     <tr className="cms-grid-filter-row">
       <th className="cms-grid-corner cms-grid-filter-corner">Filter</th>
       {ownerCmsColumns.map((column) => (
         <FilterCell
           key={column.key}
+          sheetKey={sheetKey}
           column={column}
           value={filters[column.key]}
           onChange={(nextValue) => onFilterChange(column.key, nextValue)}
@@ -180,7 +193,7 @@ function ActiveSheetGrid({ sheetKey, rows, filters, savingCell, onCellChange, on
       <table className="cms-grid-table cms-grid-table-sticky">
         <thead>
           <GridHeaderRow />
-          <GridFilterRow filters={filters} onFilterChange={onFilterChange} />
+          <GridFilterRow sheetKey={sheetKey} filters={filters} onFilterChange={onFilterChange} />
         </thead>
         <tbody>
           {visibleRows.map(({ row, rowIndex }) => (
@@ -239,7 +252,7 @@ function ArchivedSheetGrid({ sheetKey, archivedRows, filters, savingCell, onRest
       <table className="cms-grid-table cms-grid-table-sticky archived-grid">
         <thead>
           <GridHeaderRow />
-          <GridFilterRow filters={filters} onFilterChange={onFilterChange} />
+          <GridFilterRow sheetKey={sheetKey} filters={filters} onFilterChange={onFilterChange} />
         </thead>
         <tbody>
           {visibleRows.map(({ row, archiveIndex }) => (
