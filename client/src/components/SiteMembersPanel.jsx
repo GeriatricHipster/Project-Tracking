@@ -36,14 +36,15 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
   }, []);
 
   function canChangeUser(user) {
-    if (!currentIsOwner) return false;
     if (user.id === currentUser?.id) return false;
-    return true;
+    if (currentIsOwner) return true;
+    return user.site_role !== 'owner';
   }
 
   function allowedRoleOptions(user) {
     if (currentIsOwner) return siteRoles;
-    return [user.site_role];
+    if (user.site_role === 'owner') return ['owner'];
+    return siteRoles.filter((role) => role !== 'owner');
   }
 
   async function updateUser(user, payload) {
@@ -80,7 +81,7 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
         <div className="panel-heading">
           <div>
             <h2>Site member management</h2>
-            <p>Owners can review users, revoke access, delete accounts, and change site role. Managers can view the list only.</p>
+            <p>Managers and owners can review users, revoke access, delete accounts, and change site role.</p>
           </div>
           <button className="ghost-button compact" onClick={loadUsers} type="button">Refresh users</button>
         </div>
@@ -108,40 +109,34 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
                       <p>{siteUser.project_count} assigned project{siteUser.project_count === 1 ? '' : 's'}</p>
                     </div>
 
-                    {currentIsOwner ? (
-                      <div className="site-user-actions">
-                        <label>
-                          Site role
-                          <select
-                            disabled={!canChange || busy}
-                            value={siteUser.site_role}
-                            onChange={(event) => updateUser(siteUser, { site_role: event.target.value })}
-                          >
-                            {allowedRoleOptions(siteUser).map((role) => <option key={role} value={role}>{titleCase(role)}</option>)}
-                          </select>
-                        </label>
-                        <button
-                          className={siteUser.access_revoked ? 'ghost-button compact' : 'danger-button compact'}
+                    <div className="site-user-actions">
+                      <label>
+                        Site role
+                        <select
                           disabled={!canChange || busy}
-                          onClick={() => updateUser(siteUser, { access_revoked: !siteUser.access_revoked })}
-                          type="button"
+                          value={siteUser.site_role}
+                          onChange={(event) => updateUser(siteUser, { site_role: event.target.value })}
                         >
-                          {siteUser.access_revoked ? 'Restore access' : 'Revoke access'}
-                        </button>
-                        <button
-                          className="danger-button compact"
-                          disabled={!canChange || busy}
-                          onClick={() => deleteUser(siteUser)}
-                          type="button"
-                        >
-                          Delete user
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="site-user-actions read-only">
-                        <p className="muted">Only owners can change site roles, revoke access, or delete users.</p>
-                      </div>
-                    )}
+                          {allowedRoleOptions(siteUser).map((role) => <option key={role} value={role}>{titleCase(role)}</option>)}
+                        </select>
+                      </label>
+                      <button
+                        className={siteUser.access_revoked ? 'ghost-button compact' : 'danger-button compact'}
+                        disabled={!canChange || busy}
+                        onClick={() => updateUser(siteUser, { access_revoked: !siteUser.access_revoked })}
+                        type="button"
+                      >
+                        {siteUser.access_revoked ? 'Restore access' : 'Revoke access'}
+                      </button>
+                      <button
+                        className="danger-button compact"
+                        disabled={!canChange || busy}
+                        onClick={() => deleteUser(siteUser)}
+                        type="button"
+                      >
+                        Delete user
+                      </button>
+                    </div>
                   </div>
 
                   <div className="assigned-project-list site-projects">

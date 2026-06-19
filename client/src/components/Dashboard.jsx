@@ -8,6 +8,7 @@ import SiteBanner from './SiteBanner';
 const dashboardTabs = [
   { id: 'projects', label: 'Active projects' },
   { id: 'completed', label: 'Completed' },
+  { id: 'archive', label: 'Archive' },
   { id: 'assignments', label: 'Projects' },
   { id: 'calendar', label: 'Calendar overview' },
   { id: 'site-members', label: 'Site members', managersOnly: true },
@@ -38,7 +39,10 @@ function getScheduleStatus(project) {
 }
 
 function getProjectStatus(project) {
-  return getLifecycleStatus(project) === 'completed' ? 'completed' : getScheduleStatus(project);
+  const lifecycle = getLifecycleStatus(project);
+  if (lifecycle === 'archived') return 'archived';
+  if (lifecycle === 'completed') return 'completed';
+  return getScheduleStatus(project);
 }
 
 function monthParts(monthValue) {
@@ -172,12 +176,17 @@ export default function Dashboard({
   );
 
   const activeProjects = useMemo(
-    () => visibleProjects.filter((project) => getLifecycleStatus(project) !== 'completed'),
+    () => visibleProjects.filter((project) => getLifecycleStatus(project) === 'active'),
     [visibleProjects]
   );
 
   const completedProjects = useMemo(
     () => visibleProjects.filter((project) => getLifecycleStatus(project) === 'completed'),
+    [visibleProjects]
+  );
+
+  const archivedProjects = useMemo(
+    () => visibleProjects.filter((project) => getLifecycleStatus(project) === 'archived'),
     [visibleProjects]
   );
 
@@ -191,13 +200,15 @@ export default function Dashboard({
         summary.total += 1;
         if (lifecycle === 'completed') {
           summary.completed += 1;
+        } else if (lifecycle === 'archived') {
+          summary.archived += 1;
         } else {
           summary.active += 1;
           summary[status] = (summary[status] || 0) + 1;
         }
         return summary;
       },
-      { total: 0, active: 0, completed: 0, not_started: 0, in_progress: 0, blocked: 0, complete: 0 }
+      { total: 0, active: 0, completed: 0, archived: 0, not_started: 0, in_progress: 0, blocked: 0, complete: 0 }
     );
   }, [visibleProjects]);
 
@@ -232,7 +243,7 @@ export default function Dashboard({
   }
 
   async function moveProject(project, nextStatus) {
-    const label = nextStatus === 'completed' ? 'move this project to Completed' : 'move this project back to Active Projects';
+    const label = nextStatus === 'completed' ? 'move this project to Completed' : nextStatus === 'archived' ? 'archive this project' : 'move this project back to Active Projects';
     const confirmed = window.confirm(`Are you sure you want to ${label}?`);
     if (!confirmed) return;
 
@@ -240,7 +251,7 @@ export default function Dashboard({
     setActionProjectId(project.id);
     try {
       await onUpdateProject(project.id, { project_status: nextStatus });
-      setActiveTab(nextStatus === 'completed' ? 'completed' : 'projects');
+      setActiveTab(nextStatus === 'completed' ? 'completed' : nextStatus === 'archived' ? 'archive' : 'projects');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -280,9 +291,14 @@ export default function Dashboard({
           </button>
         )}
         {canManage && lifecycle === 'completed' && (
-          <button className="ghost-button compact" disabled={busy} onClick={() => moveProject(project, 'active')} type="button">
-            {busy ? 'Saving...' : 'Move back to active'}
-          </button>
+          <>
+            <button className="ghost-button compact" disabled={busy} onClick={() => moveProject(project, 'archived')} type="button">
+              {busy ? 'Saving...' : 'Archive now'}
+            </button>
+            <button className="ghost-button compact" disabled={busy} onClick={() => moveProject(project, 'active')} type="button">
+              {busy ? 'Saving...' : 'Move back to active'}
+            </button>
+          </>
         )}
         {canDelete && (
           <button className="danger-button compact" disabled={busy} onClick={() => deleteProject(project)} type="button">
@@ -308,6 +324,7 @@ export default function Dashboard({
                   <span className={`role-pill role-${project.role}`}>{titleCase(project.role)}</span>
                   <span className={`status-pill status-${status}`}>{titleCase(status)}</span>
                   {lifecycle === 'completed' && <span className="archive-pill">Completed tab</span>}
+                  {lifecycle === 'archived' && <span className="archive-pill">Archived tab</span>}
                 </div>
                 <p className="muted">{project.location || 'No location set'}</p>
                 <p>{project.description || 'No project description yet.'}</p>
@@ -414,6 +431,27 @@ export default function Dashboard({
             completedProjects,
             'No completed projects yet',
             'Use Move to completed on an active project when it is ready to file away.'
+          )}
+        </section>
+      </section>
+    );
+  }
+
+  function renderArchiveTab() {
+    return (
+      <section className="dashboard-stack">
+        <section className="panel project-list-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Archived projects</h2>
+              <p>{loading ? 'Loading archived projects...' : `${archivedProjects.length} archived project${archivedProjects.length === 1 ? '' : 's'}`}</p>
+            </div>
+          </div>
+          {error && <p className="error-box dashboard-error">{error}</p>}
+          {renderProjectCards(
+            archivedProjects,
+            'No archived projects yet',
+            'Projects automatically move here 30 days after they are completed.'
           )}
         </section>
       </section>
@@ -556,6 +594,10 @@ export default function Dashboard({
             <span>Completed</span>
             <strong>{statusSummary.completed}</strong>
           </article>
+          <article className="metric-card panel">
+            <span>Archived</span>
+            <strong>{statusSummary.archived}</strong>
+          </article>
         </section>
 
         <section className="panel calendar-panel">
@@ -665,6 +707,7 @@ export default function Dashboard({
       {activeTab !== 'projects' && activeTab !== 'completed' && error && <p className="error-box dashboard-error">{error}</p>}
       {activeTab === 'projects' && renderProjectsTab()}
       {activeTab === 'completed' && renderCompletedTab()}
+      {activeTab === 'archive' && renderArchiveTab()}
       {activeTab === 'assignments' && renderAssignmentsTab()}
       {activeTab === 'calendar' && renderCalendarTab()}
       {activeTab === 'site-members' && canManageSite && <SiteMembersPanel currentUser={user} onOpenProject={onOpenProject} />}

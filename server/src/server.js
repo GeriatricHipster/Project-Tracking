@@ -42,7 +42,7 @@ const roleRank = {
 };
 
 const statuses = new Set(['not_started', 'in_progress', 'blocked', 'complete']);
-const projectLifecycleStatuses = new Set(['active', 'completed']);
+const projectLifecycleStatuses = new Set(['active', 'completed', 'archived']);
 const priorities = new Set(['low', 'normal', 'high', 'critical']);
 const roles = new Set(['owner', 'manager', 'editor', 'viewer']);
 const inviteRoles = new Set(['manager', 'editor', 'viewer']);
@@ -569,8 +569,8 @@ function requireSiteOwner(user) {
   return siteRole;
 }
 
-const OWNER_CMS_ROW_COUNT = 60;
-const OWNER_CMS_COLUMN_COUNT = 19;
+const OWNER_CMS_ROW_COUNT = 150;
+const OWNER_CMS_COLUMN_COUNT = 20;
 
 function buildBlankOwnerCmsGrid() {
   return Array.from({ length: OWNER_CMS_ROW_COUNT }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
@@ -590,6 +590,50 @@ function normalizeOwnerCmsGrid(cells) {
   }
 
   return blank;
+}
+
+function normalizeOwnerCmsArchivedRows(rows) {
+  if (!Array.isArray(rows)) return [];
+
+  return rows
+    .map((row, index) => {
+      if (Array.isArray(row)) {
+        return {
+          row_number: index + 1,
+          archived_at: null,
+          cells: normalizeOwnerCmsGrid([row])[0]
+        };
+      }
+
+      if (row && typeof row === 'object') {
+        return {
+          row_number: Number.isInteger(Number(row.row_number)) ? Number(row.row_number) : index + 1,
+          archived_at: row.archived_at || null,
+          cells: normalizeOwnerCmsGrid([Array.isArray(row.cells) ? row.cells : []])[0]
+        };
+      }
+
+      return {
+        row_number: index + 1,
+        archived_at: null,
+        cells: Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => '')
+      };
+    })
+    .filter((row) => row.cells.some((value) => String(value || '').trim().length > 0));
+}
+
+function rowHasContent(row) {
+  return Array.isArray(row) && row.some((value) => String(value || '').trim().length > 0);
+}
+
+async function archiveStaleCompletedProjects(db = { query }) {
+  await db.query(
+    `UPDATE projects
+     SET project_status = 'archived',
+         archived_at = COALESCE(archived_at, now())
+     WHERE project_status = 'completed'
+       AND COALESCE(completed_at, updated_at, created_at) <= now() - interval '30 days'`
+  );
 }
 
 function requireOwnerCmsSheet(sheetKey) {
@@ -815,6 +859,7 @@ async function verifyParentTask(db, projectId, parentTaskId, taskId = null) {
 }
 
 async function loadProjectPayload(projectId, userId) {
+  await archiveStaleCompletedProjects();
   const access = await requireProjectAccess(projectId, userId);
 
   const projectResult = await query(
@@ -1066,23 +1111,25 @@ app.get('/api/owner/cms-wos', requireAuth, asyncHandler(async (req, res) => {
 
   const result = await tx(async (client) => {
     await client.query(
-      `INSERT INTO owner_cms_work_orders (sheet_key, sheet_name, cells)
+      `INSERT INTO owner_cms_work_orders (sheet_key, sheet_name, cells, archived_cells)
        VALUES
-         ('kurts_cms_wos', 'Kurts CMS WOs', '[]'::jsonb),
-         ('austins_cms_wos', 'Austins CMS WOs', '[]'::jsonb)
+         ('kurts_cms_wos', 'Kurts CMS WOs', '[]'::jsonb, '[]'::jsonb),
+         ('austins_cms_wos', 'Austins CMS WOs', '[]'::jsonb, '[]'::jsonb)
        ON CONFLICT (sheet_key) DO UPDATE SET
-         sheet_name = EXCLUDED.sheet_name`
+         sheet_name = EXCLUDED.sheet_name,
+         archived_cells = COALESCE(owner_cms_work_orders.archived_cells, '[]'::jsonb)`
     );
 
     const rows = await client.query(
-      `SELECT sheet_key, sheet_name, cells, created_at, updated_at
+      `SELECT sheet_key, sheet_name, cells, archived_cells, created_at, updated_at
        FROM owner_cms_work_orders
        ORDER BY sheet_name ASC`
     );
 
     return rows.rows.map((sheet) => ({
       ...sheet,
-      cells: normalizeOwnerCmsGrid(sheet.cells)
+      cells: normalizeOwnerCmsGrid(sheet.cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(sheet.archived_cells)
     }));
   });
 
@@ -1108,25 +1155,167 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
 
   const updated = await tx(async (client) => {
     const current = await client.query(
-      'SELECT sheet_key, sheet_name, cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
       [sheet.sheet_key]
     );
     if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
 
     const normalized = normalizeOwnerCmsGrid(current.rows[0].cells);
     normalized[rowIndex][colIndex] = cellValue;
+    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
 
     const saveResult = await client.query(
       `UPDATE owner_cms_work_orders
-       SET cells = $1
-       WHERE sheet_key = $2
-       RETURNING sheet_key, sheet_name, cells, created_at, updated_at`,
-      [JSON.stringify(normalized), sheet.sheet_key]
+       SET cells = $1,
+           archived_cells = $2
+       WHERE sheet_key = $3
+       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
+      [JSON.stringify(normalized), JSON.stringify(archivedRows), sheet.sheet_key]
     );
 
     return {
       ...saveResult.rows[0],
-      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells)
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
+    };
+  });
+
+  res.json({ sheet: updated });
+}));
+
+app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/archive', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
+  const rowIndex = clampInteger(req.params.rowIndex, {
+    label: 'rowIndex',
+    defaultValue: 0,
+    min: 0,
+    max: OWNER_CMS_ROW_COUNT - 1
+  });
+
+  const updated = await tx(async (client) => {
+    const current = await client.query(
+      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      [sheet.sheet_key]
+    );
+    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
+
+    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
+    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
+    const row = activeRows[rowIndex];
+    if (!row) throw httpError(404, 'Row not found.');
+
+    archivedRows.unshift({
+      row_number: rowIndex + 1,
+      archived_at: new Date().toISOString(),
+      cells: [...row]
+    });
+    activeRows[rowIndex] = Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => '');
+
+    const saveResult = await client.query(
+      `UPDATE owner_cms_work_orders
+       SET cells = $1,
+           archived_cells = $2
+       WHERE sheet_key = $3
+       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
+      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
+    );
+
+    return {
+      ...saveResult.rows[0],
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
+    };
+  });
+
+  res.json({ sheet: updated });
+}));
+
+app.post('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex/restore', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
+  const archiveIndex = clampInteger(req.params.archiveIndex, {
+    label: 'archiveIndex',
+    defaultValue: 0,
+    min: 0,
+    max: 999999
+  });
+
+  const updated = await tx(async (client) => {
+    const current = await client.query(
+      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      [sheet.sheet_key]
+    );
+    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
+
+    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
+    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
+    const archivedRow = archivedRows[archiveIndex];
+    if (!archivedRow) throw httpError(404, 'Archived row not found.');
+
+    let targetIndex = archivedRow.row_number ? Number(archivedRow.row_number) - 1 : activeRows.findIndex((row) => !rowHasContent(row));
+    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= OWNER_CMS_ROW_COUNT || rowHasContent(activeRows[targetIndex])) {
+      targetIndex = activeRows.findIndex((row) => !rowHasContent(row));
+    }
+    if (targetIndex < 0) throw httpError(400, 'No empty rows are available to restore this entry.');
+
+    activeRows[targetIndex] = [...archivedRow.cells];
+    archivedRows.splice(archiveIndex, 1);
+
+    const saveResult = await client.query(
+      `UPDATE owner_cms_work_orders
+       SET cells = $1,
+           archived_cells = $2
+       WHERE sheet_key = $3
+       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
+      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
+    );
+
+    return {
+      ...saveResult.rows[0],
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
+    };
+  });
+
+  res.json({ sheet: updated });
+}));
+
+app.delete('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
+  const archiveIndex = clampInteger(req.params.archiveIndex, {
+    label: 'archiveIndex',
+    defaultValue: 0,
+    min: 0,
+    max: 999999
+  });
+
+  const updated = await tx(async (client) => {
+    const current = await client.query(
+      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      [sheet.sheet_key]
+    );
+    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
+
+    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
+    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
+    if (!archivedRows[archiveIndex]) throw httpError(404, 'Archived row not found.');
+    archivedRows.splice(archiveIndex, 1);
+
+    const saveResult = await client.query(
+      `UPDATE owner_cms_work_orders
+       SET cells = $1,
+           archived_cells = $2
+       WHERE sheet_key = $3
+       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
+      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
+    );
+
+    return {
+      ...saveResult.rows[0],
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
     };
   });
 
@@ -1134,6 +1323,7 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
 }));
 
 app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
+  await archiveStaleCompletedProjects();
   const result = await query(
     `WITH portfolio_access AS (
        SELECT (
@@ -1232,6 +1422,7 @@ app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
      SELECT
        project_rows.*,
        CASE
+         WHEN project_status = 'archived' THEN 'archived'
          WHEN project_status = 'completed' THEN 'completed'
          ELSE schedule_status
        END AS status
@@ -1293,7 +1484,7 @@ app.get('/api/site/users', requireAuth, asyncHandler(async (req, res) => {
 
 app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) => {
   const targetUserId = parseId(req.params.userId, 'userId');
-  requireSiteOwner(req.user);
+  const actorRole = requireSiteManagement(req.user);
 
   const updatedUser = await tx(async (client) => {
     const targetResult = await client.query(
@@ -1312,6 +1503,7 @@ app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) 
       nextRevoked = normalizeBoolean(req.body.access_revoked ?? req.body.revoked, targetUser.access_revoked);
     }
 
+    ensureSiteActorCanManageTarget(actorRole, targetUser, nextRole);
     if (targetUserId === req.user.id && nextRevoked === true) {
       throw httpError(400, 'You cannot revoke your own access.');
     }
@@ -1365,7 +1557,7 @@ app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) 
 
 app.delete('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) => {
   const targetUserId = parseId(req.params.userId, 'userId');
-  requireSiteOwner(req.user);
+  const actorRole = requireSiteManagement(req.user);
 
   await tx(async (client) => {
     const targetResult = await client.query(
@@ -1376,6 +1568,7 @@ app.delete('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res)
     const targetUser = targetResult.rows[0];
 
     if (targetUserId === req.user.id) throw httpError(400, 'You cannot delete your own user account.');
+    ensureSiteActorCanManageTarget(actorRole, targetUser);
     await ensureLastSiteOwnerSafe(client, targetUserId, { deleting: true });
     await ensureNotLastProjectOwner(client, targetUserId);
 
@@ -1474,8 +1667,18 @@ app.patch('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res)
     }
     if (req.body.project_status !== undefined || req.body.lifecycle_status !== undefined) {
       const requestedStatus = req.body.project_status !== undefined ? req.body.project_status : req.body.lifecycle_status;
-      values.push(requireEnum(requestedStatus, projectLifecycleStatuses, 'project_status'));
+      const nextStatus = requireEnum(requestedStatus, projectLifecycleStatuses, 'project_status');
+      values.push(nextStatus);
       sets.push(`project_status = $${values.length}`);
+      if (nextStatus === 'completed') {
+        sets.push('completed_at = COALESCE(completed_at, now())');
+        sets.push('archived_at = NULL');
+      } else if (nextStatus === 'active') {
+        sets.push('completed_at = NULL');
+        sets.push('archived_at = NULL');
+      } else if (nextStatus === 'archived') {
+        sets.push('archived_at = COALESCE(archived_at, now())');
+      }
     }
     if (req.body.start_date !== undefined) {
       values.push(nextStart);
