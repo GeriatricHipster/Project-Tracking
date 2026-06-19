@@ -472,6 +472,13 @@ function normalizeOptionalId(value, label) {
   return parseId(value, label);
 }
 
+function normalizeAssignedToValue(value, partial = false) {
+  if (partial && value === undefined) return undefined;
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  return text.length ? text : null;
+}
+
 function signToken(user) {
   return jwt.sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
 }
@@ -855,6 +862,33 @@ async function verifyAssignee(db, projectId, assigneeId) {
   if (!member.rowCount) throw httpError(400, 'Assigned user must be a project member.');
 }
 
+async function resolveTaskAssigneeId(db, projectId, assigneeValue) {
+  if (assigneeValue === undefined) return undefined;
+  if (assigneeValue === null || assigneeValue === '') return null;
+
+  const text = String(assigneeValue).trim();
+  if (!text) return null;
+
+  if (/^\d+$/.test(text)) {
+    const assigneeId = parseId(text, 'assigned_to');
+    await verifyAssignee(db, projectId, assigneeId);
+    return assigneeId;
+  }
+
+  const byName = await db.query(
+    `SELECT pm.user_id
+     FROM project_members pm
+     JOIN users u ON u.id = pm.user_id
+     WHERE pm.project_id = $1 AND lower(u.name) = lower($2)
+     ORDER BY CASE pm.role WHEN 'owner' THEN 1 WHEN 'manager' THEN 2 WHEN 'editor' THEN 3 ELSE 4 END, u.name
+     LIMIT 1`,
+    [projectId, text]
+  );
+
+  if (byName.rowCount) return byName.rows[0].user_id;
+  return null;
+}
+
 async function verifyParentTask(db, projectId, parentTaskId, taskId = null) {
   if (!parentTaskId) return;
   if (taskId && parentTaskId === taskId) throw httpError(400, 'A task cannot be its own parent.');
@@ -999,7 +1033,7 @@ function buildTaskInput(body, partial = false) {
   if (!partial || body.vendor_secondary !== undefined) input.vendor_secondary = normalizeVendor(body.vendor_secondary, partial);
   if (!partial || body.security_team_member !== undefined) input.security_team_member = normalizeTaskChoice(body.security_team_member, securityTeamMembers, 'security_team_member', partial);
   if (!partial || body.pm !== undefined) input.pm = normalizeTaskChoice(body.pm, projectManagers, 'pm', partial);
-  if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeOptionalId(body.assigned_to, 'assigned_to');
+  if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeAssignedToValue(body.assigned_to, partial);
   if (!partial || body.assignee_secondary !== undefined) input.assignee_secondary = cleanText(body.assignee_secondary);
   if (!partial || body.assignee_tertiary !== undefined) input.assignee_tertiary = cleanText(body.assignee_tertiary);
   if (!partial || body.assignee_quaternary !== undefined) input.assignee_quaternary = cleanText(body.assignee_quaternary);
@@ -2122,7 +2156,7 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
 
   const task = await tx(async (client) => {
     await requireProjectMembership(projectId, req.user.id, 'editor', client);
-    await verifyAssignee(client, projectId, input.assigned_to);
+    input.assigned_to = await resolveTaskAssigneeId(client, projectId, input.assigned_to);
     await verifyParentTask(client, projectId, input.parent_task_id);
 
     let sortOrder = input.sort_order;
@@ -2195,7 +2229,7 @@ app.patch('/api/tasks/:taskId', requireAuth, asyncHandler(async (req, res) => {
     const nextEnd = input.end_date !== undefined ? input.end_date : before.end_date;
     ensureDateOrder(nextStart, nextEnd);
 
-    await verifyAssignee(client, before.project_id, input.assigned_to);
+    input.assigned_to = await resolveTaskAssigneeId(client, before.project_id, input.assigned_to);
     await verifyParentTask(client, before.project_id, input.parent_task_id, taskId);
 
     const values = [];

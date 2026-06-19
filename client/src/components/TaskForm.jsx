@@ -136,7 +136,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         vendor: editingTask.vendor || '',
         vendor_secondary: editingTask.vendor_secondary || '',
         pm: editingTask.pm || '',
-        assigned_to: editingTask.assigned_to ? String(editingTask.assigned_to) : '',
+        assigned_to: editingTask.assigned_to || '',
         assignee_secondary: editingTask.assignee_secondary || '',
         assignee_tertiary: editingTask.assignee_tertiary || '',
         assignee_quaternary: editingTask.assignee_quaternary || '',
@@ -160,18 +160,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     [tasks, editingTask]
   );
 
-  const memberAssigneeOptions = useMemo(
-    () => members
-      .filter((member) => member?.user_id !== undefined && member?.user_id !== null)
-      .map((member) => ({
-        value: String(member.user_id),
-        label: member.name || member.email || `User ${member.user_id}`
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label)),
-    [members]
-  );
-
-  const presetAssigneeOptions = useMemo(
+  const assigneeOptions = useMemo(
     () => sortUnique([
       ...members.map((member) => member.name).filter(Boolean),
       ...presetAssigneeNames
@@ -194,7 +183,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         vendor: form.vendor || null,
         vendor_secondary: form.vendor_secondary || null,
         pm: form.pm || null,
-        assigned_to: form.assigned_to ? Number(form.assigned_to) : null,
+        assigned_to: form.assigned_to || null,
         assignee_secondary: form.assignee_secondary || null,
         assignee_tertiary: form.assignee_tertiary || null,
         assignee_quaternary: form.assignee_quaternary || null,
@@ -267,8 +256,8 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             Assignee
             <select disabled={!canEdit} value={form.assigned_to} onChange={(event) => updateField('assigned_to', event.target.value)}>
               <option value="">Unassigned</option>
-              {memberAssigneeOptions.map((member) => (
-                <option key={member.value} value={member.value}>{member.label}</option>
+              {assigneeOptions.map((member) => (
+                <option key={member} value={member}>{member}</option>
               ))}
             </select>
           </label>
@@ -276,21 +265,21 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             Assignee 2
             <select disabled={!canEdit} value={form.assignee_secondary} onChange={(event) => updateField('assignee_secondary', event.target.value)}>
               <option value="">Unassigned</option>
-              {presetAssigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
+              {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
             </select>
           </label>
           <label>
             Assignee 3
             <select disabled={!canEdit} value={form.assignee_tertiary} onChange={(event) => updateField('assignee_tertiary', event.target.value)}>
               <option value="">Unassigned</option>
-              {presetAssigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
+              {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
             </select>
           </label>
           <label>
             Assignee 4
             <select disabled={!canEdit} value={form.assignee_quaternary} onChange={(event) => updateField('assignee_quaternary', event.target.value)}>
               <option value="">Unassigned</option>
-              {presetAssigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
+              {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
             </select>
           </label>
         </div>
