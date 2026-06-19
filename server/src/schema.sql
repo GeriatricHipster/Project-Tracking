@@ -57,13 +57,15 @@ CREATE TABLE IF NOT EXISTS projects (
   description text,
   notes text NOT NULL DEFAULT '',
   project_status text NOT NULL DEFAULT 'active',
+  completed_at timestamptz,
+  archived_at timestamptz,
   start_date date NOT NULL,
   end_date date NOT NULL,
   created_by integer REFERENCES users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT projects_date_order CHECK (end_date >= start_date),
-  CONSTRAINT projects_project_status_check CHECK (project_status IN ('active', 'completed'))
+  CONSTRAINT projects_project_status_check CHECK (project_status IN ('active', 'completed', 'archived'))
 );
 
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS notes text NOT NULL DEFAULT '';
@@ -71,12 +73,14 @@ UPDATE projects SET notes = '' WHERE notes IS NULL;
 ALTER TABLE projects ALTER COLUMN notes SET DEFAULT '';
 ALTER TABLE projects ALTER COLUMN notes SET NOT NULL;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS project_status text NOT NULL DEFAULT 'active';
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS completed_at timestamptz;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'projects_project_status_check'
   ) THEN
-    ALTER TABLE projects ADD CONSTRAINT projects_project_status_check CHECK (project_status IN ('active', 'completed'));
+    ALTER TABLE projects ADD CONSTRAINT projects_project_status_check CHECK (project_status IN ('active', 'completed', 'archived'));
   END IF;
 END $$;
 
@@ -372,6 +376,7 @@ CREATE TABLE IF NOT EXISTS owner_cms_work_orders (
   sheet_key text PRIMARY KEY,
   sheet_name text NOT NULL,
   cells jsonb NOT NULL DEFAULT '[]'::jsonb,
+  archived_cells jsonb NOT NULL DEFAULT '[]'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -382,6 +387,8 @@ VALUES
   ('austins_cms_wos', 'Austins CMS WOs', '[]'::jsonb)
 ON CONFLICT (sheet_key) DO UPDATE SET
   sheet_name = EXCLUDED.sheet_name;
+
+ALTER TABLE owner_cms_work_orders ADD COLUMN IF NOT EXISTS archived_cells jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_owner_cms_work_orders_sheet_key ON owner_cms_work_orders(sheet_key);
 CREATE INDEX IF NOT EXISTS idx_audit_log_project ON audit_log(project_id, created_at DESC);
