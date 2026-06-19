@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 function describeNotification(result, baseMessage) {
   const notification = result?.notification || result?.teams || result?.slack;
   const code = result?.invite?.formatted_code;
@@ -8,6 +10,9 @@ function describeNotification(result, baseMessage) {
   }
   return `${baseMessage} Email invite was not sent: ${notification.error || 'check Gmail/SMTP setup.'}`;
 }
+
+const allRoles = ['viewer', 'editor', 'manager', 'owner'];
+
 
 export default function MembersPanel({ currentUser, projectRole, members, canManage, onAddMember, onUpdateMember, onRemoveMember }) {
   const canOwner = projectRole === 'owner';

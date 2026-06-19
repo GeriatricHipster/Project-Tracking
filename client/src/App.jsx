@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import AuthScreen from './components/AuthScreen';
 import Dashboard from './components/Dashboard';
 import ProjectView from './components/ProjectView';
+import ErrorBoundary from './components/ErrorBoundary';
 import SiteBanner from './components/SiteBanner';
 import { api, getToken, setToken } from './lib/api';
 
@@ -166,16 +167,17 @@ export default function App() {
   }
 
   if (!token || !user) {
-    return <><button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button><AuthScreen onAuth={handleAuth} pendingInviteCode={inviteCodeFromUrl()} /></>;
+    return <><button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button><ErrorBoundary><AuthScreen onAuth={handleAuth} pendingInviteCode={inviteCodeFromUrl()} /></ErrorBoundary></>;
   }
 
   if (selectedProjectId) {
-    return <><button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button><ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></>;
+    return <><button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button><ErrorBoundary fallback={<main className="app-page"><SiteBanner /><div className="panel error-fallback"><h2>Project view error</h2><p>The project screen ran into a problem.</p><button className="primary-button" type="button" onClick={() => { setSelectedProjectId(null); loadProjects(); }}>Back to projects</button></div></main>}><ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></ErrorBoundary></>;
   }
 
   return (
     <>
       {themeToggle}
+      <ErrorBoundary fallback={<main className="app-page"><SiteBanner /><div className="panel error-fallback"><h2>Dashboard error</h2><p>The dashboard ran into a problem.</p><button className="primary-button" type="button" onClick={() => window.location.reload()}>Reload dashboard</button></div></main>}>
       <Dashboard
         user={user}
         projects={projects}
@@ -190,6 +192,7 @@ export default function App() {
         onRefresh={loadProjects}
         onLogout={logout}
       />
+      </ErrorBoundary>
     </>
   );
 }

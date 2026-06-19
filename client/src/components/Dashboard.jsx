@@ -16,6 +16,25 @@ const dashboardTabs = [
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const managerRoles = new Set(['owner', 'manager']);
+const dashboardTabStorageKey = 'psg-dashboard-tab';
+
+function readInitialDashboardTab() {
+  if (typeof window === 'undefined') return 'projects';
+  const urlTab = new URLSearchParams(window.location.search).get('tab');
+  if (dashboardTabs.some((tab) => tab.id === urlTab)) return urlTab;
+  const savedTab = window.localStorage.getItem(dashboardTabStorageKey);
+  return dashboardTabs.some((tab) => tab.id === savedTab) ? savedTab : 'projects';
+}
+
+function syncDashboardTab(nextTab) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(dashboardTabStorageKey, nextTab);
+  } catch {}
+  const params = new URLSearchParams(window.location.search);
+  params.set('tab', nextTab);
+  window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+}
 
 function titleCase(value) {
   return String(value || '')
@@ -142,7 +161,7 @@ export default function Dashboard({
   onLogout
 }) {
   const start = todayIso();
-  const [activeTab, setActiveTab] = useState('projects');
+  const [activeTab, setActiveTab] = useState(readInitialDashboardTab);
   const [calendarMonth, setCalendarMonth] = useState(start.slice(0, 7));
   const [searchTerm, setSearchTerm] = useState('');
   const [form, setForm] = useState({
@@ -171,6 +190,10 @@ export default function Dashboard({
       setActiveTab(visibleTabs[0]?.id || 'projects');
     }
   }, [activeTab, visibleTabs]);
+
+  useEffect(() => {
+    syncDashboardTab(activeTab);
+  }, [activeTab]);
 
   const visibleProjects = useMemo(
     () => projects.filter((project) => matchesProjectSearch(project, searchTerm)),
