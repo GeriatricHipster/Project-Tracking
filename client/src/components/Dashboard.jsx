@@ -287,7 +287,7 @@ export default function Dashboard({
         <button className="primary-button compact" onClick={() => onOpenProject(project.id)} type="button">Open project</button>
         {canManage && lifecycle !== 'completed' && (
           <button className="ghost-button compact" disabled={busy} onClick={() => moveProject(project, 'completed')} type="button">
-            {busy ? 'Saving...' : 'Completed'}
+            {busy ? 'Saving...' : 'Move to completed'}
           </button>
         )}
         {canManage && lifecycle === 'completed' && (
@@ -430,7 +430,7 @@ export default function Dashboard({
           {renderProjectCards(
             completedProjects,
             'No completed projects yet',
-            'Use Completed on an active project when it is ready to file away.'
+            'Use Move to completed on an active project when it is ready to file away.'
           )}
         </section>
       </section>

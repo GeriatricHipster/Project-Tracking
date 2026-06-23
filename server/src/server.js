@@ -46,7 +46,7 @@ const projectLifecycleStatuses = new Set(['active', 'completed', 'archived']);
 const priorities = new Set(['low', 'normal', 'high', 'critical']);
 const roles = new Set(['owner', 'manager', 'editor', 'viewer']);
 const inviteRoles = new Set(['manager', 'editor', 'viewer']);
-const vendors = new Set(['Accent Automatic', 'Accent Auto', 'Beacon', 'Convergint', 'DSI', 'EverBase', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'S101', 'SMT', 'Stone', 'Stone Security', 'USHOP', 'Utah Yamas', 'Yamas']);
+const vendors = new Set(['Everbase', 'IES', 'Ideacom', 'Utah Yamas', 'Convergint', 'Pavion', 'Beacon', 'Stone Security', 'S101']);
 const trades = new Set(['CCure', 'Cameras', 'CCure & Cameras']);
 const securityTeamMembers = new Set(['Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam']);
 const projectManagers = new Set(['Kurt', 'Austin']);
@@ -468,8 +468,11 @@ function normalizeProgress(value) {
 
 function normalizeOptionalId(value, label) {
   if (value === undefined) return undefined;
-  if (value === null || value === '') return null;
-  return parseId(value, label);
+  const text = String(value || '').trim();
+  if (!text) return null;
+  if (text === '0') return null;
+  if (/^(unassigned|none|null|n\/a|na|not assigned|not set)$/i.test(text)) return null;
+  return parseId(text, label);
 }
 
 function signToken(user) {
@@ -702,8 +705,40 @@ async function ensureNotLastProjectOwner(db, targetUserId) {
 }
 
 function safeDownloadName(value) {
-  const cleaned = String(value || 'blueprint').replace(/[\\/\r\n\t]/g, ' ').trim();
+  const cleaned = String(value || 'blueprint').replace(/[\/\r\n\t]/g, ' ').trim();
   return cleaned || 'blueprint';
+}
+
+async function getBlueprintColumnFlags(db = { query }) {
+  const result = await db.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'project_blueprints'`
+  );
+  const columns = new Set(result.rows.map((row) => row.column_name));
+  return {
+    hasOriginalName: columns.has('original_name'),
+    hasFileName: columns.has('file_name'),
+    hasSizeBytes: columns.has('size_bytes'),
+    hasFileSize: columns.has('file_size')
+  };
+}
+
+async function runBlueprintUpload(db = { query }) {
+  const result = await db.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'project_blueprints'`
+  );
+  const columns = new Set(result.rows.map((row) => row.column_name));
+  return {
+    hasOriginalName: columns.has('original_name'),
+    hasFileName: columns.has('file_name'),
+    hasSizeBytes: columns.has('size_bytes'),
+    hasFileSize: columns.has('file_size')
+  };
 }
 
 async function runBlueprintUpload(req, res) {
@@ -794,7 +829,7 @@ async function loadProjectBlueprints(projectId) {
        pb.project_id,
        COALESCE(pb.original_name, pb.file_name) AS original_name,
        pb.mime_type,
-       COALESCE(pb.size_bytes, pb.file_size) AS size_bytes,
+       COALESCE(pb.size_bytes, pb.file_size, octet_length(pb.file_data)) AS size_bytes,
        pb.uploaded_by,
        uploader.name AS uploaded_by_name,
        pb.created_at
@@ -815,15 +850,11 @@ const taskSelect = `
   t.description,
   t.trade,
   t.vendor,
-  t.vendor_secondary,
   t.security_team_member,
   t.pm,
   t.assigned_to,
   assignee.name AS assigned_to_name,
   assignee.email AS assigned_to_email,
-  t.assignee_secondary,
-  t.assignee_tertiary,
-  t.assignee_quaternary,
   t.status,
   t.priority,
   to_char(t.start_date, 'YYYY-MM-DD') AS start_date,
@@ -996,13 +1027,9 @@ function buildTaskInput(body, partial = false) {
   if (!partial || body.description !== undefined) input.description = cleanText(body.description);
   if (!partial || body.trade !== undefined) input.trade = normalizeTaskChoice(body.trade, trades, 'trade', partial);
   if (!partial || body.vendor !== undefined) input.vendor = normalizeVendor(body.vendor, partial);
-  if (!partial || body.vendor_secondary !== undefined) input.vendor_secondary = normalizeVendor(body.vendor_secondary, partial);
   if (!partial || body.security_team_member !== undefined) input.security_team_member = normalizeTaskChoice(body.security_team_member, securityTeamMembers, 'security_team_member', partial);
   if (!partial || body.pm !== undefined) input.pm = normalizeTaskChoice(body.pm, projectManagers, 'pm', partial);
   if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeOptionalId(body.assigned_to, 'assigned_to');
-  if (!partial || body.assignee_secondary !== undefined) input.assignee_secondary = cleanText(body.assignee_secondary);
-  if (!partial || body.assignee_tertiary !== undefined) input.assignee_tertiary = cleanText(body.assignee_tertiary);
-  if (!partial || body.assignee_quaternary !== undefined) input.assignee_quaternary = cleanText(body.assignee_quaternary);
   if (!partial || body.parent_task_id !== undefined) input.parent_task_id = normalizeOptionalId(body.parent_task_id, 'parent_task_id');
 
   if (!partial || body.status !== undefined) {
@@ -2043,12 +2070,43 @@ app.post('/api/projects/:projectId/blueprints', requireAuth, asyncHandler(async 
 
   const blueprint = await tx(async (client) => {
     await requireProjectMembership(projectId, req.user.id, 'editor', client);
+    const columnFlags = await getBlueprintColumnFlags(client);
+    const columns = ['project_id'];
+    const values = [projectId];
+
+    if (columnFlags.hasOriginalName) {
+      columns.push('original_name');
+      values.push(originalName);
+    }
+    if (columnFlags.hasFileName) {
+      columns.push('file_name');
+      values.push(originalName);
+    }
+
+    columns.push('mime_type');
+    values.push(mimeType);
+
+    if (columnFlags.hasSizeBytes) {
+      columns.push('size_bytes');
+      values.push(req.file.size);
+    }
+    if (columnFlags.hasFileSize) {
+      columns.push('file_size');
+      values.push(req.file.size);
+    }
+
+    columns.push('file_data', 'uploaded_by');
+    values.push(req.file.buffer, req.user.id);
+
+    const placeholders = values.map((_, index) => `$${index + 1}`);
+
     const result = await client.query(
-      `INSERT INTO project_blueprints
-        (project_id, original_name, file_name, mime_type, size_bytes, file_size, file_data, uploaded_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, project_id, original_name, mime_type, size_bytes, uploaded_by, created_at`,
-      [projectId, originalName, originalName, mimeType, req.file.size, req.file.size, req.file.buffer, req.user.id]
+      `INSERT INTO project_blueprints (${columns.join(', ')})
+       VALUES (${placeholders.join(', ')})
+       RETURNING id, project_id, COALESCE(original_name, file_name) AS original_name, mime_type,
+                 COALESCE(size_bytes, file_size, octet_length(file_data)) AS size_bytes,
+                 uploaded_by, created_at`,
+      values
     );
 
     await writeAudit(client, {
@@ -2070,7 +2128,8 @@ app.post('/api/projects/:projectId/blueprints', requireAuth, asyncHandler(async 
 app.get('/api/blueprints/:blueprintId/download', requireAuth, asyncHandler(async (req, res) => {
   const blueprintId = parseId(req.params.blueprintId, 'blueprintId');
   const result = await query(
-    `SELECT id, project_id, COALESCE(original_name, file_name) AS original_name, mime_type, COALESCE(size_bytes, file_size) AS size_bytes, file_data
+    `SELECT id, project_id, COALESCE(original_name, file_name) AS original_name, mime_type,
+            COALESCE(size_bytes, file_size, octet_length(file_data)) AS size_bytes, file_data
      FROM project_blueprints
      WHERE id = $1`,
     [blueprintId]
@@ -2092,7 +2151,7 @@ app.delete('/api/blueprints/:blueprintId', requireAuth, asyncHandler(async (req,
 
   await tx(async (client) => {
     const before = await client.query(
-      `SELECT id, project_id, COALESCE(original_name, file_name) AS original_name, mime_type, COALESCE(size_bytes, file_size) AS size_bytes, uploaded_by, created_at
+      `SELECT id, project_id, original_name, mime_type, size_bytes, uploaded_by, created_at
        FROM project_blueprints WHERE id = $1`,
       [blueprintId]
     );
@@ -2135,9 +2194,9 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
 
     const insertResult = await client.query(
       `INSERT INTO tasks
-        (project_id, parent_task_id, name, description, trade, vendor, vendor_secondary, security_team_member, pm, assigned_to, assignee_secondary, assignee_tertiary, assignee_quaternary, status, priority, start_date, end_date,
+        (project_id, parent_task_id, name, description, trade, vendor, security_team_member, pm, assigned_to, status, priority, start_date, end_date,
          percent_complete, color, sort_order, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
        RETURNING id`,
       [
         projectId,
@@ -2146,13 +2205,9 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
         input.description,
         input.trade,
         input.vendor,
-        input.vendor_secondary,
         input.security_team_member,
         input.pm,
         input.assigned_to ?? null,
-        input.assignee_secondary ?? null,
-        input.assignee_tertiary ?? null,
-        input.assignee_quaternary ?? null,
         input.status,
         input.priority,
         input.start_date,

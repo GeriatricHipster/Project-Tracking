@@ -313,24 +313,24 @@ CCURE & CCTV
   { key: 'security', label: 'Security', type: 'select', width: 290, options: securityOptions },
   { key: 'child_wo', label: 'Child WO', type: 'select', width: 110, options: ['Yes', 'No', 'NA'] },
   { key: 'vendor', label: 'Vendor', type: 'select', width: 160, options: linesToOptions(`
-Accent Automatic
+AVTEC
 Beacon
 Convergint
 DSI
-Everbase
+EverBase
 G4S
-IC&E
 Ideacom
 IES
-Nelson Fire
-OTIS
-Pavion
-Pye Barker
+PTI
 S101
-SMT
-Stone Security
+Stone
+Pavion
+Yamas
 USHOP
-Utah Yamas
+Misc
+SMT
+Accent Auto
+Bid Walk
 `) },
   { key: 'status', label: 'Status', type: 'select', width: 220, options: linesToOptions(`
 Cost Estimate

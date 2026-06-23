@@ -7,9 +7,9 @@ import { api, getToken, setToken } from './lib/api';
 
 const backgroundOptions = [
   { value: 'midnight', label: 'Midnight' },
-  { value: 'ember', label: 'Sunset' },
+  { value: 'ember', label: 'Ember' },
   { value: 'slate', label: 'Slate' },
-  { value: 'steel', label: 'Ocean' }
+  { value: 'steel', label: 'Steel' }
 ];
 
 function backgroundStorageKey(userId) {
