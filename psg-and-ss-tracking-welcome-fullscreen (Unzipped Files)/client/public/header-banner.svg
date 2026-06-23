@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 360" role="img" aria-labelledby="title desc">
+  <title id="title">Dark blue construction technology banner</title>
+  <desc id="desc">A dark abstract banner with blue highlights, stars, stripes, and angular construction-inspired shapes.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#020617"/>
+      <stop offset="0.42" stop-color="#071427"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="32%" cy="44%" r="55%">
+      <stop offset="0" stop-color="#2563eb" stop-opacity="0.55"/>
+      <stop offset="0.38" stop-color="#1d4ed8" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#020617" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="stripe" x1="0" x2="1">
+      <stop offset="0" stop-color="#e5e7eb" stop-opacity="0.16"/>
+      <stop offset="0.56" stop-color="#93c5fd" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#111827" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2.6"/>
+    </filter>
+    <pattern id="dots" width="36" height="36" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="1.3" fill="#dbeafe" opacity="0.28"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="360" fill="url(#bg)"/>
+  <rect width="1600" height="360" fill="url(#glow)"/>
+  <rect width="1600" height="360" fill="url(#dots)" opacity="0.35"/>
+  <g opacity="0.72">
+    <path d="M0 250 C180 205 300 222 445 178 C600 132 764 64 930 92 C1085 118 1208 214 1600 142 L1600 360 L0 360 Z" fill="#0b1120"/>
+    <path d="M0 278 C210 240 398 252 590 198 C760 150 900 125 1055 156 C1228 190 1375 250 1600 222 L1600 360 L0 360 Z" fill="#111827" opacity="0.9"/>
+  </g>
+  <g transform="translate(106 74) rotate(-7)" opacity="0.72">
+    <rect x="0" y="0" width="255" height="132" rx="6" fill="#172554" opacity="0.58"/>
+    <g fill="#dbeafe" opacity="0.58">
+      <circle cx="26" cy="24" r="3"/><circle cx="56" cy="24" r="3"/><circle cx="86" cy="24" r="3"/><circle cx="116" cy="24" r="3"/><circle cx="146" cy="24" r="3"/>
+      <circle cx="41" cy="48" r="3"/><circle cx="71" cy="48" r="3"/><circle cx="101" cy="48" r="3"/><circle cx="131" cy="48" r="3"/><circle cx="161" cy="48" r="3"/>
+      <circle cx="26" cy="72" r="3"/><circle cx="56" cy="72" r="3"/><circle cx="86" cy="72" r="3"/><circle cx="116" cy="72" r="3"/><circle cx="146" cy="72" r="3"/>
+      <circle cx="41" cy="96" r="3"/><circle cx="71" cy="96" r="3"/><circle cx="101" cy="96" r="3"/><circle cx="131" cy="96" r="3"/><circle cx="161" cy="96" r="3"/>
+    </g>
+  </g>
+  <g opacity="0.56">
+    <path d="M338 97 L1568 0 L1600 42 L362 143 Z" fill="url(#stripe)"/>
+    <path d="M350 150 L1600 66 L1600 105 L372 190 Z" fill="url(#stripe)"/>
+    <path d="M354 205 L1600 138 L1600 178 L374 244 Z" fill="url(#stripe)"/>
+    <path d="M318 260 L1600 214 L1600 255 L332 300 Z" fill="url(#stripe)"/>
+  </g>
+  <g opacity="0.48" filter="url(#soft)">
+    <path d="M648 228 C762 108 895 68 1058 76 C926 129 840 214 790 306 C752 260 705 237 648 228 Z" fill="#60a5fa"/>
+    <path d="M792 170 C918 152 1065 177 1210 270 C1070 234 946 238 826 294 C846 247 835 208 792 170 Z" fill="#93c5fd" opacity="0.42"/>
+  </g>
+  <g opacity="0.9">
+    <path d="M84 311 L1518 311" stroke="#1d4ed8" stroke-width="5" stroke-linecap="round" opacity="0.75"/>
+    <path d="M84 325 L1518 325" stroke="#93c5fd" stroke-width="1.4" stroke-linecap="round" opacity="0.4"/>
+  </g>
+  <g transform="translate(88 251)" opacity="0.88">
+    <rect x="0" y="0" width="190" height="62" rx="15" fill="#020617" opacity="0.76"/>
+    <path d="M23 42 L23 20 L43 20 C55 20 62 25 62 34 C62 43 55 48 43 48 L23 48 Z M35 31 L35 38 L43 38 C47 38 50 37 50 34 C50 32 47 31 43 31 Z" fill="#ffffff"/>
+    <path d="M75 20 L127 20 L127 31 L108 31 L108 48 L94 48 L94 31 L75 31 Z" fill="#ffffff"/>
+    <rect x="138" y="20" width="30" height="28" rx="6" fill="#2563eb"/>
+  </g>
+</svg>
