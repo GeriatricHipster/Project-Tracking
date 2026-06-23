@@ -1,4 +1,4 @@
-const OWNER_CMS_DEFAULT_ROW_COUNT = 150;
+const OWNER_CMS_ROW_COUNT = 150;
 const OWNER_CMS_COLUMN_COUNT = 20;
 
 function linesToOptions(block) {
@@ -10,6 +10,15 @@ function linesToOptions(block) {
 
 function isPlainObject(value) {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function uniqueSortedOptions(block) {
+  const seen = new Map();
+  linesToOptions(block).forEach((option) => {
+    const key = option.trim().toLowerCase();
+    if (!seen.has(key)) seen.set(key, option.trim());
+  });
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
 }
 
 const securityOptions = linesToOptions(`
@@ -294,7 +303,7 @@ Utility Sytems
   { key: 'walk_scheduled', label: 'Walk Scheduled', type: 'date', width: 140 },
   { key: 'install_date', label: 'Install Date', type: 'date', width: 140 },
   { key: 'deadline', label: 'Deadline', type: 'date', width: 140 },
-  { key: 'bill_by_year_end', label: 'Bill by year end', type: 'select', width: 170, options: ['Yes', 'No', 'NA'] },
+  { key: 'bill_by_year_end', label: 'Bill by year end', type: 'select', width: 150, options: ['Yes', 'No', 'NA'] },
   { key: 'category', label: 'Category', type: 'select', width: 180, options: linesToOptions(`
 COST ESTIAMTE
 CCURE
@@ -312,7 +321,7 @@ CCURE & CCTV
   { key: 'dm_notified', label: 'DM Notified', type: 'select', width: 120, options: ['Yes', 'No', 'NA'] },
   { key: 'security', label: 'Security', type: 'select', width: 290, options: securityOptions },
   { key: 'child_wo', label: 'Child WO', type: 'select', width: 110, options: ['Yes', 'No', 'NA'] },
-  { key: 'vendor', label: 'Vendor', type: 'select', width: 160, options: linesToOptions(`
+  { key: 'vendor', label: 'Vendor', type: 'select', width: 160, options: uniqueSortedOptions(`
 AVTEC
 Beacon
 Convergint
@@ -385,19 +394,20 @@ Uploaded
 ];
 
 export const ownerCmsColumnCount = OWNER_CMS_COLUMN_COUNT;
-export const ownerCmsRowCount = OWNER_CMS_DEFAULT_ROW_COUNT;
+export const ownerCmsRowCount = OWNER_CMS_ROW_COUNT;
 
-export function buildBlankOwnerCmsGrid(rowCount = OWNER_CMS_DEFAULT_ROW_COUNT) {
-  return Array.from({ length: rowCount }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+export function buildBlankOwnerCmsGrid(rowCount = OWNER_CMS_ROW_COUNT) {
+  const totalRows = Number.isInteger(rowCount) && rowCount > 0 ? rowCount : OWNER_CMS_ROW_COUNT;
+  return Array.from({ length: totalRows }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
 }
 
-export function normalizeOwnerCmsGrid(cells) {
-  const incomingRowCount = Array.isArray(cells) ? cells.length : 0;
-  const rowCount = Math.max(OWNER_CMS_DEFAULT_ROW_COUNT, incomingRowCount);
-  const grid = buildBlankOwnerCmsGrid(rowCount);
+export function normalizeOwnerCmsGrid(cells, minimumRows = OWNER_CMS_ROW_COUNT) {
+  const sourceRowCount = Array.isArray(cells) ? cells.length : 0;
+  const totalRows = Math.max(minimumRows, sourceRowCount);
+  const grid = buildBlankOwnerCmsGrid(totalRows);
   if (!Array.isArray(cells)) return grid;
 
-  for (let rowIndex = 0; rowIndex < Math.min(cells.length, rowCount); rowIndex += 1) {
+  for (let rowIndex = 0; rowIndex < Math.min(cells.length, totalRows); rowIndex += 1) {
     const row = cells[rowIndex];
     if (!Array.isArray(row)) continue;
     for (let colIndex = 0; colIndex < Math.min(row.length, OWNER_CMS_COLUMN_COUNT); colIndex += 1) {

@@ -17,8 +17,41 @@ const priorityOptions = [
   ['critical', 'Critical']
 ];
 
+const taskNameOptions = [
+  'Parts Procurement',
+  'Vendor Preprogramming',
+  'CCure Preprogramming (Clearances, Schedules, Events etc.)',
+  'CCure Operator Established',
+  'UIT ( IP Addresses, Firewall Rule etc.)',
+  'Conduit Install',
+  'Cable Install',
+  'ADA Install',
+  'CCure Hardware Install',
+  'Camera Install',
+  'Panel Install',
+  'Fire Integration',
+  'Alarm Panel Install/Integration',
+  'Elevator Integration',
+  'Final Programming',
+  'Vendor Testing',
+  'CCure/Camera Testing',
+  'Key Shop Hardware Change',
+  'Punchlist',
+  'Closeout'
+];
+
 const tradeOptions = ['CCure', 'Cameras', 'CCure & Cameras'];
-const vendorOptions = [...new Set([
+
+function dedupeOptions(values) {
+  const seen = new Map();
+  values.filter(Boolean).forEach((value) => {
+    const key = String(value).trim().toLowerCase();
+    if (!seen.has(key)) seen.set(key, String(value).trim());
+  });
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+
+const vendorOptions = dedupeOptions([
   'Accent Automatic',
   'Accent Auto',
   'Beacon',
@@ -41,7 +74,8 @@ const vendorOptions = [...new Set([
   'USHOP',
   'Utah Yamas',
   'Yamas'
-])].sort((a, b) => a.localeCompare(b));
+]);
+
 const pmOptions = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));
 const presetAssigneeNames = [
   'Bennett',
@@ -101,7 +135,8 @@ function sortUnique(values) {
 function blankTask(project) {
   const start = project?.start_date || todayIso();
   return {
-    name: '',
+    task_name_choice: '',
+    task_name_custom: '',
     description: '',
     trade: '',
     vendor: '',
@@ -122,6 +157,15 @@ function blankTask(project) {
   };
 }
 
+function resolveTaskName(form) {
+  const choice = String(form.task_name_choice || '').trim();
+  if (!choice) return '';
+  if (choice === 'Other') {
+    return String(form.task_name_custom || '').trim();
+  }
+  return choice;
+}
+
 export default function TaskForm({ project, members, tasks, editingTask, canEdit, onSave, onCancel }) {
   const [form, setForm] = useState(blankTask(project));
   const [saving, setSaving] = useState(false);
@@ -129,8 +173,10 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
 
   useEffect(() => {
     if (editingTask) {
+      const taskNameChoice = taskNameOptions.includes(editingTask.name) ? editingTask.name : (editingTask.name ? 'Other' : '');
       setForm({
-        name: editingTask.name || '',
+        task_name_choice: taskNameChoice,
+        task_name_custom: taskNameChoice === 'Other' ? (editingTask.name || '') : '',
         description: editingTask.description || '',
         trade: editingTask.trade || '',
         vendor: editingTask.vendor || '',
@@ -169,7 +215,13 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
   );
 
   function updateField(field, value) {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => {
+      const next = { ...current, [field]: value };
+      if (field === 'task_name_choice' && value !== 'Other') {
+        next.task_name_custom = '';
+      }
+      return next;
+    });
   }
 
   async function submit(event) {
@@ -177,8 +229,16 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     setError('');
     setSaving(true);
     try {
+      const resolvedTaskName = resolveTaskName(form);
+      if (!resolvedTaskName) {
+        throw new Error(form.task_name_choice === 'Other'
+          ? 'Enter a custom task name when using Other.'
+          : 'Please select a task name.');
+      }
+
       await onSave({
-        ...form,
+        name: resolvedTaskName,
+        description: form.description,
         trade: form.trade || null,
         vendor: form.vendor || null,
         vendor_secondary: form.vendor_secondary || null,
@@ -190,7 +250,10 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         parent_task_id: form.parent_task_id || null,
         status: form.status || 'not_started',
         priority: form.priority || 'normal',
+        start_date: form.start_date,
+        end_date: form.end_date,
         percent_complete: Number(form.percent_complete),
+        color: form.color,
         sort_order: form.sort_order === '' ? undefined : Number(form.sort_order)
       });
       if (!editingTask) setForm(blankTask(project));
@@ -214,8 +277,28 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       <form className="stack" onSubmit={submit}>
         <label>
           Task name
-          <input disabled={!canEdit} value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Panel installation" />
+          <select
+            disabled={!canEdit}
+            value={form.task_name_choice}
+            onChange={(event) => updateField('task_name_choice', event.target.value)}
+          >
+            <option value=""> </option>
+            {taskNameOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+            <option value="Other">Other</option>
+          </select>
         </label>
+
+        {form.task_name_choice === 'Other' && (
+          <label>
+            Custom task name
+            <input
+              disabled={!canEdit}
+              value={form.task_name_custom}
+              onChange={(event) => updateField('task_name_custom', event.target.value)}
+              placeholder="Enter a custom task"
+            />
+          </label>
+        )}
 
         <div className="two-col">
           <label>
