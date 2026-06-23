@@ -472,30 +472,6 @@ function normalizeOptionalId(value, label) {
   return parseId(value, label);
 }
 
-async function resolveTaskAssignee(db, projectId, value) {
-  if (value === undefined) return undefined;
-  const text = cleanText(value);
-  if (!text || text.toLowerCase() === 'unassigned') return null;
-  if (/^\d+$/.test(text)) {
-    const assigneeId = parseId(text, 'assigned_to');
-    await verifyAssignee(db, projectId, assigneeId);
-    return assigneeId;
-  }
-
-  const memberResult = await db.query(
-    `SELECT u.id
-     FROM project_members pm
-     JOIN users u ON u.id = pm.user_id
-     WHERE pm.project_id = $1
-       AND (LOWER(u.name) = LOWER($2) OR LOWER(u.email) = LOWER($2))
-     ORDER BY CASE WHEN LOWER(u.name) = LOWER($2) THEN 0 ELSE 1 END, u.id ASC
-     LIMIT 1`,
-    [projectId, text]
-  );
-
-  return memberResult.rowCount ? memberResult.rows[0].id : null;
-}
-
 function signToken(user) {
   return jwt.sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
 }
@@ -816,7 +792,7 @@ async function loadProjectBlueprints(projectId) {
     `SELECT
        pb.id,
        pb.project_id,
-       coalesce(pb.original_name, pb.file_name) AS original_name,
+       pb.original_name,
        pb.mime_type,
        pb.size_bytes,
        pb.uploaded_by,
@@ -1023,7 +999,7 @@ function buildTaskInput(body, partial = false) {
   if (!partial || body.vendor_secondary !== undefined) input.vendor_secondary = normalizeVendor(body.vendor_secondary, partial);
   if (!partial || body.security_team_member !== undefined) input.security_team_member = normalizeTaskChoice(body.security_team_member, securityTeamMembers, 'security_team_member', partial);
   if (!partial || body.pm !== undefined) input.pm = normalizeTaskChoice(body.pm, projectManagers, 'pm', partial);
-  if (!partial || body.assigned_to !== undefined) input.assigned_to = body.assigned_to === undefined ? undefined : cleanText(body.assigned_to);
+  if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeOptionalId(body.assigned_to, 'assigned_to');
   if (!partial || body.assignee_secondary !== undefined) input.assignee_secondary = cleanText(body.assignee_secondary);
   if (!partial || body.assignee_tertiary !== undefined) input.assignee_tertiary = cleanText(body.assignee_tertiary);
   if (!partial || body.assignee_quaternary !== undefined) input.assignee_quaternary = cleanText(body.assignee_quaternary);
@@ -2069,10 +2045,10 @@ app.post('/api/projects/:projectId/blueprints', requireAuth, asyncHandler(async 
     await requireProjectMembership(projectId, req.user.id, 'editor', client);
     const result = await client.query(
       `INSERT INTO project_blueprints
-        (project_id, original_name, file_name, mime_type, size_bytes, file_data, uploaded_by)
+        (project_id, original_name, mime_type, size_bytes, file_data, uploaded_by)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, project_id, original_name, mime_type, size_bytes, uploaded_by, created_at`,
-      [projectId, originalName, originalName, mimeType, req.file.size, req.file.buffer, req.user.id]
+      [projectId, originalName, mimeType, req.file.size, req.file.buffer, req.user.id]
     );
 
     await writeAudit(client, {
@@ -2094,7 +2070,7 @@ app.post('/api/projects/:projectId/blueprints', requireAuth, asyncHandler(async 
 app.get('/api/blueprints/:blueprintId/download', requireAuth, asyncHandler(async (req, res) => {
   const blueprintId = parseId(req.params.blueprintId, 'blueprintId');
   const result = await query(
-    `SELECT id, project_id, coalesce(original_name, file_name) AS original_name, mime_type, size_bytes, file_data
+    `SELECT id, project_id, original_name, mime_type, size_bytes, file_data
      FROM project_blueprints
      WHERE id = $1`,
     [blueprintId]
@@ -2116,7 +2092,7 @@ app.delete('/api/blueprints/:blueprintId', requireAuth, asyncHandler(async (req,
 
   await tx(async (client) => {
     const before = await client.query(
-      `SELECT id, project_id, coalesce(original_name, file_name) AS original_name, mime_type, size_bytes, uploaded_by, created_at
+      `SELECT id, project_id, original_name, mime_type, size_bytes, uploaded_by, created_at
        FROM project_blueprints WHERE id = $1`,
       [blueprintId]
     );
@@ -2146,7 +2122,6 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
 
   const task = await tx(async (client) => {
     await requireProjectMembership(projectId, req.user.id, 'editor', client);
-    input.assigned_to = await resolveTaskAssignee(client, projectId, input.assigned_to);
     await verifyAssignee(client, projectId, input.assigned_to);
     await verifyParentTask(client, projectId, input.parent_task_id);
 
@@ -2215,10 +2190,6 @@ app.patch('/api/tasks/:taskId', requireAuth, asyncHandler(async (req, res) => {
     const before = await selectTaskById(client, taskId);
     if (!before) throw httpError(404, 'Task not found.');
     await requireProjectMembership(before.project_id, req.user.id, 'editor', client);
-
-    if (input.assigned_to !== undefined) {
-      input.assigned_to = await resolveTaskAssignee(client, before.project_id, input.assigned_to);
-    }
 
     const nextStart = input.start_date !== undefined ? input.start_date : before.start_date;
     const nextEnd = input.end_date !== undefined ? input.end_date : before.end_date;
