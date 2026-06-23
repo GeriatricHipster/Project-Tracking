@@ -11,14 +11,23 @@ const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
 const morgan = require('morgan');
 const multer = require('multer');
+const nodemailer = require('nodemailer');
 const { Server } = require('socket.io');
 const { pool, query, tx } = require('./db');
 
 const PORT = Number(process.env.PORT || 4000);
 const JWT_SECRET = process.env.JWT_SECRET || 'local-development-secret-change-me';
-const APP_NAME = process.env.APP_NAME || 'BuildTrack Cloud';
-const SLACK_WEBHOOK_URL = String(process.env.SLACK_WEBHOOK_URL || '').trim();
-const SLACK_ASSIGNMENT_INVITE_DAYS = Number(process.env.SLACK_ASSIGNMENT_INVITE_DAYS || 7);
+const APP_NAME = process.env.APP_NAME || 'PSG and SS Tracking';
+const EMAIL_PROVIDER = String(process.env.EMAIL_PROVIDER || 'gmail').trim().toLowerCase();
+const SMTP_HOST = String(process.env.SMTP_HOST || 'smtp.gmail.com').trim();
+const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
+const SMTP_SECURE = String(process.env.SMTP_SECURE || 'false').trim().toLowerCase() === 'true';
+const SMTP_REQUIRE_TLS = String(process.env.SMTP_REQUIRE_TLS || 'true').trim().toLowerCase() !== 'false';
+const SMTP_USER = String(process.env.SMTP_USER || '').trim();
+const SMTP_PASS = String(process.env.SMTP_PASS || '').trim();
+const EMAIL_FROM = String(process.env.EMAIL_FROM || SMTP_USER).trim();
+const EMAIL_FROM_NAME = String(process.env.EMAIL_FROM_NAME || APP_NAME).trim();
+const EMAIL_ASSIGNMENT_INVITE_DAYS = Number(process.env.EMAIL_ASSIGNMENT_INVITE_DAYS || 7);
 const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
@@ -33,17 +42,22 @@ const roleRank = {
 };
 
 const statuses = new Set(['not_started', 'in_progress', 'blocked', 'complete']);
-const projectLifecycleStatuses = new Set(['active', 'completed']);
+const projectLifecycleStatuses = new Set(['active', 'completed', 'archived']);
 const priorities = new Set(['low', 'normal', 'high', 'critical']);
 const roles = new Set(['owner', 'manager', 'editor', 'viewer']);
 const inviteRoles = new Set(['manager', 'editor', 'viewer']);
-const vendors = new Set(['Everbase', 'IES', 'Ideacom', 'Utah Yamas', 'Convergint', 'Pavion', 'Beacon', 'Stone Security', 'S101']);
+const vendors = new Set(['Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'S101', 'SMT', 'Stone Security', 'USHOP', 'Utah Yamas']);
 const trades = new Set(['CCure', 'Cameras', 'CCure & Cameras']);
 const securityTeamMembers = new Set(['Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam']);
 const projectManagers = new Set(['Kurt', 'Austin']);
 const siteRoles = new Set(['owner', 'manager', 'member']);
 const dependencyTypes = new Set(['FS', 'SS', 'FF', 'SF']);
 const managerSiteRoles = new Set(['owner', 'manager']);
+const ownerCmsWorkOrderSheets = [
+  { sheet_key: 'kurts_cms_wos', sheet_name: 'Kurts CMS WOs' },
+  { sheet_key: 'austins_cms_wos', sheet_name: 'Austins CMS WOs' }
+];
+const ownerCmsWorkOrderSheetMap = new Map(ownerCmsWorkOrderSheets.map((sheet) => [sheet.sheet_key, sheet]));
 const configuredBlueprintBytes = Number(process.env.MAX_BLUEPRINT_BYTES || 25 * 1024 * 1024);
 const MAX_BLUEPRINT_BYTES = Number.isFinite(configuredBlueprintBytes) && configuredBlueprintBytes > 0
   ? configuredBlueprintBytes
@@ -179,119 +193,122 @@ function buildProjectUrl(req, projectId) {
   return appUrl ? `${appUrl}/?project=${encodeURIComponent(projectId)}` : '';
 }
 
-function slackSafeText(value, fallback = 'Not set') {
-  const text = String(value || '').trim();
-  return text || fallback;
+
+function safeText(value, fallback = 'Not set') {
+  const textValue = String(value || '').trim();
+  return textValue || fallback;
 }
 
-function buildSlackInvitePayload({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
+function buildEmailInviteMessage({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
   const formattedCode = formatInviteCode(invite.code);
   const inviteUrl = buildInviteUrl(req, invite.code);
   const expiresAt = invite.expires_at ? new Date(invite.expires_at).toLocaleString('en-US', { timeZone: 'UTC', timeZoneName: 'short' }) : 'No expiration';
   const roleText = assignmentRole || invite.role;
   const targetEmail = targetUser?.email ? normalizeEmail(targetUser.email) : '';
-  const targetName = slackSafeText(targetUser?.name, 'Assigned user');
-  const targetCallout = targetEmail ? `<mailto:${targetEmail}|${targetEmail}>` : targetName;
-  const targetIntro = targetUser
-    ? `${actor.name} assigned *${targetName}* (${targetCallout}) to *${slackSafeText(project.name)}* as *${roleText}*.`
-    : `${actor.name} created an invitation code for *${slackSafeText(project.name)}*.`;
+  const targetName = safeText(targetUser?.name, 'Assigned user');
+  const subject = `${APP_NAME} project invitation: ${safeText(project.name)}`;
+  const intro = targetUser
+    ? `${actor.name} assigned ${targetName} (${targetEmail || 'no email on file'}) to ${safeText(project.name)} as ${roleText}.`
+    : `${actor.name} created an invitation code for ${safeText(project.name)}.`;
 
-  const fields = [
-    { type: 'mrkdwn', text: `*Project:*\n${slackSafeText(project.name)}` },
-    { type: 'mrkdwn', text: `*Location:*\n${slackSafeText(project.location)}` },
-    { type: 'mrkdwn', text: `*Dates:*\n${project.start_date} to ${project.end_date}` },
-    { type: 'mrkdwn', text: `*Project role:*\n${roleText}` },
-    { type: 'mrkdwn', text: `*Assigned BuildTrack email:*\n${targetEmail ? targetCallout : 'Not targeted'}` },
-    { type: 'mrkdwn', text: `*Code expires:*\n${expiresAt}` },
-    { type: 'mrkdwn', text: `*Code uses:*\n${invite.max_uses}` }
-  ];
+  const textBody = [
+    `${APP_NAME} project invitation`,
+    intro,
+    `Project: ${safeText(project.name)}`,
+    `Location: ${safeText(project.location)}`,
+    `Dates: ${project.start_date} to ${project.end_date}`,
+    `Project role: ${roleText}`,
+    `Assigned email: ${targetEmail || 'Not targeted'}`,
+    `Code: ${formattedCode}`,
+    `Expires: ${expiresAt}`,
+    `Uses: ${invite.max_uses}`,
+    inviteUrl ? `Open invite: ${inviteUrl}` : null,
+    targetUser ? `This invitation is intended for ${targetEmail || targetName}.` : 'Only people with a PSG and SS Tracking account can accept this code.'
+  ].filter(Boolean).join('\n');
 
-  const blocks = [
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `*${APP_NAME} project invitation*\n${targetIntro}`
-      }
-    },
-    { type: 'section', fields },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `*Invitation code:* \`${formattedCode}\`\nOpen the invitation link below or copy this code into ${APP_NAME}.`
-      }
-    }
-  ];
-
-  if (inviteUrl) {
-    blocks.push({
-      type: 'actions',
-      elements: [
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: 'Open project invitation', emoji: true },
-          url: inviteUrl
-        }
-      ]
-    });
-  }
-
-  blocks.push({
-    type: 'context',
-    elements: [
-      {
-        type: 'mrkdwn',
-        text: targetUser
-          ? `Sent by ${actor.name}. This code is intended for ${targetEmail || targetName}. Only that BuildTrack user can accept it.`
-          : `Only people with a BuildTrack account can accept this code. Created by ${actor.name}.`
-      }
-    ]
-  });
+  const htmlLines = [
+    `<h2>${APP_NAME} project invitation</h2>`,
+    `<p>${intro}</p>`,
+    '<table style="border-collapse:collapse;line-height:1.5">',
+    `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Project</td><td>${safeText(project.name)}</td></tr>`,
+    `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Location</td><td>${safeText(project.location)}</td></tr>`,
+    `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Dates</td><td>${project.start_date} to ${project.end_date}</td></tr>`,
+    `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Project role</td><td>${roleText}</td></tr>`,
+    `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Assigned email</td><td>${targetEmail || 'Not targeted'}</td></tr>`,
+    `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Code</td><td style="font-size:20px;letter-spacing:2px">${formattedCode}</td></tr>`,
+    `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Expires</td><td>${expiresAt}</td></tr>`,
+    `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Uses</td><td>${invite.max_uses}</td></tr>`,
+    inviteUrl ? `<tr><td style="padding:2px 12px 2px 0;font-weight:bold">Invite link</td><td><a href="${inviteUrl}">${inviteUrl}</a></td></tr>` : '',
+    '</table>',
+    `<p>${targetUser ? `This invitation is intended for ${targetEmail || targetName}.` : 'Only people with a PSG and SS Tracking account can accept this code.'}</p>`
+  ].filter(Boolean);
 
   return {
-    text: `${APP_NAME} project invitation for ${project.name}. ${targetEmail ? `Assigned to ${targetEmail}. ` : ''}Code: ${formattedCode}`,
-    blocks
+    subject,
+    text: textBody,
+    html: htmlLines.join('')
   };
 }
 
-async function sendSlackWebhookInviteMessage({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
-  if (!SLACK_WEBHOOK_URL) {
-    throw httpError(400, 'Slack channel invitations are not set up. Add SLACK_WEBHOOK_URL in Render and redeploy.');
+let cachedEmailTransport = null;
+
+function getEmailTransport() {
+  if (EMAIL_PROVIDER !== 'gmail' && EMAIL_PROVIDER !== 'smtp') {
+    throw httpError(400, 'Email invitations are not set up. Set EMAIL_PROVIDER to gmail and add SMTP settings in Render.');
   }
-
-  const payload = buildSlackInvitePayload({ req, project, invite, actor, targetUser, assignmentRole });
-  const response = await fetch(SLACK_WEBHOOK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    const message = body ? `Slack webhook returned ${response.status}: ${body}` : `Slack webhook returned ${response.status}.`;
-    throw httpError(502, message);
+  if (!SMTP_USER || !SMTP_PASS) {
+    throw httpError(400, 'Email invitations are not set up. Add SMTP_USER and SMTP_PASS in Render and redeploy.');
   }
-
-  return { sent: true, mode: 'channel_webhook' };
+  if (!cachedEmailTransport) {
+    cachedEmailTransport = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_SECURE,
+      requireTLS: SMTP_REQUIRE_TLS,
+      auth: {
+        user: SMTP_USER,
+        pass: SMTP_PASS
+      }
+    });
+  }
+  return cachedEmailTransport;
 }
 
-async function sendSlackInviteMessage({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
-  if (!SLACK_WEBHOOK_URL) {
+async function sendEmailInviteMessage({ req, project, invite, actor, targetUser = null, assignmentRole = null }) {
+  if (!SMTP_USER || !SMTP_PASS) {
     return {
       sent: false,
-      mode: 'channel_webhook',
-      error: 'Slack channel invitations are not set up. Add SLACK_WEBHOOK_URL in Render and redeploy.'
+      mode: 'smtp',
+      error: 'Email invitations are not set up. Add SMTP_USER and SMTP_PASS in Render and redeploy.'
+    };
+  }
+
+  const recipient = normalizeEmail(targetUser?.email || invite.target_email);
+  if (!recipient) {
+    return {
+      sent: false,
+      mode: 'smtp',
+      error: 'No email address was found for this invitation.'
     };
   }
 
   try {
-    return await sendSlackWebhookInviteMessage({ req, project, invite, actor, targetUser, assignmentRole });
+    const transport = getEmailTransport();
+    const message = buildEmailInviteMessage({ req, project, invite, actor, targetUser, assignmentRole });
+    await transport.sendMail({
+      from: EMAIL_FROM_NAME ? `"${EMAIL_FROM_NAME}" <${EMAIL_FROM || SMTP_USER}>` : (EMAIL_FROM || SMTP_USER),
+      to: recipient,
+      replyTo: EMAIL_FROM || SMTP_USER,
+      subject: message.subject,
+      text: message.text,
+      html: message.html
+    });
+    return { sent: true, mode: 'smtp', recipient };
   } catch (error) {
     return {
       sent: false,
-      mode: 'channel_webhook',
-      error: error.message || 'Slack channel message failed.'
+      mode: 'smtp',
+      error: error.message || 'Email send failed.'
     };
   }
 }
@@ -309,7 +326,7 @@ async function selectProjectForInvite(client, projectId) {
   return projectResult.rows[0];
 }
 
-async function createInviteCode(client, { projectId, role, maxUses, expiresInDays, actorId, targetUserId = null, targetEmail = null, auditAction = 'slack_invite_code_created' }) {
+async function createInviteCode(client, { projectId, role, maxUses, expiresInDays, actorId, targetUserId = null, targetEmail = null, auditAction = 'email_invite_code_created' }) {
   let invite;
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const code = generateInviteCode();
@@ -430,6 +447,17 @@ function normalizeProjectNotes(value) {
   return text;
 }
 
+function normalizeProjectNoteBody(value) {
+  const text = String(value ?? '').trim();
+  if (!text) {
+    throw httpError(400, 'Project note text is required.');
+  }
+  if (text.length > 10000) {
+    throw httpError(400, 'Project notes must be 10,000 characters or fewer.');
+  }
+  return text;
+}
+
 function normalizeProgress(value) {
   const number = Number(value);
   if (!Number.isInteger(number) || number < 0 || number > 100) {
@@ -492,10 +520,6 @@ async function hasPortfolioViewAccess(userId, db = { query }) {
     `SELECT 1
      FROM users
      WHERE id = $1 AND access_revoked = false AND site_role IN ('owner', 'manager')
-     UNION
-     SELECT 1
-     FROM project_members
-     WHERE user_id = $1 AND role IN ('owner', 'manager')
      LIMIT 1`,
     [userId]
   );
@@ -535,6 +559,89 @@ function requireSiteManagement(user) {
     throw httpError(403, 'Site member management requires site manager or site owner access.');
   }
   return siteRole;
+}
+
+function requireSiteOwner(user) {
+  const siteRole = user?.site_role || 'member';
+  if (siteRole !== 'owner') {
+    throw httpError(403, 'This area is only available to site owners.');
+  }
+  return siteRole;
+}
+
+const OWNER_CMS_ROW_COUNT = 150;
+const OWNER_CMS_COLUMN_COUNT = 20;
+
+function buildBlankOwnerCmsGrid() {
+  return Array.from({ length: OWNER_CMS_ROW_COUNT }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+}
+
+function normalizeOwnerCmsGrid(cells) {
+  const blank = buildBlankOwnerCmsGrid();
+  if (!Array.isArray(cells)) return blank;
+
+  for (let rowIndex = 0; rowIndex < Math.min(cells.length, OWNER_CMS_ROW_COUNT); rowIndex += 1) {
+    const row = cells[rowIndex];
+    if (!Array.isArray(row)) continue;
+    for (let colIndex = 0; colIndex < Math.min(row.length, OWNER_CMS_COLUMN_COUNT); colIndex += 1) {
+      const value = row[colIndex];
+      blank[rowIndex][colIndex] = value === null || value === undefined ? '' : String(value);
+    }
+  }
+
+  return blank;
+}
+
+function normalizeOwnerCmsArchivedRows(rows) {
+  if (!Array.isArray(rows)) return [];
+
+  return rows
+    .map((row, index) => {
+      if (Array.isArray(row)) {
+        return {
+          row_number: index + 1,
+          archived_at: null,
+          cells: normalizeOwnerCmsGrid([row])[0]
+        };
+      }
+
+      if (row && typeof row === 'object') {
+        return {
+          row_number: Number.isInteger(Number(row.row_number)) ? Number(row.row_number) : index + 1,
+          archived_at: row.archived_at || null,
+          cells: normalizeOwnerCmsGrid([Array.isArray(row.cells) ? row.cells : []])[0]
+        };
+      }
+
+      return {
+        row_number: index + 1,
+        archived_at: null,
+        cells: Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => '')
+      };
+    })
+    .filter((row) => row.cells.some((value) => String(value || '').trim().length > 0));
+}
+
+function rowHasContent(row) {
+  return Array.isArray(row) && row.some((value) => String(value || '').trim().length > 0);
+}
+
+async function archiveStaleCompletedProjects(db = { query }) {
+  await db.query(
+    `UPDATE projects
+     SET project_status = 'archived',
+         archived_at = COALESCE(archived_at, now())
+     WHERE project_status = 'completed'
+       AND COALESCE(completed_at, updated_at, created_at) <= now() - interval '30 days'`
+  );
+}
+
+function requireOwnerCmsSheet(sheetKey) {
+  const sheet = ownerCmsWorkOrderSheetMap.get(String(sheetKey || '').trim());
+  if (!sheet) {
+    throw httpError(404, 'CMS work order sheet not found.');
+  }
+  return sheet;
 }
 
 function ensureSiteActorCanManageTarget(actorRole, targetUser, requestedRole = null) {
@@ -708,11 +815,15 @@ const taskSelect = `
   t.description,
   t.trade,
   t.vendor,
+  t.vendor_secondary,
   t.security_team_member,
   t.pm,
   t.assigned_to,
   assignee.name AS assigned_to_name,
   assignee.email AS assigned_to_email,
+  t.assignee_secondary,
+  t.assignee_tertiary,
+  t.assignee_quaternary,
   t.status,
   t.priority,
   to_char(t.start_date, 'YYYY-MM-DD') AS start_date,
@@ -752,6 +863,7 @@ async function verifyParentTask(db, projectId, parentTaskId, taskId = null) {
 }
 
 async function loadProjectPayload(projectId, userId) {
+  await archiveStaleCompletedProjects();
   const access = await requireProjectAccess(projectId, userId);
 
   const projectResult = await query(
@@ -843,6 +955,25 @@ async function loadProjectPayload(projectId, userId) {
     [projectId]
   );
 
+  const notesResult = await query(
+    `SELECT
+       pne.id,
+       pne.project_id,
+       pne.body,
+       pne.created_by,
+       pne.updated_by,
+       pne.created_at,
+       pne.updated_at,
+       creator.name AS created_by_name,
+       updater.name AS updated_by_name
+     FROM project_note_entries pne
+     LEFT JOIN users creator ON creator.id = pne.created_by
+     LEFT JOIN users updater ON updater.id = pne.updated_by
+     WHERE pne.project_id = $1
+     ORDER BY pne.created_at DESC, pne.id DESC`,
+    [projectId]
+  );
+
   const checklist = await loadProjectChecklist(projectId);
   const blueprints = await loadProjectBlueprints(projectId);
 
@@ -851,6 +982,7 @@ async function loadProjectPayload(projectId, userId) {
     tasks: tasksResult.rows,
     dependencies: dependenciesResult.rows,
     members: membersResult.rows,
+    notes_entries: notesResult.rows,
     checklist,
     blueprints,
     audit: auditResult.rows
@@ -864,9 +996,13 @@ function buildTaskInput(body, partial = false) {
   if (!partial || body.description !== undefined) input.description = cleanText(body.description);
   if (!partial || body.trade !== undefined) input.trade = normalizeTaskChoice(body.trade, trades, 'trade', partial);
   if (!partial || body.vendor !== undefined) input.vendor = normalizeVendor(body.vendor, partial);
+  if (!partial || body.vendor_secondary !== undefined) input.vendor_secondary = normalizeVendor(body.vendor_secondary, partial);
   if (!partial || body.security_team_member !== undefined) input.security_team_member = normalizeTaskChoice(body.security_team_member, securityTeamMembers, 'security_team_member', partial);
   if (!partial || body.pm !== undefined) input.pm = normalizeTaskChoice(body.pm, projectManagers, 'pm', partial);
   if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeOptionalId(body.assigned_to, 'assigned_to');
+  if (!partial || body.assignee_secondary !== undefined) input.assignee_secondary = cleanText(body.assignee_secondary);
+  if (!partial || body.assignee_tertiary !== undefined) input.assignee_tertiary = cleanText(body.assignee_tertiary);
+  if (!partial || body.assignee_quaternary !== undefined) input.assignee_quaternary = cleanText(body.assignee_quaternary);
   if (!partial || body.parent_task_id !== undefined) input.parent_task_id = normalizeOptionalId(body.parent_task_id, 'parent_task_id');
 
   if (!partial || body.status !== undefined) {
@@ -977,7 +1113,229 @@ app.get('/api/me', requireAuth, asyncHandler(async (req, res) => {
   res.json({ user: publicUser(req.user) });
 }));
 
+
+app.get('/api/owner/cms-wos', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+
+  const result = await tx(async (client) => {
+    await client.query(
+      `INSERT INTO owner_cms_work_orders (sheet_key, sheet_name, cells, archived_cells)
+       VALUES
+         ('kurts_cms_wos', 'Kurts CMS WOs', '[]'::jsonb, '[]'::jsonb),
+         ('austins_cms_wos', 'Austins CMS WOs', '[]'::jsonb, '[]'::jsonb)
+       ON CONFLICT (sheet_key) DO UPDATE SET
+         sheet_name = EXCLUDED.sheet_name,
+         archived_cells = COALESCE(owner_cms_work_orders.archived_cells, '[]'::jsonb)`
+    );
+
+    const rows = await client.query(
+      `SELECT sheet_key, sheet_name, cells, archived_cells, created_at, updated_at
+       FROM owner_cms_work_orders
+       ORDER BY sheet_name ASC`
+    );
+
+    return rows.rows.map((sheet) => ({
+      ...sheet,
+      cells: normalizeOwnerCmsGrid(sheet.cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(sheet.archived_cells)
+    }));
+  });
+
+  res.json({ sheets: result });
+}));
+
+app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
+  const rowIndex = clampInteger(req.body.row_index ?? req.body.rowIndex, {
+    label: 'row_index',
+    defaultValue: 0,
+    min: 0,
+    max: OWNER_CMS_ROW_COUNT - 1
+  });
+  const colIndex = clampInteger(req.body.col_index ?? req.body.colIndex, {
+    label: 'col_index',
+    defaultValue: 0,
+    min: 0,
+    max: OWNER_CMS_COLUMN_COUNT - 1
+  });
+  const cellValue = String(req.body.value ?? '');
+
+  const updated = await tx(async (client) => {
+    const current = await client.query(
+      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      [sheet.sheet_key]
+    );
+    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
+
+    const normalized = normalizeOwnerCmsGrid(current.rows[0].cells);
+    normalized[rowIndex][colIndex] = cellValue;
+    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
+
+    const saveResult = await client.query(
+      `UPDATE owner_cms_work_orders
+       SET cells = $1,
+           archived_cells = $2
+       WHERE sheet_key = $3
+       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
+      [JSON.stringify(normalized), JSON.stringify(archivedRows), sheet.sheet_key]
+    );
+
+    return {
+      ...saveResult.rows[0],
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
+    };
+  });
+
+  res.json({ sheet: updated });
+}));
+
+app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/archive', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
+  const rowIndex = clampInteger(req.params.rowIndex, {
+    label: 'rowIndex',
+    defaultValue: 0,
+    min: 0,
+    max: OWNER_CMS_ROW_COUNT - 1
+  });
+
+  const updated = await tx(async (client) => {
+    const current = await client.query(
+      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      [sheet.sheet_key]
+    );
+    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
+
+    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
+    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
+    const row = activeRows[rowIndex];
+    if (!row) throw httpError(404, 'Row not found.');
+
+    if (!rowHasContent(row)) {
+      throw httpError(400, 'That row is already blank.');
+    }
+
+    archivedRows.unshift({
+      row_number: rowIndex + 1,
+      archived_at: new Date().toISOString(),
+      cells: [...row]
+    });
+    activeRows[rowIndex] = Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => '');
+
+    const saveResult = await client.query(
+      `UPDATE owner_cms_work_orders
+       SET cells = $1,
+           archived_cells = $2
+       WHERE sheet_key = $3
+       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
+      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
+    );
+
+    return {
+      ...saveResult.rows[0],
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
+    };
+  });
+
+  res.json({ sheet: updated });
+}));
+
+app.post('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex/restore', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
+  const archiveIndex = clampInteger(req.params.archiveIndex, {
+    label: 'archiveIndex',
+    defaultValue: 0,
+    min: 0,
+    max: 999999
+  });
+
+  const updated = await tx(async (client) => {
+    const current = await client.query(
+      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      [sheet.sheet_key]
+    );
+    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
+
+    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
+    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
+    const archivedRow = archivedRows[archiveIndex];
+    if (!archivedRow) throw httpError(404, 'Archived row not found.');
+
+    let targetIndex = archivedRow.row_number ? Number(archivedRow.row_number) - 1 : activeRows.findIndex((row) => !rowHasContent(row));
+    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= OWNER_CMS_ROW_COUNT || rowHasContent(activeRows[targetIndex])) {
+      targetIndex = activeRows.findIndex((row) => !rowHasContent(row));
+    }
+    if (targetIndex < 0) throw httpError(400, 'No empty rows are available to restore this entry.');
+
+    activeRows[targetIndex] = [...archivedRow.cells];
+    archivedRows.splice(archiveIndex, 1);
+
+    const saveResult = await client.query(
+      `UPDATE owner_cms_work_orders
+       SET cells = $1,
+           archived_cells = $2
+       WHERE sheet_key = $3
+       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
+      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
+    );
+
+    return {
+      ...saveResult.rows[0],
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
+    };
+  });
+
+  res.json({ sheet: updated });
+}));
+
+app.delete('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
+  const archiveIndex = clampInteger(req.params.archiveIndex, {
+    label: 'archiveIndex',
+    defaultValue: 0,
+    min: 0,
+    max: 999999
+  });
+
+  const updated = await tx(async (client) => {
+    const current = await client.query(
+      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      [sheet.sheet_key]
+    );
+    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
+
+    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
+    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
+    if (!archivedRows[archiveIndex]) throw httpError(404, 'Archived row not found.');
+    archivedRows.splice(archiveIndex, 1);
+
+    const saveResult = await client.query(
+      `UPDATE owner_cms_work_orders
+       SET cells = $1,
+           archived_cells = $2
+       WHERE sheet_key = $3
+       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
+      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
+    );
+
+    return {
+      ...saveResult.rows[0],
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
+    };
+  });
+
+  res.json({ sheet: updated });
+}));
+
 app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
+  await archiveStaleCompletedProjects();
   const result = await query(
     `WITH portfolio_access AS (
        SELECT (
@@ -985,11 +1343,6 @@ app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
            SELECT 1
            FROM users
            WHERE id = $1 AND access_revoked = false AND site_role IN ('owner', 'manager')
-         )
-         OR EXISTS (
-           SELECT 1
-           FROM project_members
-           WHERE user_id = $1 AND role IN ('owner', 'manager')
          )
        ) AS can_view_all
      ),
@@ -1018,7 +1371,8 @@ app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
          count(*) FILTER (WHERE status = 'not_started')::int AS not_started_task_count,
          count(*) FILTER (WHERE status = 'in_progress')::int AS in_progress_task_count,
          count(*) FILTER (WHERE status = 'blocked')::int AS blocked_task_count,
-         count(*) FILTER (WHERE status = 'complete')::int AS complete_task_count
+         count(*) FILTER (WHERE status = 'complete')::int AS complete_task_count,
+         coalesce(array_to_string(array_agg(DISTINCT pm ORDER BY pm) FILTER (WHERE pm IS NOT NULL), ', '), '') AS pm_summary
        FROM tasks
        WHERE project_id IN (SELECT id FROM accessible_projects)
        GROUP BY project_id
@@ -1063,6 +1417,7 @@ app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
          coalesce(ts.in_progress_task_count, 0) AS in_progress_task_count,
          coalesce(ts.blocked_task_count, 0) AS blocked_task_count,
          coalesce(ts.complete_task_count, 0) AS complete_task_count,
+         coalesce(ts.pm_summary, '') AS pm_summary,
          coalesce(ms.member_count, 0) AS member_count,
          coalesce(ms.members, '[]'::json) AS members,
          CASE
@@ -1079,6 +1434,7 @@ app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
      SELECT
        project_rows.*,
        CASE
+         WHEN project_status = 'archived' THEN 'archived'
          WHEN project_status = 'completed' THEN 'completed'
          ELSE schedule_status
        END AS status
@@ -1323,8 +1679,18 @@ app.patch('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res)
     }
     if (req.body.project_status !== undefined || req.body.lifecycle_status !== undefined) {
       const requestedStatus = req.body.project_status !== undefined ? req.body.project_status : req.body.lifecycle_status;
-      values.push(requireEnum(requestedStatus, projectLifecycleStatuses, 'project_status'));
+      const nextStatus = requireEnum(requestedStatus, projectLifecycleStatuses, 'project_status');
+      values.push(nextStatus);
       sets.push(`project_status = $${values.length}`);
+      if (nextStatus === 'completed') {
+        sets.push('completed_at = COALESCE(completed_at, now())');
+        sets.push('archived_at = NULL');
+      } else if (nextStatus === 'active') {
+        sets.push('completed_at = NULL');
+        sets.push('archived_at = NULL');
+      } else if (nextStatus === 'archived') {
+        sets.push('archived_at = COALESCE(archived_at, now())');
+      }
     }
     if (req.body.start_date !== undefined) {
       values.push(nextStart);
@@ -1366,39 +1732,98 @@ app.patch('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res)
 }));
 
 
+async function createProjectNote(client, projectId, userId, body) {
+  await requireProjectMembership(projectId, userId, 'viewer', client);
+  const payload = body || {};
+  const noteBody = normalizeProjectNoteBody(payload.notes ?? payload.body ?? payload.text);
+  const result = await client.query(
+    `INSERT INTO project_note_entries (project_id, body, created_by, updated_by)
+     VALUES ($1, $2, $3, $3)
+     RETURNING id, project_id, body, created_by, updated_by, created_at, updated_at`,
+    [projectId, noteBody, userId]
+  );
+  await client.query('UPDATE projects SET updated_at = now() WHERE id = $1', [projectId]);
+  await writeAudit(client, {
+    projectId,
+    userId,
+    action: 'project_note_created',
+    entityType: 'project_note',
+    entityId: result.rows[0].id,
+    after: result.rows[0]
+  });
+  return result.rows[0];
+}
+
+app.post('/api/projects/:projectId/notes', requireAuth, asyncHandler(async (req, res) => {
+  const projectId = parseId(req.params.projectId, 'projectId');
+  const note = await tx(async (client) => createProjectNote(client, projectId, req.user.id, req.body));
+  emitProjectChange(projectId, { actorId: req.user.id, message: 'Project note added.' });
+  res.status(201).json({ note });
+}));
+
 app.patch('/api/projects/:projectId/notes', requireAuth, asyncHandler(async (req, res) => {
   const projectId = parseId(req.params.projectId, 'projectId');
-  const notes = normalizeProjectNotes(req.body.notes);
+  const note = await tx(async (client) => createProjectNote(client, projectId, req.user.id, req.body));
+  emitProjectChange(projectId, { actorId: req.user.id, message: 'Project note added.' });
+  res.status(201).json({ note });
+}));
+
+app.patch('/api/projects/:projectId/notes/:noteId', requireAuth, asyncHandler(async (req, res) => {
+  const projectId = parseId(req.params.projectId, 'projectId');
+  const noteId = parseId(req.params.noteId, 'noteId');
+  const payload = req.body || {};
+  const body = normalizeProjectNoteBody(payload.body ?? payload.notes ?? payload.text);
 
   const updated = await tx(async (client) => {
     await requireProjectMembership(projectId, req.user.id, 'viewer', client);
-
-    const beforeResult = await client.query('SELECT id, notes FROM projects WHERE id = $1', [projectId]);
-    if (!beforeResult.rowCount) throw httpError(404, 'Project not found.');
-
+    const before = await client.query('SELECT * FROM project_note_entries WHERE id = $1 AND project_id = $2', [noteId, projectId]);
+    if (!before.rowCount) throw httpError(404, 'Project note not found.');
     const result = await client.query(
-      `UPDATE projects
-       SET notes = $1
-       WHERE id = $2
-       RETURNING id, notes, updated_at`,
-      [notes, projectId]
+      `UPDATE project_note_entries
+       SET body = $1, updated_by = $2, updated_at = now()
+       WHERE id = $3 AND project_id = $4
+       RETURNING id, project_id, body, created_by, updated_by, created_at, updated_at`,
+      [body, req.user.id, noteId, projectId]
     );
-
+    await client.query('UPDATE projects SET updated_at = now() WHERE id = $1', [projectId]);
     await writeAudit(client, {
       projectId,
       userId: req.user.id,
-      action: 'project_notes_updated',
-      entityType: 'project',
-      entityId: projectId,
-      before: beforeResult.rows[0],
+      action: 'project_note_updated',
+      entityType: 'project_note',
+      entityId: noteId,
+      before: before.rows[0],
       after: result.rows[0]
     });
-
     return result.rows[0];
   });
 
-  emitProjectChange(projectId, { actorId: req.user.id, message: 'Project notes updated.' });
-  res.json({ project: updated });
+  emitProjectChange(projectId, { actorId: req.user.id, message: 'Project note updated.' });
+  res.json({ note: updated });
+}));
+
+app.delete('/api/projects/:projectId/notes/:noteId', requireAuth, asyncHandler(async (req, res) => {
+  const projectId = parseId(req.params.projectId, 'projectId');
+  const noteId = parseId(req.params.noteId, 'noteId');
+
+  await tx(async (client) => {
+    await requireProjectMembership(projectId, req.user.id, 'viewer', client);
+    const before = await client.query('SELECT * FROM project_note_entries WHERE id = $1 AND project_id = $2', [noteId, projectId]);
+    if (!before.rowCount) throw httpError(404, 'Project note not found.');
+    await client.query('DELETE FROM project_note_entries WHERE id = $1 AND project_id = $2', [noteId, projectId]);
+    await client.query('UPDATE projects SET updated_at = now() WHERE id = $1', [projectId]);
+    await writeAudit(client, {
+      projectId,
+      userId: req.user.id,
+      action: 'project_note_deleted',
+      entityType: 'project_note',
+      entityId: noteId,
+      before: before.rows[0]
+    });
+  });
+
+  emitProjectChange(projectId, { actorId: req.user.id, message: 'Project note deleted.' });
+  res.status(204).send();
 }));
 
 app.delete('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res) => {
@@ -1434,7 +1859,6 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
       throw httpError(403, 'Only project owners can add another owner.');
     }
 
-    const project = await selectProjectForInvite(client, projectId);
     const userResult = await client.query('SELECT id, name, email, access_revoked FROM users WHERE email = $1', [email]);
     if (!userResult.rowCount) {
       throw httpError(404, 'That user has not registered yet. Ask them to create an account first, then add them again.');
@@ -1455,19 +1879,6 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
     );
 
     const row = { project_id: projectId, user_id: user.id, role, name: user.name, email: user.email, access_revoked: false };
-    let invite = null;
-    if (inviteRoles.has(role)) {
-      invite = await createInviteCode(client, {
-        projectId,
-        role,
-        maxUses: 1,
-        expiresInDays: Number.isFinite(SLACK_ASSIGNMENT_INVITE_DAYS) ? SLACK_ASSIGNMENT_INVITE_DAYS : 7,
-        actorId: req.user.id,
-        targetUserId: user.id,
-        targetEmail: user.email,
-        auditAction: 'member_assignment_invite_code_created'
-      });
-    }
 
     await writeAudit(client, {
       projectId,
@@ -1476,25 +1887,14 @@ app.post('/api/projects/:projectId/members', requireAuth, asyncHandler(async (re
       entityType: 'project_member',
       entityId: user.id,
       before: beforeMember.rows[0] || null,
-      after: { ...row, invite_id: invite?.id || null }
+      after: row
     });
 
-    return { member: row, project, invite, action };
+    return { member: row };
   });
 
-  const slack = created.invite
-    ? await sendSlackInviteMessage({
-        req,
-        project: created.project,
-        invite: created.invite,
-        actor: req.user,
-        targetUser: created.member,
-        assignmentRole: created.member.role
-      })
-    : { sent: false, mode: 'not_created', error: 'No invitation code was created for owner role.' };
-
   emitProjectChange(projectId, { actorId: req.user.id, message: 'Project member updated.' });
-  res.status(201).json({ member: created.member, invite: publicInvite(req, created.invite), slack });
+  res.status(201).json({ member: created.member });
 }));
 
 app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(async (req, res) => {
@@ -1511,7 +1911,6 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
     ]);
     if (!before.rowCount) throw httpError(404, 'Project member not found.');
 
-    const project = await selectProjectForInvite(client, projectId);
     const targetResult = await client.query('SELECT id, name, email, access_revoked FROM users WHERE id = $1', [targetUserId]);
     if (!targetResult.rowCount) throw httpError(404, 'User not found.');
     const targetUser = targetResult.rows[0];
@@ -1531,19 +1930,6 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
     );
 
     const row = { ...result.rows[0], name: targetUser.name, email: targetUser.email, access_revoked: targetUser.access_revoked };
-    let invite = null;
-    if (!targetUser.access_revoked && inviteRoles.has(role)) {
-      invite = await createInviteCode(client, {
-        projectId,
-        role,
-        maxUses: 1,
-        expiresInDays: Number.isFinite(SLACK_ASSIGNMENT_INVITE_DAYS) ? SLACK_ASSIGNMENT_INVITE_DAYS : 7,
-        actorId: req.user.id,
-        targetUserId,
-        targetEmail: targetUser.email,
-        auditAction: 'member_assignment_invite_code_created'
-      });
-    }
 
     await writeAudit(client, {
       projectId,
@@ -1552,25 +1938,14 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
       entityType: 'project_member',
       entityId: targetUserId,
       before: before.rows[0],
-      after: { ...row, invite_id: invite?.id || null }
+      after: row
     });
 
-    return { member: row, project, invite };
+    return { member: row };
   });
 
-  const slack = updated.invite
-    ? await sendSlackInviteMessage({
-        req,
-        project: updated.project,
-        invite: updated.invite,
-        actor: req.user,
-        targetUser: updated.member,
-        assignmentRole: updated.member.role
-      })
-    : { sent: false, mode: 'not_created', error: 'No invitation code was created for owner role or a revoked user.' };
-
   emitProjectChange(projectId, { actorId: req.user.id, message: 'Project member role changed.' });
-  res.json({ member: updated.member, invite: publicInvite(req, updated.invite), slack });
+  res.json({ member: updated.member });
 }));
 
 app.delete('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(async (req, res) => {
@@ -1609,189 +1984,6 @@ app.delete('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler
 }));
 
 
-app.post('/api/projects/:projectId/slack-invites', requireAuth, asyncHandler(async (req, res) => {
-  const projectId = parseId(req.params.projectId, 'projectId');
-  const role = requireEnum(req.body.role || 'viewer', inviteRoles, 'invite role');
-  const expiresInDays = clampInteger(req.body.expires_in_days ?? req.body.expires_days, {
-    label: 'expires_in_days',
-    defaultValue: 7,
-    min: 1,
-    max: 30
-  });
-  const maxUses = clampInteger(req.body.max_uses, {
-    label: 'max_uses',
-    defaultValue: 10,
-    min: 1,
-    max: 100
-  });
-
-  const created = await tx(async (client) => {
-    const membership = await requireProjectMembership(projectId, req.user.id, 'manager', client);
-    if (role === 'manager' && membership.role !== 'owner') {
-      throw httpError(403, 'Only project owners can create manager invitation codes.');
-    }
-
-    const projectResult = await client.query(
-      `SELECT id, name, location, description, project_status,
-        to_char(start_date, 'YYYY-MM-DD') AS start_date,
-        to_char(end_date, 'YYYY-MM-DD') AS end_date
-       FROM projects
-       WHERE id = $1`,
-      [projectId]
-    );
-    if (!projectResult.rowCount) throw httpError(404, 'Project not found.');
-
-    let invite;
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const code = generateInviteCode();
-      const insertResult = await client.query(
-        `INSERT INTO project_invite_codes
-          (project_id, code, role, max_uses, expires_at, created_by)
-         VALUES ($1, $2, $3, $4, now() + ($5::int * interval '1 day'), $6)
-         ON CONFLICT (code) DO NOTHING
-         RETURNING id, project_id, code, role, max_uses, uses_count, expires_at, created_by, created_at`,
-        [projectId, code, role, maxUses, expiresInDays, req.user.id]
-      );
-      if (insertResult.rowCount) {
-        invite = insertResult.rows[0];
-        break;
-      }
-    }
-
-    if (!invite) throw httpError(500, 'Could not create a unique invitation code. Please try again.');
-
-    await writeAudit(client, {
-      projectId,
-      userId: req.user.id,
-      action: 'slack_invite_code_created',
-      entityType: 'project_invite_code',
-      entityId: invite.id,
-      after: { ...invite, formatted_code: formatInviteCode(invite.code) }
-    });
-
-    return { project: projectResult.rows[0], invite };
-  });
-
-  const slack = await sendSlackInviteMessage({ req, project: created.project, invite: created.invite, actor: req.user });
-
-  const responseInvite = {
-    ...created.invite,
-    formatted_code: formatInviteCode(created.invite.code),
-    invite_url: buildInviteUrl(req, created.invite.code)
-  };
-
-  emitProjectChange(projectId, {
-    actorId: req.user.id,
-    message: slack.sent ? 'Slack invitation code sent.' : 'Invitation code created, but Slack did not send.'
-  });
-
-  res.status(slack.sent ? 201 : 202).json({ invite: responseInvite, project: created.project, slack });
-}));
-
-app.post('/api/invites/:code/accept', requireAuth, asyncHandler(async (req, res) => {
-  const code = normalizeInviteCode(req.params.code);
-
-  const result = await tx(async (client) => {
-    const inviteResult = await client.query(
-      `SELECT
-         pic.id,
-         pic.project_id,
-         pic.code,
-         pic.role,
-         pic.max_uses,
-         pic.uses_count,
-         pic.expires_at,
-         pic.revoked_at,
-         pic.target_user_id,
-         pic.target_email,
-         p.name,
-         p.location,
-         p.project_status,
-         to_char(p.start_date, 'YYYY-MM-DD') AS start_date,
-         to_char(p.end_date, 'YYYY-MM-DD') AS end_date
-       FROM project_invite_codes pic
-       JOIN projects p ON p.id = pic.project_id
-       WHERE pic.code = $1
-       FOR UPDATE OF pic`,
-      [code]
-    );
-
-    if (!inviteResult.rowCount) throw httpError(404, 'Invitation code not found. Check the code and try again.');
-    const invite = inviteResult.rows[0];
-
-    if (invite.revoked_at) throw httpError(400, 'This invitation code has been revoked.');
-    if (invite.target_user_id && Number(invite.target_user_id) !== Number(req.user.id)) {
-      throw httpError(403, 'This invitation code was issued to a different BuildTrack user.');
-    }
-    if (invite.target_email && normalizeEmail(invite.target_email) !== normalizeEmail(req.user.email)) {
-      throw httpError(403, 'This invitation code was issued to a different email address.');
-    }
-    if (invite.expires_at && new Date(invite.expires_at).getTime() < Date.now()) {
-      throw httpError(400, 'This invitation code has expired. Ask a project manager for a new one.');
-    }
-    if (Number(invite.uses_count) >= Number(invite.max_uses)) {
-      throw httpError(400, 'This invitation code has already been used the maximum number of times.');
-    }
-
-    const currentMembership = await client.query(
-      'SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2',
-      [invite.project_id, req.user.id]
-    );
-
-    let finalRole = invite.role;
-    let alreadyMember = false;
-    if (currentMembership.rowCount) {
-      alreadyMember = true;
-      finalRole = higherProjectRole(currentMembership.rows[0].role, invite.role);
-      if (finalRole !== currentMembership.rows[0].role) {
-        await client.query(
-          'UPDATE project_members SET role = $1 WHERE project_id = $2 AND user_id = $3',
-          [finalRole, invite.project_id, req.user.id]
-        );
-      }
-    } else {
-      await client.query(
-        'INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3)',
-        [invite.project_id, req.user.id, invite.role]
-      );
-    }
-
-    if (!alreadyMember || invite.target_user_id) {
-      await client.query('UPDATE project_invite_codes SET uses_count = uses_count + 1 WHERE id = $1', [invite.id]);
-    }
-
-    await writeAudit(client, {
-      projectId: invite.project_id,
-      userId: req.user.id,
-      action: 'invite_code_accepted',
-      entityType: 'project_invite_code',
-      entityId: invite.id,
-      after: {
-        invite_id: invite.id,
-        code: invite.code,
-        role: finalRole,
-        already_member: alreadyMember,
-        accepted_by: req.user.id
-      }
-    });
-
-    return {
-      project: {
-        id: invite.project_id,
-        name: invite.name,
-        location: invite.location,
-        project_status: invite.project_status,
-        start_date: invite.start_date,
-        end_date: invite.end_date,
-        role: finalRole
-      },
-      membership: { role: finalRole, already_member: alreadyMember }
-    };
-  });
-
-  emitProjectChange(result.project.id, { actorId: req.user.id, message: `${req.user.name} joined from an invitation code.` });
-  res.json(result);
-}));
 
 
 app.patch('/api/projects/:projectId/checklist/:itemKey', requireAuth, asyncHandler(async (req, res) => {
@@ -1943,9 +2135,9 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
 
     const insertResult = await client.query(
       `INSERT INTO tasks
-        (project_id, parent_task_id, name, description, trade, vendor, security_team_member, pm, assigned_to, status, priority, start_date, end_date,
+        (project_id, parent_task_id, name, description, trade, vendor, vendor_secondary, security_team_member, pm, assigned_to, assignee_secondary, assignee_tertiary, assignee_quaternary, status, priority, start_date, end_date,
          percent_complete, color, sort_order, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
        RETURNING id`,
       [
         projectId,
@@ -1954,9 +2146,13 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
         input.description,
         input.trade,
         input.vendor,
+        input.vendor_secondary,
         input.security_team_member,
         input.pm,
         input.assigned_to ?? null,
+        input.assignee_secondary ?? null,
+        input.assignee_tertiary ?? null,
+        input.assignee_quaternary ?? null,
         input.status,
         input.priority,
         input.start_date,
@@ -2250,7 +2446,7 @@ app.use((error, req, res, next) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`BuildTrack server listening on port ${PORT}`);
+  console.log(`PSG and SS Tracking server listening on port ${PORT}`);
 });
 
 process.on('SIGTERM', async () => {
