@@ -1,4 +1,4 @@
-# Start Here: Create and Deploy PSG and SS Tracking Without Terminal
+# Start Here: Create and Deploy BuildTrack Cloud Without Terminal
 
 These steps are written for GitHub's website and Render. You do not need to run Terminal commands.
 
@@ -11,7 +11,7 @@ This app tracks construction project timelines and includes:
 - Projects / assignments tab showing who is assigned to each project
 - Calendar overview of projects and status
 - Gantt chart for each project
-- Project Check list for IPs, panels, clearances, doors, and CCure operator setup
+- Gantt checklist for IPs, panels, clearances, doors, and CCure operator setup
 - Drag-and-drop blueprint uploads
 - Project member assignments
 - Site member management for managers and owners
@@ -65,7 +65,7 @@ buildtrack-cloud
 5. At the bottom, enter this commit message:
 
 ```text
-Upload PSG and SS Tracking
+Upload BuildTrack Cloud
 ```
 
 6. Click **Commit changes**.
@@ -148,7 +148,7 @@ Default file limit: 25 MB.
 
 ---
 
-## Step 8: Use the Project Check list
+## Step 8: Use the Gantt checklist
 
 Open a project and look below the Gantt chart. You will see checkboxes for:
 
@@ -162,3 +162,21 @@ CCure Operator established
 
 Users with edit access can check or uncheck these items.
 
+## Optional Slack channel invite setup
+
+After the updated app is deployed, you can connect Slack so project managers and owners automatically post an invitation code into a specific Slack channel when they add or update a project member. There is no separate Slack invite-code panel anymore.
+
+Open this file for the plain-English setup steps:
+
+```text
+SLACK_INVITE_SETUP.md
+```
+
+The main Render keys you need are:
+
+```text
+SLACK_WEBHOOK_URL
+APP_URL
+```
+
+You do not need Slack direct-message scopes or `SLACK_BOT_TOKEN` for this version.

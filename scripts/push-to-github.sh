@@ -29,7 +29,7 @@ git add .
 if git diff --cached --quiet; then
   echo "No new file changes to commit."
 else
-  git commit -m "Prepare PSG and SS Tracking deployment"
+  git commit -m "Prepare BuildTrack Cloud deployment"
 fi
 
 current_branch="$(git branch --show-current || true)"
