@@ -2742,6 +2742,139 @@ html[data-theme='dark'] .cms-grid-table td {
   }
 }
 
+
+.cms-section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 0 0 1rem;
+}
+
+.cms-section-tabs button {
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  padding: 0.6rem 0.95rem;
+  background: #ffffff;
+  color: #111827;
+  font-weight: 800;
+}
+
+.cms-section-tabs button.active {
+  background: linear-gradient(135deg, #ef4444, #991b1b);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.owner-cms-panel.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  margin: 0;
+  padding: 1rem;
+  overflow: auto;
+  background: inherit;
+}
+
+.owner-cms-panel.is-fullscreen > .panel {
+  min-height: calc(100vh - 2rem);
+}
+
+.cms-grid-actions-cell,
+.cms-grid-actions-header {
+  min-width: 170px;
+  width: 170px;
+}
+
+.stack-actions {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.wrap-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.markup-calculator {
+  display: grid;
+  gap: 1rem;
+}
+
+.markup-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: end;
+  padding: 0.9rem 1rem;
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.14);
+  border-radius: 18px;
+}
+
+.markup-summary label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 180px;
+  font-weight: 700;
+}
+
+.markup-summary input {
+  min-height: 42px;
+}
+
+.markup-table-wrap {
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.markup-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.markup-table th,
+.markup-table td {
+  padding: 0.75rem 0.8rem;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+}
+
+.markup-table thead th {
+  background: #f8fafc;
+}
+
+.markup-table input {
+  width: 100%;
+}
+
+.markup-total-row th {
+  background: rgba(239, 68, 68, 0.06);
+}
+
+html[data-theme='dark'] .cms-section-tabs button {
+  background: rgba(255, 255, 255, 0.04);
+  color: #e5e7eb;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme='dark'] .markup-summary,
+html[data-theme='dark'] .markup-table-wrap {
+  background: #0b1220;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme='dark'] .markup-table th,
+html[data-theme='dark'] .markup-table td {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme='dark'] .markup-table thead th,
+html[data-theme='dark'] .markup-total-row th {
+  background: #111827;
+}
+
 /* Display controls and background presets */
 .floating-controls {
   position: fixed;
