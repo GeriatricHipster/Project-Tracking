@@ -43,29 +43,6 @@ const vendorOptions = [...new Set([
   'Yamas'
 ])].sort((a, b) => a.localeCompare(b));
 const pmOptions = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));
-
-const taskNameOptions = [
-  'Parts Procurement',
-  'Preprogramming (Vendor)',
-  'Preprogramming (Ccure Team) clearances/schedules etc.',
-  'Ccure Operator Established',
-  'UIT (IP Addresses, Firewall)',
-  'Conduit Install',
-  'Cable Install',
-  'ADA Install',
-  'Ccure Hardware Install',
-  'Camera Hardware Install',
-  'Panel Install',
-  'Fire Integration',
-  'Alarm Panel Install/Integration',
-  'Elevator Integration',
-  'Final Programming',
-  'Vendor Testing',
-  'CCure/Camera Testing',
-  'Key Shop Hardware Change',
-  'Punchlist',
-  'Closeout'
-];
 const presetAssigneeNames = [
   'Bennett',
   'Bill',
@@ -144,14 +121,9 @@ function blankTask(project) {
     sort_order: ''
   };
 }
-function taskNameModeFromValue(name = '') {
-  if (!name) return '';
-  return taskNameOptions.includes(name) ? name : 'other';
-}
 
 export default function TaskForm({ project, members, tasks, editingTask, canEdit, onSave, onCancel }) {
   const [form, setForm] = useState(blankTask(project));
-  const [nameMode, setNameMode] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -177,10 +149,8 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         color: editingTask.color || '#2563eb',
         sort_order: editingTask.sort_order || ''
       });
-      setNameMode(taskNameModeFromValue(editingTask.name));
     } else {
       setForm(blankTask(project));
-      setNameMode('');
     }
     setError('');
   }, [editingTask, project]);
@@ -200,12 +170,6 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
-  }
-
-  function handleTaskNameChange(value) {
-    setNameMode(value);
-    if (value === 'other') return;
-    setForm((current) => ({ ...current, name: value }));
   }
 
   async function submit(event) {
@@ -248,27 +212,10 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       </div>
 
       <form className="stack" onSubmit={submit}>
-        <div className="two-col">
-          <label>
-            Task name
-            <select disabled={!canEdit} value={nameMode} onChange={(event) => handleTaskNameChange(event.target.value)}>
-              <option value=""> </option>
-              {taskNameOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-              <option value="other">Other</option>
-            </select>
-          </label>
-          {nameMode === 'other' && (
-            <label>
-              Custom task name
-              <input
-                disabled={!canEdit}
-                value={form.name}
-                onChange={(event) => updateField('name', event.target.value)}
-                placeholder="Enter custom task name"
-              />
-            </label>
-          )}
-        </div>
+        <label>
+          Task name
+          <input disabled={!canEdit} value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Panel installation" />
+        </label>
 
         <div className="two-col">
           <label>
@@ -309,9 +256,14 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             Assignee
             <select disabled={!canEdit} value={form.assigned_to} onChange={(event) => updateField('assigned_to', event.target.value)}>
               <option value="">Unassigned</option>
-              {assigneeOptions.map((member) => (
-                <option key={member} value={member}>{member}</option>
-              ))}
+              {members
+                .slice()
+                .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')) )
+                .map((member) => (
+                  <option key={member.user_id} value={member.user_id}>
+                    {member.name}{member.email ? ` (${member.email})` : ''}
+                  </option>
+                ))}
             </select>
           </label>
           <label>
