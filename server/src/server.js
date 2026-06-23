@@ -792,9 +792,9 @@ async function loadProjectBlueprints(projectId) {
     `SELECT
        pb.id,
        pb.project_id,
-       pb.original_name,
+       COALESCE(pb.original_name, pb.file_name) AS original_name,
        pb.mime_type,
-       pb.size_bytes,
+       COALESCE(pb.size_bytes, pb.file_size) AS size_bytes,
        pb.uploaded_by,
        uploader.name AS uploaded_by_name,
        pb.created_at
@@ -2045,10 +2045,10 @@ app.post('/api/projects/:projectId/blueprints', requireAuth, asyncHandler(async 
     await requireProjectMembership(projectId, req.user.id, 'editor', client);
     const result = await client.query(
       `INSERT INTO project_blueprints
-        (project_id, original_name, mime_type, size_bytes, file_data, uploaded_by)
-       VALUES ($1, $2, $3, $4, $5, $6)
+        (project_id, original_name, file_name, mime_type, size_bytes, file_size, file_data, uploaded_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, project_id, original_name, mime_type, size_bytes, uploaded_by, created_at`,
-      [projectId, originalName, mimeType, req.file.size, req.file.buffer, req.user.id]
+      [projectId, originalName, originalName, mimeType, req.file.size, req.file.size, req.file.buffer, req.user.id]
     );
 
     await writeAudit(client, {
@@ -2070,7 +2070,7 @@ app.post('/api/projects/:projectId/blueprints', requireAuth, asyncHandler(async 
 app.get('/api/blueprints/:blueprintId/download', requireAuth, asyncHandler(async (req, res) => {
   const blueprintId = parseId(req.params.blueprintId, 'blueprintId');
   const result = await query(
-    `SELECT id, project_id, original_name, mime_type, size_bytes, file_data
+    `SELECT id, project_id, COALESCE(original_name, file_name) AS original_name, mime_type, COALESCE(size_bytes, file_size) AS size_bytes, file_data
      FROM project_blueprints
      WHERE id = $1`,
     [blueprintId]
@@ -2092,7 +2092,7 @@ app.delete('/api/blueprints/:blueprintId', requireAuth, asyncHandler(async (req,
 
   await tx(async (client) => {
     const before = await client.query(
-      `SELECT id, project_id, original_name, mime_type, size_bytes, uploaded_by, created_at
+      `SELECT id, project_id, COALESCE(original_name, file_name) AS original_name, mime_type, COALESCE(size_bytes, file_size) AS size_bytes, uploaded_by, created_at
        FROM project_blueprints WHERE id = $1`,
       [blueprintId]
     );
