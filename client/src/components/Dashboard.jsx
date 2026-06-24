@@ -3,7 +3,6 @@ import { addDays, formatDate, todayIso } from '../lib/dates';
 import { buildingOptions } from '../lib/buildings';
 import SiteMembersPanel from './SiteMembersPanel';
 import OwnerCmsWosPanel from './OwnerCmsWosPanel';
-import MarkupCalculatorPanel from './MarkupCalculatorPanel';
 import SiteBanner from './SiteBanner';
 
 const dashboardTabs = [
@@ -13,8 +12,7 @@ const dashboardTabs = [
   { id: 'assignments', label: 'Projects' },
   { id: 'calendar', label: 'Calendar overview' },
   { id: 'site-members', label: 'Site members', managersOnly: true },
-  { id: 'owner-cms', label: 'CMS WOs', ownersOnly: true },
-  { id: 'markup-calc', label: 'Markup calculator', ownersOnly: true }
+  { id: 'owner-cms', label: 'CMS WOs', ownersOnly: true }
 ];
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -161,7 +159,6 @@ export default function Dashboard({
 
   const canManageSite = Boolean(user?.can_manage_site || ['owner', 'manager'].includes(user?.site_role));
   const canAccessOwnerCms = user?.site_role === 'owner' && !user?.access_revoked;
-  const canAccessMarkupCalculator = canAccessOwnerCms;
   const visibleTabs = useMemo(
     () => dashboardTabs.filter((tab) => (!tab.managersOnly || canManageSite) && (!tab.ownersOnly || canAccessOwnerCms)),
     [canManageSite, canAccessOwnerCms]
@@ -282,7 +279,7 @@ export default function Dashboard({
   function renderProjectActions(project) {
     const lifecycle = getLifecycleStatus(project);
     const canManage = managerRoles.has(project.role);
-    const canDelete = project.role === 'owner';
+    const canDelete = user?.site_role === 'owner' && !user?.access_revoked;
     const busy = actionProjectId === project.id;
 
     return (
@@ -715,7 +712,6 @@ export default function Dashboard({
       {activeTab === 'calendar' && renderCalendarTab()}
       {activeTab === 'site-members' && canManageSite && <SiteMembersPanel currentUser={user} onOpenProject={onOpenProject} />}
       {activeTab === 'owner-cms' && canAccessOwnerCms && <OwnerCmsWosPanel user={user} />}
-      {activeTab === 'markup-calc' && canAccessMarkupCalculator && <MarkupCalculatorPanel />}
     </main>
   );
 }

@@ -2605,9 +2605,9 @@ html[data-theme='dark'] .theme-toggle-button {
 
 .cms-sheet-meta {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
   margin: 0.2rem 0 1rem;
 }
 
@@ -2926,111 +2926,4 @@ html[data-theme='dark'] .status-archived {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-.owner-cms-fullscreen {
-  position: fixed;
-  inset: 1rem;
-  z-index: 80;
-  margin: 0;
-  padding: 0;
-  overflow: auto;
-  background: var(--page-bg);
-  border-radius: 18px;
-  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.32);
-}
-
-.owner-cms-fullscreen .owner-cms-sheet-panel {
-  min-height: calc(100vh - 2rem);
-}
-
-.cms-sheet-actions {
-  justify-content: flex-start;
-  gap: 0.5rem;
-}
-
-.cms-sheet-actions-left {
-  align-self: flex-start;
-}
-
-.cms-row-action-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  margin-top: 0.35rem;
-}
-
-.cms-row-action-stack .ghost-button,
-.cms-row-action-stack .danger-button {
-  min-width: 110px;
-}
-
-.markup-calculator-panel {
-  gap: 1rem;
-}
-
-.markup-report-layout {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.markup-report-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.markup-report-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.markup-report-grid-header,
-.markup-report-row,
-.markup-report-total {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(120px, 0.8fr) minmax(120px, 0.8fr);
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.markup-report-grid-header {
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted-text);
-}
-
-.markup-report-row input {
-  width: 100%;
-}
-
-.markup-report-value,
-.markup-report-total strong {
-  padding: 0.7rem 0.85rem;
-  border-radius: 14px;
-  background: var(--surface-2);
-  border: 1px solid var(--border-color);
-  font-variant-numeric: tabular-nums;
-}
-
-.markup-report-total {
-  margin-top: 0.25rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--border-color);
-}
-
-@media (max-width: 1100px) {
-  .markup-report-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 900px) {
-  .owner-cms-fullscreen {
-    inset: 0.5rem;
-  }
 }

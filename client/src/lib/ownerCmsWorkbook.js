@@ -294,7 +294,7 @@ Utility Sytems
   { key: 'walk_scheduled', label: 'Walk Scheduled', type: 'date', width: 140 },
   { key: 'install_date', label: 'Install Date', type: 'date', width: 140 },
   { key: 'deadline', label: 'Deadline', type: 'date', width: 140 },
-  { key: 'bill_by_year_end', label: 'Bill by Year end', type: 'select', width: 160, options: ['Yes', 'No', 'NA'] },
+  { key: 'bill_by_year_end', label: 'Bill by year end', type: 'date', width: 150 },
   { key: 'category', label: 'Category', type: 'select', width: 180, options: linesToOptions(`
 COST ESTIAMTE
 CCURE
@@ -312,28 +312,25 @@ CCURE & CCTV
   { key: 'dm_notified', label: 'DM Notified', type: 'select', width: 120, options: ['Yes', 'No', 'NA'] },
   { key: 'security', label: 'Security', type: 'select', width: 290, options: securityOptions },
   { key: 'child_wo', label: 'Child WO', type: 'select', width: 110, options: ['Yes', 'No', 'NA'] },
-  { key: 'vendor', label: 'Vendor', type: 'select', width: 180, options: linesToOptions(`
+  { key: 'vendor', label: 'Vendor', type: 'select', width: 160, options: linesToOptions(`
 AVTEC
 Beacon
-Bid Walk
 Convergint
 DSI
 EverBase
 G4S
-IC&E
 Ideacom
 IES
-Misc
-Nelson Fire
-OTIS
-Pavion
 PTI
-Pye Barker
 S101
-SMT
-USHOP
-Utah Yamas
+Stone
+Pavion
 Yamas
+USHOP
+Misc
+SMT
+Accent Auto
+Bid Walk
 `) },
   { key: 'status', label: 'Status', type: 'select', width: 220, options: linesToOptions(`
 Cost Estimate

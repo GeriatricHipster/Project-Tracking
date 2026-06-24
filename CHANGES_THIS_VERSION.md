@@ -5,3 +5,6 @@
 - Existing PSG and SS Tracking project features remain unchanged.
 
 - Remember me preference now persists between visits and the checkbox stays visible and clear on the login screen.
+
+
+- site owners can now delete any project, not just projects they belong to
