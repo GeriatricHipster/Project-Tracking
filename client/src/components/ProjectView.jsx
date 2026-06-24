@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { api, getToken } from '../lib/api';
 import { createProjectSocket } from '../lib/socket';
 import { formatDate } from '../lib/dates';
@@ -21,13 +21,48 @@ const roleRank = {
   owner: 3
 };
 
+class ProjectViewErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  handleReload = () => {
+    window.location.reload();
+  };
+
+  render() {
+    if (this.state.error) {
+      return (
+        <main className="app-page error-boundary-page">
+          <SiteBanner />
+          <div className="panel error-boundary-card">
+            <h1>Project page error</h1>
+            <p>The project page hit an error while loading. You can go back and try again.</p>
+            <div className="row-actions">
+              <button className="primary-button" type="button" onClick={this.handleReload}>Reload project</button>
+              <button className="ghost-button" type="button" onClick={this.props.onBack}>Back to projects</button>
+            </div>
+          </div>
+        </main>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 function titleCase(value) {
   return String(value || '')
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export default function ProjectView({ projectId, user, onBack }) {
+function ProjectViewContent({ projectId, user, onBack }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -208,6 +243,7 @@ export default function ProjectView({ projectId, user, onBack }) {
             <h1>{project.name}</h1>
             <span className={`role-pill role-${project.role}`}>{titleCase(project.role)}</span>
             {project.project_status === 'completed' && <span className="status-pill status-completed">Completed</span>}
+            {project.project_status === 'archived' && <span className="status-pill status-archived">Archived</span>}
           </div>
           <p>{project.location || 'No location set'} · {formatDate(project.start_date)} to {formatDate(project.end_date)}</p>
           {project.description && <p className="project-description">{project.description}</p>}
@@ -263,5 +299,14 @@ export default function ProjectView({ projectId, user, onBack }) {
         </aside>
       </section>
     </main>
+  );
+}
+
+
+export default function ProjectView(props) {
+  return (
+    <ProjectViewErrorBoundary onBack={props.onBack}>
+      <ProjectViewContent {...props} />
+    </ProjectViewErrorBoundary>
   );
 }
