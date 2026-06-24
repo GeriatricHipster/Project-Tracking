@@ -42,12 +42,13 @@ const roleRank = {
 };
 
 const statuses = new Set(['not_started', 'in_progress', 'blocked', 'complete']);
-const projectLifecycleStatuses = new Set(['active', 'completed', 'archived']);
+const projectLifecycleStatuses = new Set(['active', 'completed']);
 const priorities = new Set(['low', 'normal', 'high', 'critical']);
 const roles = new Set(['owner', 'manager', 'editor', 'viewer']);
 const inviteRoles = new Set(['manager', 'editor', 'viewer']);
-const vendors = new Set(['Accent Automatic', 'Accent Auto', 'Beacon', 'Convergint', 'DSI', 'EverBase', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'S101', 'SMT', 'Stone', 'Stone Security', 'USHOP', 'Utah Yamas', 'Yamas']);
+const vendors = new Set(['Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas']);
 const trades = new Set(['CCure', 'Cameras', 'CCure & Cameras']);
+const assigneeNames = new Set(['Bennett', 'Bill', 'Chris', 'Derick', 'Derick & James', 'Derick & Justin', 'Derick & Justin, Suvam', 'Derick & Kenna', 'Derick & Kyra', 'Derick & Locksmiths', 'Derick & Ryan', 'Derick & Suvam', 'James', 'James & Derick', 'James & Justin', 'James & Justin, Suvam', 'James & Kenna', 'James & Kyra', 'James & Locksmiths', 'James & Ryan', 'James & Suvam', 'Jim', 'Justin', 'Justin & Derick', 'Justin & James', 'Justin & Kenna', 'Justin & Kyra', 'Justin & Locksmiths', 'Justin & Ryan', 'Justin & Suvam', 'Kenna', 'Kenna & Derick', 'Kenna & Justin', 'Kenna & Justin, Suvam', 'Kenna & Kyra', 'Kenna & Locksmiths', 'Kenna & Ryan', 'Kenna & Suvam', 'Kyra', 'Ryan', 'Suvam', 'Suvam & Derick', 'Suvam & James', 'Suvam & Justin', 'Suvam & Kenna', 'Suvam & Kyra', 'Suvam & Locksmiths', 'Suvam & Ryan']);
 const securityTeamMembers = new Set(['Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam']);
 const projectManagers = new Set(['Kurt', 'Austin']);
 const siteRoles = new Set(['owner', 'manager', 'member']);
@@ -439,6 +440,10 @@ function normalizeVendor(value, partial = false) {
   return normalizeTaskChoice(value, vendors, 'vendor', partial);
 }
 
+function normalizeAssigneeChoice(value, partial = false) {
+  return normalizeTaskChoice(value, assigneeNames, 'assignee', partial);
+}
+
 function normalizeProjectNotes(value) {
   const text = String(value ?? '');
   if (text.length > 10000) {
@@ -469,7 +474,9 @@ function normalizeProgress(value) {
 function normalizeOptionalId(value, label) {
   if (value === undefined) return undefined;
   if (value === null || value === '') return null;
-  return parseId(value, label);
+  const text = String(value).trim();
+  if (!/^\d+$/.test(text)) return null;
+  return parseId(text, label);
 }
 
 function signToken(user) {
@@ -569,8 +576,8 @@ function requireSiteOwner(user) {
   return siteRole;
 }
 
-const OWNER_CMS_ROW_COUNT = 150;
-const OWNER_CMS_COLUMN_COUNT = 20;
+const OWNER_CMS_ROW_COUNT = 60;
+const OWNER_CMS_COLUMN_COUNT = 19;
 
 function buildBlankOwnerCmsGrid() {
   return Array.from({ length: OWNER_CMS_ROW_COUNT }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
@@ -590,50 +597,6 @@ function normalizeOwnerCmsGrid(cells) {
   }
 
   return blank;
-}
-
-function normalizeOwnerCmsArchivedRows(rows) {
-  if (!Array.isArray(rows)) return [];
-
-  return rows
-    .map((row, index) => {
-      if (Array.isArray(row)) {
-        return {
-          row_number: index + 1,
-          archived_at: null,
-          cells: normalizeOwnerCmsGrid([row])[0]
-        };
-      }
-
-      if (row && typeof row === 'object') {
-        return {
-          row_number: Number.isInteger(Number(row.row_number)) ? Number(row.row_number) : index + 1,
-          archived_at: row.archived_at || null,
-          cells: normalizeOwnerCmsGrid([Array.isArray(row.cells) ? row.cells : []])[0]
-        };
-      }
-
-      return {
-        row_number: index + 1,
-        archived_at: null,
-        cells: Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => '')
-      };
-    })
-    .filter((row) => row.cells.some((value) => String(value || '').trim().length > 0));
-}
-
-function rowHasContent(row) {
-  return Array.isArray(row) && row.some((value) => String(value || '').trim().length > 0);
-}
-
-async function archiveStaleCompletedProjects(db = { query }) {
-  await db.query(
-    `UPDATE projects
-     SET project_status = 'archived',
-         archived_at = COALESCE(archived_at, now())
-     WHERE project_status = 'completed'
-       AND COALESCE(completed_at, updated_at, created_at) <= now() - interval '30 days'`
-  );
 }
 
 function requireOwnerCmsSheet(sheetKey) {
@@ -792,7 +755,7 @@ async function loadProjectBlueprints(projectId) {
     `SELECT
        pb.id,
        pb.project_id,
-       pb.original_name,
+       COALESCE(pb.original_name, pb.file_name) AS original_name,
        pb.mime_type,
        pb.size_bytes,
        pb.uploaded_by,
@@ -815,15 +778,16 @@ const taskSelect = `
   t.description,
   t.trade,
   t.vendor,
-  t.vendor_secondary,
+  t.vendor_2,
+  t.assignee_1,
+  t.assignee_2,
+  t.assignee_3,
+  t.assignee_4,
   t.security_team_member,
   t.pm,
   t.assigned_to,
   assignee.name AS assigned_to_name,
   assignee.email AS assigned_to_email,
-  t.assignee_secondary,
-  t.assignee_tertiary,
-  t.assignee_quaternary,
   t.status,
   t.priority,
   to_char(t.start_date, 'YYYY-MM-DD') AS start_date,
@@ -863,7 +827,6 @@ async function verifyParentTask(db, projectId, parentTaskId, taskId = null) {
 }
 
 async function loadProjectPayload(projectId, userId) {
-  await archiveStaleCompletedProjects();
   const access = await requireProjectAccess(projectId, userId);
 
   const projectResult = await query(
@@ -996,13 +959,14 @@ function buildTaskInput(body, partial = false) {
   if (!partial || body.description !== undefined) input.description = cleanText(body.description);
   if (!partial || body.trade !== undefined) input.trade = normalizeTaskChoice(body.trade, trades, 'trade', partial);
   if (!partial || body.vendor !== undefined) input.vendor = normalizeVendor(body.vendor, partial);
-  if (!partial || body.vendor_secondary !== undefined) input.vendor_secondary = normalizeVendor(body.vendor_secondary, partial);
+  if (!partial || body.vendor_2 !== undefined) input.vendor_2 = normalizeVendor(body.vendor_2, partial);
+  if (!partial || body.assignee_1 !== undefined) input.assignee_1 = normalizeAssigneeChoice(body.assignee_1, partial);
+  if (!partial || body.assignee_2 !== undefined) input.assignee_2 = normalizeAssigneeChoice(body.assignee_2, partial);
+  if (!partial || body.assignee_3 !== undefined) input.assignee_3 = normalizeAssigneeChoice(body.assignee_3, partial);
+  if (!partial || body.assignee_4 !== undefined) input.assignee_4 = normalizeAssigneeChoice(body.assignee_4, partial);
   if (!partial || body.security_team_member !== undefined) input.security_team_member = normalizeTaskChoice(body.security_team_member, securityTeamMembers, 'security_team_member', partial);
   if (!partial || body.pm !== undefined) input.pm = normalizeTaskChoice(body.pm, projectManagers, 'pm', partial);
   if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeOptionalId(body.assigned_to, 'assigned_to');
-  if (!partial || body.assignee_secondary !== undefined) input.assignee_secondary = cleanText(body.assignee_secondary);
-  if (!partial || body.assignee_tertiary !== undefined) input.assignee_tertiary = cleanText(body.assignee_tertiary);
-  if (!partial || body.assignee_quaternary !== undefined) input.assignee_quaternary = cleanText(body.assignee_quaternary);
   if (!partial || body.parent_task_id !== undefined) input.parent_task_id = normalizeOptionalId(body.parent_task_id, 'parent_task_id');
 
   if (!partial || body.status !== undefined) {
@@ -1119,25 +1083,23 @@ app.get('/api/owner/cms-wos', requireAuth, asyncHandler(async (req, res) => {
 
   const result = await tx(async (client) => {
     await client.query(
-      `INSERT INTO owner_cms_work_orders (sheet_key, sheet_name, cells, archived_cells)
+      `INSERT INTO owner_cms_work_orders (sheet_key, sheet_name, cells)
        VALUES
-         ('kurts_cms_wos', 'Kurts CMS WOs', '[]'::jsonb, '[]'::jsonb),
-         ('austins_cms_wos', 'Austins CMS WOs', '[]'::jsonb, '[]'::jsonb)
+         ('kurts_cms_wos', 'Kurts CMS WOs', '[]'::jsonb),
+         ('austins_cms_wos', 'Austins CMS WOs', '[]'::jsonb)
        ON CONFLICT (sheet_key) DO UPDATE SET
-         sheet_name = EXCLUDED.sheet_name,
-         archived_cells = COALESCE(owner_cms_work_orders.archived_cells, '[]'::jsonb)`
+         sheet_name = EXCLUDED.sheet_name`
     );
 
     const rows = await client.query(
-      `SELECT sheet_key, sheet_name, cells, archived_cells, created_at, updated_at
+      `SELECT sheet_key, sheet_name, cells, created_at, updated_at
        FROM owner_cms_work_orders
        ORDER BY sheet_name ASC`
     );
 
     return rows.rows.map((sheet) => ({
       ...sheet,
-      cells: normalizeOwnerCmsGrid(sheet.cells),
-      archived_rows: normalizeOwnerCmsArchivedRows(sheet.archived_cells)
+      cells: normalizeOwnerCmsGrid(sheet.cells)
     }));
   });
 
@@ -1163,171 +1125,25 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
 
   const updated = await tx(async (client) => {
     const current = await client.query(
-      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      'SELECT sheet_key, sheet_name, cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
       [sheet.sheet_key]
     );
     if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
 
     const normalized = normalizeOwnerCmsGrid(current.rows[0].cells);
     normalized[rowIndex][colIndex] = cellValue;
-    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
 
     const saveResult = await client.query(
       `UPDATE owner_cms_work_orders
-       SET cells = $1,
-           archived_cells = $2
-       WHERE sheet_key = $3
-       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
-      [JSON.stringify(normalized), JSON.stringify(archivedRows), sheet.sheet_key]
+       SET cells = $1
+       WHERE sheet_key = $2
+       RETURNING sheet_key, sheet_name, cells, created_at, updated_at`,
+      [JSON.stringify(normalized), sheet.sheet_key]
     );
 
     return {
       ...saveResult.rows[0],
-      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
-      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
-    };
-  });
-
-  res.json({ sheet: updated });
-}));
-
-app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/archive', requireAuth, asyncHandler(async (req, res) => {
-  requireSiteOwner(req.user);
-  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
-  const rowIndex = clampInteger(req.params.rowIndex, {
-    label: 'rowIndex',
-    defaultValue: 0,
-    min: 0,
-    max: OWNER_CMS_ROW_COUNT - 1
-  });
-
-  const updated = await tx(async (client) => {
-    const current = await client.query(
-      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
-      [sheet.sheet_key]
-    );
-    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
-
-    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
-    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
-    const row = activeRows[rowIndex];
-    if (!row) throw httpError(404, 'Row not found.');
-
-    if (!rowHasContent(row)) {
-      throw httpError(400, 'That row is already blank.');
-    }
-
-    archivedRows.unshift({
-      row_number: rowIndex + 1,
-      archived_at: new Date().toISOString(),
-      cells: [...row]
-    });
-    activeRows[rowIndex] = Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => '');
-
-    const saveResult = await client.query(
-      `UPDATE owner_cms_work_orders
-       SET cells = $1,
-           archived_cells = $2
-       WHERE sheet_key = $3
-       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
-      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
-    );
-
-    return {
-      ...saveResult.rows[0],
-      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
-      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
-    };
-  });
-
-  res.json({ sheet: updated });
-}));
-
-app.post('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex/restore', requireAuth, asyncHandler(async (req, res) => {
-  requireSiteOwner(req.user);
-  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
-  const archiveIndex = clampInteger(req.params.archiveIndex, {
-    label: 'archiveIndex',
-    defaultValue: 0,
-    min: 0,
-    max: 999999
-  });
-
-  const updated = await tx(async (client) => {
-    const current = await client.query(
-      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
-      [sheet.sheet_key]
-    );
-    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
-
-    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
-    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
-    const archivedRow = archivedRows[archiveIndex];
-    if (!archivedRow) throw httpError(404, 'Archived row not found.');
-
-    let targetIndex = archivedRow.row_number ? Number(archivedRow.row_number) - 1 : activeRows.findIndex((row) => !rowHasContent(row));
-    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= OWNER_CMS_ROW_COUNT || rowHasContent(activeRows[targetIndex])) {
-      targetIndex = activeRows.findIndex((row) => !rowHasContent(row));
-    }
-    if (targetIndex < 0) throw httpError(400, 'No empty rows are available to restore this entry.');
-
-    activeRows[targetIndex] = [...archivedRow.cells];
-    archivedRows.splice(archiveIndex, 1);
-
-    const saveResult = await client.query(
-      `UPDATE owner_cms_work_orders
-       SET cells = $1,
-           archived_cells = $2
-       WHERE sheet_key = $3
-       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
-      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
-    );
-
-    return {
-      ...saveResult.rows[0],
-      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
-      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
-    };
-  });
-
-  res.json({ sheet: updated });
-}));
-
-app.delete('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex', requireAuth, asyncHandler(async (req, res) => {
-  requireSiteOwner(req.user);
-  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
-  const archiveIndex = clampInteger(req.params.archiveIndex, {
-    label: 'archiveIndex',
-    defaultValue: 0,
-    min: 0,
-    max: 999999
-  });
-
-  const updated = await tx(async (client) => {
-    const current = await client.query(
-      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
-      [sheet.sheet_key]
-    );
-    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
-
-    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
-    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
-    if (!archivedRows[archiveIndex]) throw httpError(404, 'Archived row not found.');
-    archivedRows.splice(archiveIndex, 1);
-
-    const saveResult = await client.query(
-      `UPDATE owner_cms_work_orders
-       SET cells = $1,
-           archived_cells = $2
-       WHERE sheet_key = $3
-       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
-      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
-    );
-
-    return {
-      ...saveResult.rows[0],
-      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
-      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells)
     };
   });
 
@@ -1335,7 +1151,6 @@ app.delete('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex', requireAuth, a
 }));
 
 app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
-  await archiveStaleCompletedProjects();
   const result = await query(
     `WITH portfolio_access AS (
        SELECT (
@@ -1434,7 +1249,6 @@ app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
      SELECT
        project_rows.*,
        CASE
-         WHEN project_status = 'archived' THEN 'archived'
          WHEN project_status = 'completed' THEN 'completed'
          ELSE schedule_status
        END AS status
@@ -1679,18 +1493,8 @@ app.patch('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res)
     }
     if (req.body.project_status !== undefined || req.body.lifecycle_status !== undefined) {
       const requestedStatus = req.body.project_status !== undefined ? req.body.project_status : req.body.lifecycle_status;
-      const nextStatus = requireEnum(requestedStatus, projectLifecycleStatuses, 'project_status');
-      values.push(nextStatus);
+      values.push(requireEnum(requestedStatus, projectLifecycleStatuses, 'project_status'));
       sets.push(`project_status = $${values.length}`);
-      if (nextStatus === 'completed') {
-        sets.push('completed_at = COALESCE(completed_at, now())');
-        sets.push('archived_at = NULL');
-      } else if (nextStatus === 'active') {
-        sets.push('completed_at = NULL');
-        sets.push('archived_at = NULL');
-      } else if (nextStatus === 'archived') {
-        sets.push('archived_at = COALESCE(archived_at, now())');
-      }
     }
     if (req.body.start_date !== undefined) {
       values.push(nextStart);
@@ -1828,13 +1632,9 @@ app.delete('/api/projects/:projectId/notes/:noteId', requireAuth, asyncHandler(a
 
 app.delete('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res) => {
   const projectId = parseId(req.params.projectId, 'projectId');
-  const isSiteOwner = req.user.site_role === 'owner';
 
   await tx(async (client) => {
-    if (!isSiteOwner) {
-      await requireProjectMembership(projectId, req.user.id, 'owner', client);
-    }
-
+    requireSiteOwner(req.user);
     const beforeResult = await client.query('SELECT * FROM projects WHERE id = $1', [projectId]);
     if (!beforeResult.rowCount) throw httpError(404, 'Project not found.');
     await writeAudit(client, {
@@ -2049,10 +1849,10 @@ app.post('/api/projects/:projectId/blueprints', requireAuth, asyncHandler(async 
     await requireProjectMembership(projectId, req.user.id, 'editor', client);
     const result = await client.query(
       `INSERT INTO project_blueprints
-        (project_id, original_name, mime_type, size_bytes, file_data, uploaded_by)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, project_id, original_name, mime_type, size_bytes, uploaded_by, created_at`,
-      [projectId, originalName, mimeType, req.file.size, req.file.buffer, req.user.id]
+        (project_id, original_name, file_name, mime_type, size_bytes, file_data, uploaded_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, project_id, COALESCE(original_name, file_name) AS original_name, mime_type, size_bytes, uploaded_by, created_at`,
+      [projectId, originalName, originalName, mimeType, req.file.size, req.file.buffer, req.user.id]
     );
 
     await writeAudit(client, {
@@ -2074,7 +1874,7 @@ app.post('/api/projects/:projectId/blueprints', requireAuth, asyncHandler(async 
 app.get('/api/blueprints/:blueprintId/download', requireAuth, asyncHandler(async (req, res) => {
   const blueprintId = parseId(req.params.blueprintId, 'blueprintId');
   const result = await query(
-    `SELECT id, project_id, original_name, mime_type, size_bytes, file_data
+    `SELECT id, project_id, COALESCE(original_name, file_name) AS original_name, mime_type, size_bytes, file_data
      FROM project_blueprints
      WHERE id = $1`,
     [blueprintId]
@@ -2096,7 +1896,7 @@ app.delete('/api/blueprints/:blueprintId', requireAuth, asyncHandler(async (req,
 
   await tx(async (client) => {
     const before = await client.query(
-      `SELECT id, project_id, original_name, mime_type, size_bytes, uploaded_by, created_at
+      `SELECT id, project_id, COALESCE(original_name, file_name) AS original_name, mime_type, size_bytes, uploaded_by, created_at
        FROM project_blueprints WHERE id = $1`,
       [blueprintId]
     );
@@ -2139,9 +1939,9 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
 
     const insertResult = await client.query(
       `INSERT INTO tasks
-        (project_id, parent_task_id, name, description, trade, vendor, vendor_secondary, security_team_member, pm, assigned_to, assignee_secondary, assignee_tertiary, assignee_quaternary, status, priority, start_date, end_date,
+        (project_id, parent_task_id, name, description, trade, vendor, vendor_2, assignee_1, assignee_2, assignee_3, assignee_4, security_team_member, pm, assigned_to, status, priority, start_date, end_date,
          percent_complete, color, sort_order, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
        RETURNING id`,
       [
         projectId,
@@ -2150,13 +1950,14 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
         input.description,
         input.trade,
         input.vendor,
-        input.vendor_secondary,
+        input.vendor_2,
+        input.assignee_1,
+        input.assignee_2,
+        input.assignee_3,
+        input.assignee_4,
         input.security_team_member,
         input.pm,
         input.assigned_to ?? null,
-        input.assignee_secondary ?? null,
-        input.assignee_tertiary ?? null,
-        input.assignee_quaternary ?? null,
         input.status,
         input.priority,
         input.start_date,

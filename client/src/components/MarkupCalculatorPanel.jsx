@@ -1,116 +1,153 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-const REPORTS = [
+const MATERIAL_ROWS = 6;
+const SECTION_DEFINITIONS = [
   {
-    id: 'four-seven',
-    title: 'Material (+4.7%)',
-    percent: 0.047,
-    subtitle: 'Based on the first workbook report.'
+    id: 'markup-47',
+    title: 'MARK UP REPORT',
+    rate: 0.047,
+    materialLabel: 'MATERIAL (+4.7%)',
+    totalLabel: 'TOTAL MARK UP 4.7%'
   },
   {
-    id: 'five-zero',
-    title: 'Material (+5.0%)',
-    percent: 0.05,
-    subtitle: 'Based on the second workbook report.'
+    id: 'markup-50',
+    title: 'MARK UP REPORT',
+    rate: 0.05,
+    materialLabel: 'MATERIAL (+5.0%)',
+    totalLabel: 'TOTAL MARK UP 5.0%'
   }
 ];
 
-const initialValues = {
-  'four-seven': [6557.743, 736.2, '', '', '', ''],
-  'five-zero': [16.32, 2317, '', '', '', '']
-};
+function blankSectionValues() {
+  return Array.from({ length: MATERIAL_ROWS }, () => '');
+}
 
-function toNumber(value) {
+function formatMoney(value) {
   const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
+  if (!Number.isFinite(number)) return '0.00';
+  return number.toFixed(2);
 }
 
-function currency(value) {
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(toNumber(value));
-}
+function FullscreenButton({ targetRef }) {
+  const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
 
-function ReportCard({ report, values, onChange }) {
-  const totals = useMemo(() => {
-    const lineValues = values.map(toNumber);
-    const totalBase = lineValues.reduce((sum, value) => sum + value, 0);
-    const totalMarkup = lineValues.reduce((sum, value) => sum + (value * report.percent), 0);
-    return { totalBase, totalMarkup };
-  }, [report.percent, values]);
+  useEffect(() => {
+    const handleChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', handleChange);
+    return () => document.removeEventListener('fullscreenchange', handleChange);
+  }, []);
+
+  function toggleFullscreen() {
+    const target = targetRef.current;
+    if (!target) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+      return;
+    }
+    target.requestFullscreen?.();
+  }
 
   return (
-    <article className="panel markup-report-card">
-      <div className="panel-heading compact-heading">
+    <button className="ghost-button compact fullscreen-button" onClick={toggleFullscreen} type="button">
+      {isFullscreen ? 'Exit full screen' : 'Full screen'}
+    </button>
+  );
+}
+
+function MarkupSection({ definition, values, onChange }) {
+  const totals = useMemo(() => {
+    const materials = values.map((value) => Number(value) || 0);
+    const markups = materials.map((amount) => amount * definition.rate);
+    return {
+      materials,
+      markups,
+      materialTotal: materials.reduce((sum, amount) => sum + amount, 0),
+      markupTotal: markups.reduce((sum, amount) => sum + amount, 0)
+    };
+  }, [definition.rate, values]);
+
+  return (
+    <article className="panel markup-section-card">
+      <div className="markup-section-header">
         <div>
-          <h2>{report.title}</h2>
-          <p>{report.subtitle}</p>
+          <h3>{definition.title}</h3>
+          <p>{definition.materialLabel}</p>
         </div>
+        <span className="status-pill">Rate {Math.round(definition.rate * 1000) / 10}%</span>
       </div>
 
-      <div className="markup-report-grid">
-        <div className="markup-report-grid-header">
-          <span>Line item</span>
-          <span>Base amount</span>
-          <span>Markup</span>
-        </div>
-        {values.map((value, index) => {
-          const markup = toNumber(value) * report.percent;
-          return (
-            <div className="markup-report-row" key={`${report.id}-${index}`}>
-              <label>
-                <span className="sr-only">Line item {index + 1}</span>
-                <input
-                  value={value}
-                  onChange={(event) => onChange(index, event.target.value)}
-                  placeholder={`Line item ${index + 1}`}
-                  type="text"
-                />
-              </label>
-              <div className="markup-report-value">{currency(value)}</div>
-              <div className="markup-report-value">{currency(markup)}</div>
-            </div>
-          );
-        })}
-        <div className="markup-report-total">
-          <strong>Total</strong>
-          <strong>{currency(totals.totalBase)}</strong>
-          <strong>{currency(totals.totalMarkup)}</strong>
-        </div>
+      <div className="table-scroll markup-table-wrap">
+        <table className="markup-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Material</th>
+              <th>{definition.totalLabel}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {values.map((value, index) => (
+              <tr key={`${definition.id}-${index}`}>
+                <td>{index + 1}</td>
+                <td>
+                  <input
+                    className="markup-input"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    type="number"
+                    value={value}
+                    onChange={(event) => onChange(index, event.target.value)}
+                    aria-label={`${definition.materialLabel} row ${index + 1}`}
+                  />
+                </td>
+                <td>{formatMoney(totals.markups[index])}</td>
+              </tr>
+            ))}
+            <tr className="markup-total-row">
+              <td colSpan="1">Totals</td>
+              <td>{formatMoney(totals.materialTotal)}</td>
+              <td>{formatMoney(totals.markupTotal)}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </article>
   );
 }
 
 export default function MarkupCalculatorPanel() {
-  const [reports, setReports] = useState(initialValues);
+  const panelRef = useRef(null);
+  const [sections, setSections] = useState(() => SECTION_DEFINITIONS.map(() => blankSectionValues()));
 
-  function updateValue(reportId, index, value) {
-    setReports((current) => {
-      const nextValues = [...(current[reportId] || [])];
-      nextValues[index] = value;
-      return {
-        ...current,
-        [reportId]: nextValues
-      };
+  function updateSection(sectionIndex, rowIndex, value) {
+    setSections((current) => {
+      const next = current.map((sectionValues) => [...sectionValues]);
+      next[sectionIndex][rowIndex] = value;
+      return next;
     });
   }
 
   return (
-    <section className="dashboard-stack markup-calculator-panel">
+    <section className="dashboard-stack owner-markup-panel" ref={panelRef}>
       <section className="panel">
         <div className="panel-heading">
-          <div>
-            <h2>Markup calculator</h2>
-            <p>Editable markup worksheet based on the workbook formulas.</p>
+          <div className="panel-heading-left">
+            <FullscreenButton targetRef={panelRef} />
+            <div>
+              <h2>Mark up calculator</h2>
+              <p>Based on the workbook formulas: enter up to 6 material amounts for each report and the markup total updates automatically.</p>
+            </div>
           </div>
         </div>
 
-        <div className="markup-report-layout">
-          {REPORTS.map((report) => (
-            <ReportCard
-              key={report.id}
-              report={report}
-              values={reports[report.id] || []}
-              onChange={(index, value) => updateValue(report.id, index, value)}
+        <div className="markup-calc-grid">
+          {SECTION_DEFINITIONS.map((definition, sectionIndex) => (
+            <MarkupSection
+              key={definition.id}
+              definition={definition}
+              values={sections[sectionIndex]}
+              onChange={(rowIndex, value) => updateSection(sectionIndex, rowIndex, value)}
             />
           ))}
         </div>
