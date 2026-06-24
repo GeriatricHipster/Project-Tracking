@@ -7,10 +7,6 @@ const statusLabel = {
   complete: 'Complete'
 };
 
-function joinValues(values) {
-  return values.filter(Boolean).join(', ') || '-';
-}
-
 export default function TaskTable({ tasks, canEdit, onEdit, onDelete }) {
   return (
     <section className="panel table-panel">
@@ -27,11 +23,11 @@ export default function TaskTable({ tasks, canEdit, onEdit, onDelete }) {
             <tr>
               <th>Task</th>
               <th>Trade</th>
+              <th>Building</th>
               <th>Vendor</th>
-              <th>Vendor 2</th>
-              <th>Assignees</th>
+              <th>Security team</th>
               <th>PM</th>
-              <th>Primary assignee</th>
+              <th>Assignee</th>
               <th>Status</th>
               <th>Dates</th>
               <th>Progress</th>
@@ -47,9 +43,9 @@ export default function TaskTable({ tasks, canEdit, onEdit, onDelete }) {
                   {task.description && <span className="table-subtext">{task.description}</span>}
                 </td>
                 <td>{task.trade || '-'}</td>
+                <td>{task.building || '-'}</td>
                 <td>{task.vendor || '-'}</td>
-                <td>{task.vendor_secondary || '-'}</td>
-                <td>{joinValues([task.assignee_one, task.assignee_two, task.assignee_three, task.assignee_four])}</td>
+                <td>{task.security_team_member || '-'}</td>
                 <td>{task.pm || '-'}</td>
                 <td>{task.assigned_to_name || '-'}</td>
                 <td><span className={`status-pill status-${task.status}`}>{statusLabel[task.status] || task.status}</span></td>

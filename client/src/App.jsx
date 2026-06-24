@@ -10,10 +10,10 @@ const backgroundOptions = [
   { value: 'ember', label: 'Ember' },
   { value: 'slate', label: 'Slate' },
   { value: 'steel', label: 'Steel' },
-  { value: 'aurora', label: 'Aurora' },
+  { value: 'sunrise', label: 'Sunrise' },
   { value: 'forest', label: 'Forest' },
-  { value: 'plum', label: 'Plum' },
-  { value: 'sunset', label: 'Sunset' }
+  { value: 'dune', label: 'Dune' },
+  { value: 'cobalt', label: 'Cobalt' }
 ];
 
 function backgroundStorageKey(userId) {
@@ -182,7 +182,7 @@ export default function App() {
   }
 
   if (selectedProjectId) {
-    return <>{floatingControls}<ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></>;
+    return <>{floatingControls}<ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} onLogout={logout} /></>;
   }
 
   return (

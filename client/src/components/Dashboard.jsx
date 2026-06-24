@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addDays, formatDate, todayIso } from '../lib/dates';
-import { buildingOptions } from '../lib/buildings';
+import { getBuildingOptions } from '../lib/buildings';
 import SiteMembersPanel from './SiteMembersPanel';
 import OwnerCmsWosPanel from './OwnerCmsWosPanel';
-import MarkupCalculator from './MarkupCalculator';
 import SiteBanner from './SiteBanner';
+import MarkupCalculatorPanel from './MarkupCalculatorPanel';
 
 const dashboardTabs = [
   { id: 'projects', label: 'Active projects' },
@@ -155,13 +155,14 @@ export default function Dashboard({
     start_date: start,
     end_date: addDays(start, 90)
   });
+  const [buildingVersion, setBuildingVersion] = useState(0);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionProjectId, setActionProjectId] = useState(null);
 
   const canManageSite = Boolean(user?.can_manage_site || ['owner', 'manager'].includes(user?.site_role));
   const canAccessOwnerCms = user?.site_role === 'owner' && !user?.access_revoked;
-  const canAccessMarkupCalc = canAccessOwnerCms;
+  const canAccessMarkupCalculator = canAccessOwnerCms;
   const visibleTabs = useMemo(
     () => dashboardTabs.filter((tab) => (!tab.managersOnly || canManageSite) && (!tab.ownersOnly || canAccessOwnerCms)),
     [canManageSite, canAccessOwnerCms]
@@ -172,6 +173,15 @@ export default function Dashboard({
       setActiveTab(visibleTabs[0]?.id || 'projects');
     }
   }, [activeTab, visibleTabs]);
+
+
+  useEffect(() => {
+    const refreshBuildings = () => setBuildingVersion((value) => value + 1);
+    window.addEventListener('psg:buildings-updated', refreshBuildings);
+    return () => window.removeEventListener('psg:buildings-updated', refreshBuildings);
+  }, []);
+
+  const projectBuildingOptions = useMemo(() => getBuildingOptions(), [buildingVersion]);
 
   const visibleProjects = useMemo(
     () => projects.filter((project) => matchesProjectSearch(project, searchTerm)),
@@ -282,7 +292,7 @@ export default function Dashboard({
   function renderProjectActions(project) {
     const lifecycle = getLifecycleStatus(project);
     const canManage = managerRoles.has(project.role);
-    const canDelete = user?.site_role === 'owner' && !user?.access_revoked;
+    const canDelete = user?.site_role === 'owner';
     const busy = actionProjectId === project.id;
 
     return (
@@ -377,7 +387,7 @@ export default function Dashboard({
               Building
               <select value={form.location} onChange={(event) => updateField('location', event.target.value)}>
                 <option value=""> </option>
-                {buildingOptions.map((building) => (
+                {projectBuildingOptions.map((building) => (
                   <option key={building} value={building}>{building}</option>
                 ))}
               </select>
@@ -663,14 +673,18 @@ export default function Dashboard({
     );
   }
 
-
   function renderMarkupCalculatorTab() {
-    return <MarkupCalculator />;
+    return (
+      <section className="dashboard-stack">
+        <MarkupCalculatorPanel />
+      </section>
+    );
   }
+
 
   return (
     <main className="app-page">
-      <SiteBanner />
+      <SiteBanner onLogout={onLogout} />
       <header className="topbar">
         <div className="brand-lockup small">
           <span className="brand-mark">PSG</span>
@@ -720,7 +734,7 @@ export default function Dashboard({
       {activeTab === 'calendar' && renderCalendarTab()}
       {activeTab === 'site-members' && canManageSite && <SiteMembersPanel currentUser={user} onOpenProject={onOpenProject} />}
       {activeTab === 'owner-cms' && canAccessOwnerCms && <OwnerCmsWosPanel user={user} />}
-      {activeTab === 'markup-calculator' && canAccessMarkupCalc && renderMarkupCalculatorTab()}
+      {activeTab === 'markup-calculator' && canAccessMarkupCalculator && <MarkupCalculatorPanel />}
     </main>
   );
 }

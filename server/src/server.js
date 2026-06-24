@@ -46,60 +46,10 @@ const projectLifecycleStatuses = new Set(['active', 'completed', 'archived']);
 const priorities = new Set(['low', 'normal', 'high', 'critical']);
 const roles = new Set(['owner', 'manager', 'editor', 'viewer']);
 const inviteRoles = new Set(['manager', 'editor', 'viewer']);
-const vendors = new Set(['Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas']);
+const vendors = new Set(['Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'IES', 'Ideacom', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas']);
 const trades = new Set(['CCure', 'Cameras', 'CCure & Cameras']);
 const securityTeamMembers = new Set(['Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam']);
 const projectManagers = new Set(['Kurt', 'Austin']);
-const assigneeNames = new Set([
-  'Bennett',
-  'Bill',
-  'Chris',
-  'Derick',
-  'Derick & James',
-  'Derick & Justin',
-  'Derick & Justin, Suvam',
-  'Derick & Kenna',
-  'Derick & Kyra',
-  'Derick & Locksmiths',
-  'Derick & Ryan',
-  'Derick & Suvam',
-  'James',
-  'James & Derick',
-  'James & Justin',
-  'James & Justin, Suvam',
-  'James & Kenna',
-  'James & Kyra',
-  'James & Locksmiths',
-  'James & Ryan',
-  'James & Suvam',
-  'Jim',
-  'Justin',
-  'Justin & Derick',
-  'Justin & James',
-  'Justin & Kenna',
-  'Justin & Kyra',
-  'Justin & Locksmiths',
-  'Justin & Ryan',
-  'Justin & Suvam',
-  'Kenna',
-  'Kenna & Derick',
-  'Kenna & Justin',
-  'Kenna & Justin, Suvam',
-  'Kenna & Kyra',
-  'Kenna & Locksmiths',
-  'Kenna & Ryan',
-  'Kenna & Suvam',
-  'Kyra',
-  'Ryan',
-  'Suvam',
-  'Suvam & Derick',
-  'Suvam & James',
-  'Suvam & Justin',
-  'Suvam & Kenna',
-  'Suvam & Kyra',
-  'Suvam & Locksmiths',
-  'Suvam & Ryan'
-]);
 const siteRoles = new Set(['owner', 'manager', 'member']);
 const dependencyTypes = new Set(['FS', 'SS', 'FF', 'SF']);
 const managerSiteRoles = new Set(['owner', 'manager']);
@@ -518,10 +468,12 @@ function normalizeProgress(value) {
 
 function normalizeOptionalId(value, label) {
   if (value === undefined) return undefined;
-  if (value === null) return null;
-  const normalized = String(value).trim();
-  if (!normalized || normalized.toLowerCase() === 'unassigned' || normalized === '0') return null;
-  return parseId(normalized, label);
+  if (value === null || value === '') return null;
+  try {
+    return parseId(value, label);
+  } catch {
+    return null;
+  }
 }
 
 function signToken(user) {
@@ -621,19 +573,18 @@ function requireSiteOwner(user) {
   return siteRole;
 }
 
-const OWNER_CMS_INITIAL_ROW_COUNT = 150;
+const OWNER_CMS_ROW_COUNT = 150;
 const OWNER_CMS_COLUMN_COUNT = 20;
 
-function buildBlankOwnerCmsGrid(rowCount = OWNER_CMS_INITIAL_ROW_COUNT) {
-  return Array.from({ length: rowCount }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+function buildBlankOwnerCmsGrid() {
+  return Array.from({ length: OWNER_CMS_ROW_COUNT }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
 }
 
 function normalizeOwnerCmsGrid(cells) {
-  const rowCount = Math.max(OWNER_CMS_INITIAL_ROW_COUNT, Array.isArray(cells) ? cells.length : 0);
-  const blank = buildBlankOwnerCmsGrid(rowCount);
+  const blank = buildBlankOwnerCmsGrid();
   if (!Array.isArray(cells)) return blank;
 
-  for (let rowIndex = 0; rowIndex < Math.min(cells.length, blank.length); rowIndex += 1) {
+  for (let rowIndex = 0; rowIndex < Math.min(cells.length, OWNER_CMS_ROW_COUNT); rowIndex += 1) {
     const row = cells[rowIndex];
     if (!Array.isArray(row)) continue;
     for (let colIndex = 0; colIndex < Math.min(row.length, OWNER_CMS_COLUMN_COUNT); colIndex += 1) {
@@ -865,16 +816,11 @@ const taskSelect = `
   t.project_id,
   t.parent_task_id,
   t.name,
-  t.task_name_choice,
-  t.task_name_custom,
   t.description,
   t.trade,
+  t.building,
   t.vendor,
-  t.vendor_secondary,
-  t.assignee_one,
-  t.assignee_two,
-  t.assignee_three,
-  t.assignee_four,
+  t.security_team_member,
   t.pm,
   t.assigned_to,
   assignee.name AS assigned_to_name,
@@ -1047,32 +993,12 @@ async function loadProjectPayload(projectId, userId) {
 function buildTaskInput(body, partial = false) {
   const input = {};
 
-  const nextTaskChoice = cleanText(body.task_name_choice ?? body.name);
-  const nextTaskCustom = cleanText(body.task_name_custom);
-  if (!partial || body.task_name_choice !== undefined || body.task_name_custom !== undefined || body.name !== undefined) {
-    if (nextTaskChoice === 'Other') {
-      input.task_name_choice = 'Other';
-      input.task_name_custom = requireText(nextTaskCustom, 'Custom task name');
-      input.name = input.task_name_custom;
-    } else if (nextTaskChoice) {
-      input.task_name_choice = nextTaskChoice;
-      input.task_name_custom = '';
-      input.name = nextTaskChoice;
-    } else if (!partial) {
-      input.task_name_choice = '';
-      input.task_name_custom = '';
-      input.name = requireText(body.name, 'Task name');
-    }
-  }
-
+  if (!partial || body.name !== undefined) input.name = requireText(body.name, 'Task name');
   if (!partial || body.description !== undefined) input.description = cleanText(body.description);
+  if (!partial || body.building !== undefined) input.building = cleanText(body.building);
   if (!partial || body.trade !== undefined) input.trade = normalizeTaskChoice(body.trade, trades, 'trade', partial);
   if (!partial || body.vendor !== undefined) input.vendor = normalizeVendor(body.vendor, partial);
-  if (!partial || body.vendor_secondary !== undefined) input.vendor_secondary = normalizeVendor(body.vendor_secondary, partial);
-  if (!partial || body.assignee_one !== undefined) input.assignee_one = normalizeTaskChoice(body.assignee_one, assigneeNames, 'assignee_one', partial);
-  if (!partial || body.assignee_two !== undefined) input.assignee_two = normalizeTaskChoice(body.assignee_two, assigneeNames, 'assignee_two', partial);
-  if (!partial || body.assignee_three !== undefined) input.assignee_three = normalizeTaskChoice(body.assignee_three, assigneeNames, 'assignee_three', partial);
-  if (!partial || body.assignee_four !== undefined) input.assignee_four = normalizeTaskChoice(body.assignee_four, assigneeNames, 'assignee_four', partial);
+  if (!partial || body.security_team_member !== undefined) input.security_team_member = normalizeTaskChoice(body.security_team_member, securityTeamMembers, 'security_team_member', partial);
   if (!partial || body.pm !== undefined) input.pm = normalizeTaskChoice(body.pm, projectManagers, 'pm', partial);
   if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeOptionalId(body.assigned_to, 'assigned_to');
   if (!partial || body.parent_task_id !== undefined) input.parent_task_id = normalizeOptionalId(body.parent_task_id, 'parent_task_id');
@@ -1110,7 +1036,6 @@ function buildTaskInput(body, partial = false) {
 
   return input;
 }
-
 
 async function wouldCreateCycle(db, projectId, predecessorTaskId, successorTaskId) {
   const result = await db.query(
@@ -1264,15 +1189,13 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
   res.json({ sheet: updated });
 }));
 
-app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/insert', requireAuth, asyncHandler(async (req, res) => {
+
+app.post('/api/owner/cms-wos/:sheetKey/rows', requireAuth, asyncHandler(async (req, res) => {
   requireSiteOwner(req.user);
   const sheet = requireOwnerCmsSheet(req.params.sheetKey);
-  const rowIndex = clampInteger(req.params.rowIndex, {
-    label: 'rowIndex',
-    defaultValue: 0,
-    min: 0,
-    max: 999999
-  });
+  const rowIndex = req.body.row_index === undefined || req.body.row_index === null || req.body.row_index === ''
+    ? null
+    : clampInteger(req.body.row_index, { label: 'row_index', defaultValue: 0, min: 0, max: 999999 });
 
   const updated = await tx(async (client) => {
     const current = await client.query(
@@ -1283,7 +1206,7 @@ app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/insert', requireAuth, asyn
 
     const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
     const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
-    const insertAt = Math.min(Math.max(rowIndex, 0), activeRows.length);
+    const insertAt = rowIndex === null ? activeRows.length : Math.max(0, Math.min(rowIndex + 1, activeRows.length));
     activeRows.splice(insertAt, 0, Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
 
     const saveResult = await client.query(
@@ -1304,7 +1227,6 @@ app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/insert', requireAuth, asyn
 
   res.json({ sheet: updated });
 }));
-
 
 app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/archive', requireAuth, asyncHandler(async (req, res) => {
   requireSiteOwner(req.user);
@@ -1381,10 +1303,15 @@ app.post('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex/restore', requireA
     if (!archivedRow) throw httpError(404, 'Archived row not found.');
 
     let targetIndex = archivedRow.row_number ? Number(archivedRow.row_number) - 1 : activeRows.findIndex((row) => !rowHasContent(row));
-    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= activeRows.length || rowHasContent(activeRows[targetIndex])) {
+    if (!Number.isInteger(targetIndex) || targetIndex < 0 || rowHasContent(activeRows[targetIndex])) {
       targetIndex = activeRows.findIndex((row) => !rowHasContent(row));
     }
-    if (targetIndex < 0) throw httpError(400, 'No empty rows are available to restore this entry.');
+    if (targetIndex < 0) {
+      targetIndex = activeRows.length;
+    }
+    while (activeRows.length <= targetIndex) {
+      activeRows.push(Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+    }
 
     activeRows[targetIndex] = [...archivedRow.cells];
     archivedRows.splice(archiveIndex, 1);
@@ -1945,7 +1872,9 @@ app.delete('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res
   const projectId = parseId(req.params.projectId, 'projectId');
 
   await tx(async (client) => {
-    requireSiteOwner(req.user);
+    if (req.user.site_role !== 'owner') {
+      await requireProjectMembership(projectId, req.user.id, 'owner', client);
+    }
     const beforeResult = await client.query('SELECT * FROM projects WHERE id = $1', [projectId]);
     if (!beforeResult.rowCount) throw httpError(404, 'Project not found.');
     await writeAudit(client, {
@@ -2250,25 +2179,19 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
 
     const insertResult = await client.query(
       `INSERT INTO tasks
-        (project_id, parent_task_id, name, task_name_choice, task_name_custom, description, trade, vendor, vendor_secondary,
-         assignee_one, assignee_two, assignee_three, assignee_four, pm, assigned_to, status, priority, start_date, end_date,
+        (project_id, parent_task_id, name, building, description, trade, vendor, security_team_member, pm, assigned_to, status, priority, start_date, end_date,
          percent_complete, color, sort_order, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING id`,
       [
         projectId,
         input.parent_task_id ?? null,
         input.name,
-        input.task_name_choice ?? null,
-        input.task_name_custom ?? null,
+        input.building,
         input.description,
         input.trade,
         input.vendor,
-        input.vendor_secondary,
-        input.assignee_one,
-        input.assignee_two,
-        input.assignee_three,
-        input.assignee_four,
+        input.security_team_member,
         input.pm,
         input.assigned_to ?? null,
         input.status,

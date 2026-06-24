@@ -17,12 +17,11 @@ function clamp(value, min, max) {
 function taskMeta(task) {
   const parts = [];
   if (task.trade) parts.push(task.trade);
+  if (task.building) parts.push(task.building);
   if (task.vendor) parts.push(task.vendor);
-  if (task.vendor_secondary) parts.push(task.vendor_secondary);
-  const assignees = [task.assignee_one, task.assignee_two, task.assignee_three, task.assignee_four].filter(Boolean);
-  if (assignees.length) parts.push(`Assignees: ${assignees.join(', ')}`);
+  if (task.security_team_member) parts.push(`Security: ${task.security_team_member}`);
   if (task.pm) parts.push(`PM: ${task.pm}`);
-  if (task.assigned_to_name) parts.push(`Primary: ${task.assigned_to_name}`);
+  if (task.assigned_to_name) parts.push(`Assignee: ${task.assigned_to_name}`);
   return parts.join(' · ');
 }
 

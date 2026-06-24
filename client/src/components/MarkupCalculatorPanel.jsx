@@ -1,157 +1,103 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 
-const MATERIAL_ROWS = 6;
-const SECTION_DEFINITIONS = [
+const sections = [
   {
     id: 'markup-47',
-    title: 'MARK UP REPORT',
+    title: 'Mark up report',
     rate: 0.047,
-    materialLabel: 'MATERIAL (+4.7%)',
-    totalLabel: 'TOTAL MARK UP 4.7%'
+    rateLabel: 'Material (+4.7%)',
+    totalLabel: 'Total mark up 4.7%',
+    inputs: [6557.743, 736.2, '', '', '', '']
   },
   {
     id: 'markup-50',
-    title: 'MARK UP REPORT',
+    title: 'Mark up report',
     rate: 0.05,
-    materialLabel: 'MATERIAL (+5.0%)',
-    totalLabel: 'TOTAL MARK UP 5.0%'
+    rateLabel: 'Material (+5.0%)',
+    totalLabel: 'Total mark up 5.0%',
+    inputs: [16.32, 2317, '', '', '', '']
   }
 ];
 
-function blankSectionValues() {
-  return Array.from({ length: MATERIAL_ROWS }, () => '');
-}
-
 function formatMoney(value) {
+  const number = Number(value || 0);
+  return Number.isFinite(number)
+    ? number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '0.00';
+}
+
+function normalizeInput(value) {
+  if (value === '') return '';
   const number = Number(value);
-  if (!Number.isFinite(number)) return '0.00';
-  return number.toFixed(2);
+  return Number.isFinite(number) ? number : '';
 }
 
-function FullscreenButton({ targetRef }) {
-  const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
+function SectionCard({ section }) {
+  const [materials, setMaterials] = useState(section.inputs);
 
-  useEffect(() => {
-    const handleChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener('fullscreenchange', handleChange);
-    return () => document.removeEventListener('fullscreenchange', handleChange);
-  }, []);
-
-  function toggleFullscreen() {
-    const target = targetRef.current;
-    if (!target) return;
-    if (document.fullscreenElement) {
-      document.exitFullscreen?.();
-      return;
-    }
-    target.requestFullscreen?.();
-  }
-
-  return (
-    <button className="ghost-button compact fullscreen-button" onClick={toggleFullscreen} type="button">
-      {isFullscreen ? 'Exit full screen' : 'Full screen'}
-    </button>
-  );
-}
-
-function MarkupSection({ definition, values, onChange }) {
   const totals = useMemo(() => {
-    const materials = values.map((value) => Number(value) || 0);
-    const markups = materials.map((amount) => amount * definition.rate);
-    return {
-      materials,
-      markups,
-      materialTotal: materials.reduce((sum, amount) => sum + amount, 0),
-      markupTotal: markups.reduce((sum, amount) => sum + amount, 0)
-    };
-  }, [definition.rate, values]);
+    const numeric = materials.map((value) => Number(value || 0));
+    const materialTotal = numeric.reduce((sum, value) => sum + value, 0);
+    const markupTotal = numeric.reduce((sum, value) => sum + value * section.rate, 0);
+    const rows = numeric.map((value) => ({ material: value, markup: value * section.rate }));
+    return { materialTotal, markupTotal, rows };
+  }, [materials, section.rate]);
 
   return (
-    <article className="panel markup-section-card">
-      <div className="markup-section-header">
+    <article className="panel markup-card">
+      <div className="panel-heading">
         <div>
-          <h3>{definition.title}</h3>
-          <p>{definition.materialLabel}</p>
+          <h2>{section.title}</h2>
+          <p>{section.rateLabel} using the workbook formulas.</p>
         </div>
-        <span className="status-pill">Rate {Math.round(definition.rate * 1000) / 10}%</span>
       </div>
 
-      <div className="table-scroll markup-table-wrap">
-        <table className="markup-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Material</th>
-              <th>{definition.totalLabel}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {values.map((value, index) => (
-              <tr key={`${definition.id}-${index}`}>
-                <td>{index + 1}</td>
-                <td>
-                  <input
-                    className="markup-input"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.01"
-                    type="number"
-                    value={value}
-                    onChange={(event) => onChange(index, event.target.value)}
-                    aria-label={`${definition.materialLabel} row ${index + 1}`}
-                  />
-                </td>
-                <td>{formatMoney(totals.markups[index])}</td>
-              </tr>
-            ))}
-            <tr className="markup-total-row">
-              <td colSpan="1">Totals</td>
-              <td>{formatMoney(totals.materialTotal)}</td>
-              <td>{formatMoney(totals.markupTotal)}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div className="markup-grid">
+        <div className="markup-grid-head">Material amount</div>
+        <div className="markup-grid-head">Markup formula</div>
+        {materials.map((value, index) => (
+          <div className="markup-row" key={`${section.id}-${index}`}>
+            <input
+              type="number"
+              step="0.01"
+              value={value}
+              onChange={(event) => {
+                const next = [...materials];
+                next[index] = normalizeInput(event.target.value);
+                setMaterials(next);
+              }}
+              placeholder="Enter amount"
+            />
+            <output>${formatMoney(totals.rows[index].markup)}</output>
+          </div>
+        ))}
+        <div className="markup-total-label">Totals</div>
+        <div className="markup-total-value">
+          <strong>${formatMoney(totals.markupTotal)}</strong>
+          <small>Material total: ${formatMoney(totals.materialTotal)}</small>
+        </div>
       </div>
+
+      <p className="markup-note">{section.totalLabel} = each material amount × {section.rateLabel.replace('Material (+', '').replace('%)', '%')}.</p>
     </article>
   );
 }
 
 export default function MarkupCalculatorPanel() {
-  const panelRef = useRef(null);
-  const [sections, setSections] = useState(() => SECTION_DEFINITIONS.map(() => blankSectionValues()));
-
-  function updateSection(sectionIndex, rowIndex, value) {
-    setSections((current) => {
-      const next = current.map((sectionValues) => [...sectionValues]);
-      next[sectionIndex][rowIndex] = value;
-      return next;
-    });
-  }
-
   return (
-    <section className="dashboard-stack owner-markup-panel" ref={panelRef}>
-      <section className="panel">
-        <div className="panel-heading">
-          <div className="panel-heading-left">
-            <FullscreenButton targetRef={panelRef} />
-            <div>
-              <h2>Mark up calculator</h2>
-              <p>Based on the workbook formulas: enter up to 6 material amounts for each report and the markup total updates automatically.</p>
-            </div>
-          </div>
+    <section className="panel markup-panel">
+      <div className="panel-heading">
+        <div>
+          <h2>Markup calculator</h2>
+          <p>Owner-only workbook formulas translated into a quick calculator.</p>
         </div>
+      </div>
 
-        <div className="markup-calc-grid">
-          {SECTION_DEFINITIONS.map((definition, sectionIndex) => (
-            <MarkupSection
-              key={definition.id}
-              definition={definition}
-              values={sections[sectionIndex]}
-              onChange={(rowIndex, value) => updateSection(sectionIndex, rowIndex, value)}
-            />
-          ))}
-        </div>
-      </section>
+      <div className="markup-panel-grid">
+        {sections.map((section) => (
+          <SectionCard key={section.id} section={section} />
+        ))}
+      </div>
     </section>
   );
 }

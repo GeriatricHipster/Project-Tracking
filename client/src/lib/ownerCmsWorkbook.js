@@ -1,4 +1,4 @@
-const OWNER_CMS_INITIAL_ROW_COUNT = 150;
+const OWNER_CMS_ROW_COUNT = 150;
 const OWNER_CMS_COLUMN_COUNT = 20;
 
 function linesToOptions(block) {
@@ -294,7 +294,7 @@ Utility Sytems
   { key: 'walk_scheduled', label: 'Walk Scheduled', type: 'date', width: 140 },
   { key: 'install_date', label: 'Install Date', type: 'date', width: 140 },
   { key: 'deadline', label: 'Deadline', type: 'date', width: 140 },
-  { key: 'bill_by_year_end', label: 'Bill by year end', type: 'date', width: 150 },
+  { key: 'bill_by_year_end', label: 'Bill by year end', type: 'select', width: 150, options: ['Yes', 'No', 'NA'] },
   { key: 'category', label: 'Category', type: 'select', width: 180, options: linesToOptions(`
 COST ESTIAMTE
 CCURE
@@ -312,27 +312,25 @@ CCURE & CCTV
   { key: 'dm_notified', label: 'DM Notified', type: 'select', width: 120, options: ['Yes', 'No', 'NA'] },
   { key: 'security', label: 'Security', type: 'select', width: 290, options: securityOptions },
   { key: 'child_wo', label: 'Child WO', type: 'select', width: 110, options: ['Yes', 'No', 'NA'] },
-  { key: 'vendor', label: 'Vendor', type: 'select', width: 180, options: linesToOptions(`
-Accent Automatic
+  { key: 'vendor', label: 'Vendor', type: 'select', width: 160, options: linesToOptions(`
+AVTEC
 Beacon
 Convergint
 DSI
-Everbase
+EverBase
 G4S
-IC&E
 Ideacom
 IES
-Nelson Fire
-OTIS
-Pavion
-PTI (Bosch)
-Pye Barker
+PTI
 S101
-Schindler
+Stone
+Pavion
+Yamas
+USHOP
+Misc
 SMT
-Stone Security
-Thyssenkrupp
-Utah Yamas
+Accent Auto
+Bid Walk
 `) },
   { key: 'status', label: 'Status', type: 'select', width: 220, options: linesToOptions(`
 Cost Estimate
@@ -387,20 +385,21 @@ Uploaded
 ];
 
 export const ownerCmsColumnCount = OWNER_CMS_COLUMN_COUNT;
-export const ownerCmsRowCount = OWNER_CMS_INITIAL_ROW_COUNT;
+export const ownerCmsRowCount = OWNER_CMS_ROW_COUNT;
 
-export function buildBlankOwnerCmsGrid(rowCount = OWNER_CMS_INITIAL_ROW_COUNT) {
-  return Array.from({ length: rowCount }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+export function buildBlankOwnerCmsGrid(rowCount = OWNER_CMS_ROW_COUNT) {
+  return Array.from({ length: Math.max(1, rowCount) }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
 }
 
 export function normalizeOwnerCmsGrid(cells) {
-  const rowCount = Math.max(OWNER_CMS_INITIAL_ROW_COUNT, Array.isArray(cells) ? cells.length : 0);
+  const rowCount = Array.isArray(cells) ? Math.max(OWNER_CMS_ROW_COUNT, cells.length) : OWNER_CMS_ROW_COUNT;
   const grid = buildBlankOwnerCmsGrid(rowCount);
   if (!Array.isArray(cells)) return grid;
 
-  for (let rowIndex = 0; rowIndex < Math.min(cells.length, grid.length); rowIndex += 1) {
+  for (let rowIndex = 0; rowIndex < cells.length; rowIndex += 1) {
     const row = cells[rowIndex];
     if (!Array.isArray(row)) continue;
+    if (!grid[rowIndex]) grid[rowIndex] = Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => '');
     for (let colIndex = 0; colIndex < Math.min(row.length, OWNER_CMS_COLUMN_COUNT); colIndex += 1) {
       const value = row[colIndex];
       grid[rowIndex][colIndex] = value === null || value === undefined ? '' : String(value);

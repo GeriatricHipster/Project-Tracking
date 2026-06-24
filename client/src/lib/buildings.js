@@ -205,3 +205,39 @@ export const buildingOptions = [
   '5100 Acute Care Center [E]',
   '5150 Rehab'
 ];
+
+
+const BUILDING_STORAGE_KEY = 'psg-building-options';
+
+function normalizeBuilding(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+export function getBuildingOptions() {
+  if (typeof window === 'undefined') return buildingOptions;
+  try {
+    const stored = window.localStorage.getItem(BUILDING_STORAGE_KEY);
+    const custom = stored ? JSON.parse(stored) : [];
+    return Array.from(new Set([...buildingOptions, ...custom].map(normalizeBuilding).filter(Boolean)));
+  } catch {
+    return buildingOptions;
+  }
+}
+
+export function addBuildingOption(value) {
+  const building = normalizeBuilding(value);
+  if (!building) return getBuildingOptions();
+  if (typeof window === 'undefined') return buildingOptions;
+  try {
+    const current = getBuildingOptions();
+    if (current.includes(building)) return current;
+    const stored = window.localStorage.getItem(BUILDING_STORAGE_KEY);
+    const custom = stored ? JSON.parse(stored) : [];
+    custom.push(building);
+    window.localStorage.setItem(BUILDING_STORAGE_KEY, JSON.stringify(Array.from(new Set(custom))));
+    window.dispatchEvent(new CustomEvent('psg:buildings-updated'));
+  } catch {
+    // ignore storage failures
+  }
+  return getBuildingOptions();
+}

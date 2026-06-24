@@ -98,16 +98,11 @@ CREATE TABLE IF NOT EXISTS tasks (
   project_id integer NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   parent_task_id integer REFERENCES tasks(id) ON DELETE SET NULL,
   name text NOT NULL,
-  task_name_choice text,
-  task_name_custom text,
   description text,
   trade text,
+  building text,
   vendor text,
-  vendor_secondary text,
-  assignee_one text,
-  assignee_two text,
-  assignee_three text,
-  assignee_four text,
+  security_team_member text,
   pm text,
   assigned_to integer REFERENCES users(id) ON DELETE SET NULL,
   status text NOT NULL DEFAULT 'not_started',
@@ -123,36 +118,31 @@ CREATE TABLE IF NOT EXISTS tasks (
   CONSTRAINT tasks_status_check CHECK (status IN ('not_started', 'in_progress', 'blocked', 'complete')),
   CONSTRAINT tasks_priority_check CHECK (priority IN ('low', 'normal', 'high', 'critical')),
   CONSTRAINT tasks_trade_check CHECK (trade IS NULL OR trade IN ('CCure', 'Cameras', 'CCure & Cameras')),
+  CONSTRAINT tasks_security_team_member_check CHECK (security_team_member IS NULL OR security_team_member IN ('Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam')),
   CONSTRAINT tasks_pm_check CHECK (pm IS NULL OR pm IN ('Kurt', 'Austin')),
-  CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas')),
-  CONSTRAINT tasks_vendor_secondary_check CHECK (vendor_secondary IS NULL OR vendor_secondary IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas')),
+  CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'IES', 'Ideacom', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas')),
   CONSTRAINT tasks_progress_check CHECK (percent_complete >= 0 AND percent_complete <= 100),
   CONSTRAINT tasks_date_order CHECK (end_date >= start_date)
 );
 
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS trade text;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS building text;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS vendor text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS vendor_secondary text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_one text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_two text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_three text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_four text;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS security_team_member text;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS pm text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS task_name_choice text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS task_name_custom text;
 
 UPDATE tasks SET trade = NULL WHERE trade IS NOT NULL AND trade NOT IN ('CCure', 'Cameras', 'CCure & Cameras');
-UPDATE tasks SET vendor = NULL WHERE vendor IS NOT NULL AND vendor NOT IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas');
-UPDATE tasks SET vendor_secondary = NULL WHERE vendor_secondary IS NOT NULL AND vendor_secondary NOT IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas');
+UPDATE tasks SET vendor = NULL WHERE vendor IS NOT NULL AND vendor NOT IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'IES', 'Ideacom', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas');
+UPDATE tasks SET security_team_member = NULL WHERE security_team_member IS NOT NULL AND security_team_member NOT IN ('Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam');
 UPDATE tasks SET pm = NULL WHERE pm IS NOT NULL AND pm NOT IN ('Kurt', 'Austin');
 
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_trade_check;
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_vendor_check;
-ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_vendor_secondary_check;
+ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_security_team_member_check;
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_pm_check;
 ALTER TABLE tasks ADD CONSTRAINT tasks_trade_check CHECK (trade IS NULL OR trade IN ('CCure', 'Cameras', 'CCure & Cameras'));
-ALTER TABLE tasks ADD CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas'));
-ALTER TABLE tasks ADD CONSTRAINT tasks_vendor_secondary_check CHECK (vendor_secondary IS NULL OR vendor_secondary IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas'));
+ALTER TABLE tasks ADD CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'IES', 'Ideacom', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas'));
+ALTER TABLE tasks ADD CONSTRAINT tasks_security_team_member_check CHECK (security_team_member IS NULL OR security_team_member IN ('Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam'));
 ALTER TABLE tasks ADD CONSTRAINT tasks_pm_check CHECK (pm IS NULL OR pm IN ('Kurt', 'Austin'));
 
 CREATE TABLE IF NOT EXISTS task_dependencies (
@@ -317,7 +307,6 @@ BEGIN
     UPDATE project_blueprints
     SET original_name = file_name
     WHERE original_name IS NULL AND file_name IS NOT NULL;
-    EXECUTE 'ALTER TABLE project_blueprints ALTER COLUMN file_name DROP NOT NULL';
   END IF;
 END $$;
 UPDATE project_blueprints SET original_name = concat('blueprint-', id) WHERE original_name IS NULL;
@@ -336,12 +325,25 @@ BEGIN
     UPDATE project_blueprints
     SET size_bytes = file_size
     WHERE size_bytes IS NULL AND file_size IS NOT NULL;
-    EXECUTE 'ALTER TABLE project_blueprints ALTER COLUMN file_size DROP NOT NULL';
   END IF;
 END $$;
 UPDATE project_blueprints SET size_bytes = octet_length(file_data) WHERE size_bytes IS NULL AND file_data IS NOT NULL;
 UPDATE project_blueprints SET size_bytes = 1 WHERE size_bytes IS NULL OR size_bytes <= 0;
 ALTER TABLE project_blueprints ALTER COLUMN size_bytes SET NOT NULL;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'project_blueprints'
+      AND column_name = 'file_name'
+  ) THEN
+    UPDATE project_blueprints
+    SET file_name = COALESCE(file_name, original_name);
+    ALTER TABLE project_blueprints ALTER COLUMN file_name DROP NOT NULL;
+  END IF;
+END $$;
 DO $$
 BEGIN
   IF NOT EXISTS (
