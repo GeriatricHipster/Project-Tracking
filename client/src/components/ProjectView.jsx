@@ -26,7 +26,7 @@ function titleCase(value) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export default function ProjectView({ projectId, user, onBack, onLogout }) {
+export default function ProjectView({ projectId, user, onBack }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -139,6 +139,14 @@ export default function ProjectView({ projectId, user, onBack, onLogout }) {
     await loadProject({ quiet: true });
   }
 
+  async function updateChecklistItem(item, isChecked) {
+    await api(`/projects/${projectId}/checklist/${item.item_key}`, {
+      method: 'PATCH',
+      body: { is_checked: isChecked }
+    });
+    await loadProject({ quiet: true });
+  }
+
   async function uploadBlueprint(file) {
     const formData = new FormData();
     formData.append('blueprint', file);
@@ -170,7 +178,7 @@ export default function ProjectView({ projectId, user, onBack, onLogout }) {
   if (loading && !data) {
     return (
       <main className="app-page">
-        <SiteBanner onLogout={onLogout} />
+        <SiteBanner />
         <button className="ghost-button" onClick={onBack} type="button">Back to projects</button>
         <div className="panel loading-panel">Loading project...</div>
       </main>
@@ -180,7 +188,7 @@ export default function ProjectView({ projectId, user, onBack, onLogout }) {
   if (error && !data) {
     return (
       <main className="app-page">
-        <SiteBanner onLogout={onLogout} />
+        <SiteBanner />
         <button className="ghost-button" onClick={onBack} type="button">Back to projects</button>
         <div className="error-box">{error}</div>
       </main>
@@ -191,7 +199,7 @@ export default function ProjectView({ projectId, user, onBack, onLogout }) {
 
   return (
     <main className="app-page project-view">
-      <SiteBanner onLogout={onLogout} />
+      <SiteBanner />
       <header className="project-header panel">
         <button className="ghost-button" onClick={onBack} type="button">Back to projects</button>
         <div className="project-title-block">

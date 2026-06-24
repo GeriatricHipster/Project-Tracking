@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addDays, formatDate, todayIso } from '../lib/dates';
-import { getBuildingOptions } from '../lib/buildings';
+import { buildingOptions } from '../lib/buildings';
 import SiteMembersPanel from './SiteMembersPanel';
 import OwnerCmsWosPanel from './OwnerCmsWosPanel';
-import SiteBanner from './SiteBanner';
 import MarkupCalculatorPanel from './MarkupCalculatorPanel';
+import SiteBanner from './SiteBanner';
 
 const dashboardTabs = [
   { id: 'projects', label: 'Active projects' },
@@ -14,11 +14,33 @@ const dashboardTabs = [
   { id: 'calendar', label: 'Calendar overview' },
   { id: 'site-members', label: 'Site members', managersOnly: true },
   { id: 'owner-cms', label: 'CMS WOs', ownersOnly: true },
-  { id: 'markup-calculator', label: 'Markup calculator', ownersOnly: true }
+  { id: 'markup-calc', label: 'Mark up calculator', ownersOnly: true }
 ];
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const managerRoles = new Set(['owner', 'manager']);
+const buildingStoragePrefix = 'psg-extra-buildings:';
+
+function buildingStorageKey(userId) {
+  return `${buildingStoragePrefix}${userId || 'guest'}`;
+}
+
+function readSavedBuildings(userId) {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(buildingStorageKey(userId));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveBuildings(userId, buildings) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(buildingStorageKey(userId), JSON.stringify(buildings));
+}
+
 
 function titleCase(value) {
   return String(value || '')
@@ -155,14 +177,25 @@ export default function Dashboard({
     start_date: start,
     end_date: addDays(start, 90)
   });
-  const [buildingVersion, setBuildingVersion] = useState(0);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionProjectId, setActionProjectId] = useState(null);
+  const [buildingMode, setBuildingMode] = useState('select');
+  const [newBuildingName, setNewBuildingName] = useState('');
+  const [extraBuildings, setExtraBuildings] = useState(() => readSavedBuildings(null));
+
+  useEffect(() => {
+    setExtraBuildings(readSavedBuildings(user?.id));
+    setBuildingMode('select');
+    setNewBuildingName('');
+  }, [user?.id]);
+
+  const mergedBuildingOptions = useMemo(() => {
+    return [...new Set([...buildingOptions, ...extraBuildings])].sort((a, b) => String(a).localeCompare(String(b)));
+  }, [extraBuildings]);
 
   const canManageSite = Boolean(user?.can_manage_site || ['owner', 'manager'].includes(user?.site_role));
   const canAccessOwnerCms = user?.site_role === 'owner' && !user?.access_revoked;
-  const canAccessMarkupCalculator = canAccessOwnerCms;
   const visibleTabs = useMemo(
     () => dashboardTabs.filter((tab) => (!tab.managersOnly || canManageSite) && (!tab.ownersOnly || canAccessOwnerCms)),
     [canManageSite, canAccessOwnerCms]
@@ -173,15 +206,6 @@ export default function Dashboard({
       setActiveTab(visibleTabs[0]?.id || 'projects');
     }
   }, [activeTab, visibleTabs]);
-
-
-  useEffect(() => {
-    const refreshBuildings = () => setBuildingVersion((value) => value + 1);
-    window.addEventListener('psg:buildings-updated', refreshBuildings);
-    return () => window.removeEventListener('psg:buildings-updated', refreshBuildings);
-  }, []);
-
-  const projectBuildingOptions = useMemo(() => getBuildingOptions(), [buildingVersion]);
 
   const visibleProjects = useMemo(
     () => projects.filter((project) => matchesProjectSearch(project, searchTerm)),
@@ -247,6 +271,8 @@ export default function Dashboard({
     try {
       await onCreateProject(form);
       setForm({ name: '', location: '', description: '', start_date: start, end_date: addDays(start, 90) });
+      setBuildingMode('select');
+      setNewBuildingName('');
       setActiveTab('projects');
     } catch (err) {
       setError(err.message);
@@ -300,7 +326,7 @@ export default function Dashboard({
         <button className="primary-button compact" onClick={() => onOpenProject(project.id)} type="button">Open project</button>
         {canManage && lifecycle !== 'completed' && (
           <button className="ghost-button compact" disabled={busy} onClick={() => moveProject(project, 'completed')} type="button">
-            {busy ? 'Saving...' : 'Move to completed'}
+            {busy ? 'Saving...' : 'Completed'}
           </button>
         )}
         {canManage && lifecycle === 'completed' && (
@@ -385,13 +411,57 @@ export default function Dashboard({
             </label>
             <label>
               Building
-              <select value={form.location} onChange={(event) => updateField('location', event.target.value)}>
+              <select
+                value={mergedBuildingOptions.includes(form.location) ? form.location : ''}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (value === '__add_new__') {
+                    setBuildingMode('custom');
+                    setNewBuildingName('');
+                    updateField('location', '');
+                    return;
+                  }
+                  setBuildingMode('select');
+                  updateField('location', value);
+                }}
+              >
                 <option value=""> </option>
-                {projectBuildingOptions.map((building) => (
+                {mergedBuildingOptions.map((building) => (
                   <option key={building} value={building}>{building}</option>
                 ))}
+                <option value="__add_new__">Add new building</option>
               </select>
             </label>
+            {buildingMode === 'custom' && (
+              <div className="building-add-row">
+                <label>
+                  New building
+                  <input
+                    value={newBuildingName}
+                    onChange={(event) => setNewBuildingName(event.target.value)}
+                    placeholder="Type a new building name"
+                  />
+                </label>
+                <button
+                  className="ghost-button compact"
+                  type="button"
+                  onClick={() => {
+                    const nextValue = String(newBuildingName || '').trim();
+                    if (!nextValue) return;
+                    setExtraBuildings((current) => {
+                      const next = [...new Set([...current, nextValue])].sort((a, b) => String(a).localeCompare(b));
+                      saveBuildings(user?.id, next);
+                      return next;
+                    });
+                    updateField('location', nextValue);
+                    setBuildingMode('select');
+                    setNewBuildingName('');
+                  }}
+                >
+                  Add building
+                </button>
+              </div>
+            )}
             <label>
               Description
               <textarea value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Scope, client, phase, or notes" />
@@ -443,7 +513,7 @@ export default function Dashboard({
           {renderProjectCards(
             completedProjects,
             'No completed projects yet',
-            'Use Move to completed on an active project when it is ready to file away.'
+            'Use Completed on an active project when it is ready to file away.'
           )}
         </section>
       </section>
@@ -674,17 +744,12 @@ export default function Dashboard({
   }
 
   function renderMarkupCalculatorTab() {
-    return (
-      <section className="dashboard-stack">
-        <MarkupCalculatorPanel />
-      </section>
-    );
+    return <MarkupCalculatorPanel />;
   }
-
 
   return (
     <main className="app-page">
-      <SiteBanner onLogout={onLogout} />
+      <SiteBanner />
       <header className="topbar">
         <div className="brand-lockup small">
           <span className="brand-mark">PSG</span>
@@ -734,7 +799,7 @@ export default function Dashboard({
       {activeTab === 'calendar' && renderCalendarTab()}
       {activeTab === 'site-members' && canManageSite && <SiteMembersPanel currentUser={user} onOpenProject={onOpenProject} />}
       {activeTab === 'owner-cms' && canAccessOwnerCms && <OwnerCmsWosPanel user={user} />}
-      {activeTab === 'markup-calculator' && canAccessMarkupCalculator && <MarkupCalculatorPanel />}
+      {activeTab === 'markup-calc' && canAccessOwnerCms && renderMarkupCalculatorTab()}
     </main>
   );
 }

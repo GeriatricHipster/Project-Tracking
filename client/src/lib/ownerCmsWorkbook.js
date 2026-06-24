@@ -313,25 +313,27 @@ CCURE & CCTV
   { key: 'security', label: 'Security', type: 'select', width: 290, options: securityOptions },
   { key: 'child_wo', label: 'Child WO', type: 'select', width: 110, options: ['Yes', 'No', 'NA'] },
   { key: 'vendor', label: 'Vendor', type: 'select', width: 160, options: linesToOptions(`
-AVTEC
+Accent Automatic
 Beacon
 Convergint
 DSI
-EverBase
+Everbase
 G4S
+IC&E
 Ideacom
 IES
-PTI
-S101
-Stone
+Nelson Fire
+OTIS
 Pavion
-Yamas
-USHOP
-Misc
+PTI (Bosch)
+Pye Barker
+S101
+Schindler
 SMT
-Accent Auto
-Bid Walk
-`) },
+Stone Security
+Thyssenkrupp
+Utah Yamas
+`).sort((a, b) => a.localeCompare(b)) },
   { key: 'status', label: 'Status', type: 'select', width: 220, options: linesToOptions(`
 Cost Estimate
 Intro/SOW
@@ -388,18 +390,16 @@ export const ownerCmsColumnCount = OWNER_CMS_COLUMN_COUNT;
 export const ownerCmsRowCount = OWNER_CMS_ROW_COUNT;
 
 export function buildBlankOwnerCmsGrid(rowCount = OWNER_CMS_ROW_COUNT) {
-  return Array.from({ length: Math.max(1, rowCount) }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+  return Array.from({ length: Math.max(OWNER_CMS_ROW_COUNT, rowCount) }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
 }
 
 export function normalizeOwnerCmsGrid(cells) {
-  const rowCount = Array.isArray(cells) ? Math.max(OWNER_CMS_ROW_COUNT, cells.length) : OWNER_CMS_ROW_COUNT;
-  const grid = buildBlankOwnerCmsGrid(rowCount);
+  const grid = buildBlankOwnerCmsGrid(Array.isArray(cells) ? cells.length : OWNER_CMS_ROW_COUNT);
   if (!Array.isArray(cells)) return grid;
 
   for (let rowIndex = 0; rowIndex < cells.length; rowIndex += 1) {
     const row = cells[rowIndex];
     if (!Array.isArray(row)) continue;
-    if (!grid[rowIndex]) grid[rowIndex] = Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => '');
     for (let colIndex = 0; colIndex < Math.min(row.length, OWNER_CMS_COLUMN_COUNT); colIndex += 1) {
       const value = row[colIndex];
       grid[rowIndex][colIndex] = value === null || value === undefined ? '' : String(value);

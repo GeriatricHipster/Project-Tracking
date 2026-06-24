@@ -1,4 +1,4 @@
-const taskNameBaseOptions = [
+export const taskNameOptions = [
   'Parts Procurement',
   'Preprogramming (Vendor)',
   'Preprogramming (Ccure Team) clearances/schedules etc.',
@@ -18,10 +18,11 @@ const taskNameBaseOptions = [
   'CCure/Camera Testing',
   'Key Shop Hardware Change',
   'Punchlist',
-  'Closeout'
+  'Closeout',
+  'Other'
 ];
 
-const assigneeSeedOptions = [
+const assigneeSource = [
   'James',
   'James & Kyra',
   'James & Ryan',
@@ -72,7 +73,9 @@ const assigneeSeedOptions = [
   'Chris'
 ];
 
-const vendorSeedOptions = [
+export const assigneeOptions = [...new Set(assigneeSource)].sort((a, b) => a.localeCompare(b));
+
+export const vendorOptions = [...new Set([
   'Utah Yamas',
   'IES',
   'Ideacom',
@@ -93,14 +96,6 @@ const vendorSeedOptions = [
   'OTIS',
   'Schindler',
   'Thyssenkrupp'
-];
+])].sort((a, b) => a.localeCompare(b));
 
-function sortUnique(values) {
-  return Array.from(new Set(values)).sort((a, b) => String(a).localeCompare(String(b)));
-}
-
-export const taskNameOptions = [...taskNameBaseOptions, 'Other'];
-export const assigneeOptions = sortUnique(assigneeSeedOptions);
-export const vendorOptions = sortUnique(vendorSeedOptions);
-export const tradeOptions = ['CCure', 'Cameras', 'CCure & Cameras'];
-export const projectManagerOptions = ['Kurt', 'Austin'];
+export const projectManagerOptions = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));

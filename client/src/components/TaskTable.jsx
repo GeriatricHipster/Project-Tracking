@@ -23,8 +23,8 @@ export default function TaskTable({ tasks, canEdit, onEdit, onDelete }) {
             <tr>
               <th>Task</th>
               <th>Trade</th>
-              <th>Building</th>
               <th>Vendor</th>
+              <th>More</th>
               <th>Security team</th>
               <th>PM</th>
               <th>Assignee</th>
@@ -43,11 +43,20 @@ export default function TaskTable({ tasks, canEdit, onEdit, onDelete }) {
                   {task.description && <span className="table-subtext">{task.description}</span>}
                 </td>
                 <td>{task.trade || '-'}</td>
-                <td>{task.building || '-'}</td>
                 <td>{task.vendor || '-'}</td>
+                <td>
+                  <div className="stack gap-tight">
+                    <span>{task.vendor_secondary || '-'}</span>
+                    <span className="table-subtext">
+                      {[task.assignee_secondary, task.assignee_tertiary, task.assignee_quaternary].filter(Boolean).length
+                        ? [task.assignee_secondary, task.assignee_tertiary, task.assignee_quaternary].filter(Boolean).join(' · ')
+                        : 'No extra assignees'}
+                    </span>
+                  </div>
+                </td>
                 <td>{task.security_team_member || '-'}</td>
                 <td>{task.pm || '-'}</td>
-                <td>{task.assigned_to_name || '-'}</td>
+                <td>{task.assigned_to_label || task.assigned_to_name || '-'}</td>
                 <td><span className={`status-pill status-${task.status}`}>{statusLabel[task.status] || task.status}</span></td>
                 <td>{formatDate(task.start_date)} - {formatDate(task.end_date)}</td>
                 <td>

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addDays, todayIso } from '../lib/dates';
-import { addBuildingOption, getBuildingOptions } from '../lib/buildings';
+import { assigneeOptions, projectManagerOptions, taskNameOptions, vendorOptions } from '../lib/taskOptions';
 
 const statusOptions = [
+  ['', 'Unassigned'],
   ['not_started', 'Not started'],
   ['in_progress', 'In progress'],
   ['blocked', 'Blocked'],
@@ -10,75 +11,32 @@ const statusOptions = [
 ];
 
 const priorityOptions = [
+  ['', 'Unassigned'],
   ['low', 'Low'],
   ['normal', 'Normal'],
   ['high', 'High'],
   ['critical', 'Critical']
 ];
 
-const taskNameOptions = [
-  'Parts Procurement',
-  'Preprogramming (Vendor)',
-  'Preprogramming (Ccure Team) clearances/schedules etc.',
-  'Ccure Operator Established',
-  'UIT (IP Addresses, Firewall)',
-  'Conduit Install',
-  'Cable Install',
-  'ADA Install',
-  'Ccure Hardware Install',
-  'Camera Hardware Install',
-  'Panel Install',
-  'Fire Integration',
-  'Alarm Panel Install/Integration',
-  'Elevator Integration',
-  'Final Programming',
-  'Vendor Testing',
-  'CCure/Camera Testing',
-  'Key Shop Hardware Change',
-  'Punchlist',
-  'Closeout',
-  'Other'
-];
-
 const tradeOptions = ['CCure', 'Cameras', 'CCure & Cameras'];
-const vendorOptions = [
-  'Accent Automatic',
-  'Beacon',
-  'Convergint',
-  'DSI',
-  'Everbase',
-  'G4S',
-  'IC&E',
-  'IES',
-  'Ideacom',
-  'Nelson Fire',
-  'OTIS',
-  'Pavion',
-  'PTI (Bosch)',
-  'Pye Barker',
-  'S101',
-  'Schindler',
-  'SMT',
-  'Stone Security',
-  'Thyssenkrupp',
-  'Utah Yamas',
-];
-
-
 
 function blankTask(project) {
   const start = project?.start_date || todayIso();
   return {
     task_name_choice: '',
     custom_task_name: '',
-    building: '',
     description: '',
     trade: '',
     vendor: '',
-    assigned_to: '',
+    vendor_secondary: '',
+    pm: '',
+    assigned_to_label: '',
+    assignee_secondary: '',
+    assignee_tertiary: '',
+    assignee_quaternary: '',
     parent_task_id: '',
-    status: 'not_started',
-    priority: 'normal',
+    status: '',
+    priority: '',
     start_date: start,
     end_date: addDays(start, 5),
     percent_complete: 0,
@@ -88,29 +46,44 @@ function blankTask(project) {
 }
 
 function getTaskNameChoice(name) {
+  if (!name) return '';
   return taskNameOptions.includes(name) ? name : 'Other';
+}
+
+function getTaskNameValue(form) {
+  if (form.task_name_choice === 'Other') {
+    return String(form.custom_task_name || '').trim();
+  }
+  return form.task_name_choice;
+}
+
+function assigneeFieldTitle(index) {
+  return index === 1 ? 'Assignee 1' : `Assignee ${index}`;
 }
 
 export default function TaskForm({ project, members, tasks, editingTask, canEdit, onSave, onCancel }) {
   const [form, setForm] = useState(blankTask(project));
-  const [buildingOptions, setBuildingOptions] = useState(() => getBuildingOptions());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (editingTask) {
-      const taskNameChoice = getTaskNameChoice(editingTask.name || '');
+      const nameChoice = getTaskNameChoice(editingTask.name || '');
       setForm({
-        task_name_choice: taskNameChoice,
-        custom_task_name: taskNameChoice === 'Other' ? (editingTask.name || '') : '',
-        building: editingTask.building || '',
+        task_name_choice: nameChoice,
+        custom_task_name: nameChoice === 'Other' ? (editingTask.name || '') : '',
         description: editingTask.description || '',
         trade: editingTask.trade || '',
         vendor: editingTask.vendor || '',
-        assigned_to: editingTask.assigned_to || '',
+        vendor_secondary: editingTask.vendor_secondary || '',
+        pm: editingTask.pm || '',
+        assigned_to_label: editingTask.assigned_to_label || editingTask.assigned_to_name || '',
+        assignee_secondary: editingTask.assignee_secondary || '',
+        assignee_tertiary: editingTask.assignee_tertiary || '',
+        assignee_quaternary: editingTask.assignee_quaternary || '',
         parent_task_id: editingTask.parent_task_id || '',
-        status: editingTask.status || 'not_started',
-        priority: editingTask.priority || 'normal',
+        status: editingTask.status || '',
+        priority: editingTask.priority || '',
         start_date: editingTask.start_date || project?.start_date || todayIso(),
         end_date: editingTask.end_date || project?.start_date || todayIso(),
         percent_complete: editingTask.percent_complete || 0,
@@ -120,15 +93,8 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     } else {
       setForm(blankTask(project));
     }
-    setBuildingOptions(getBuildingOptions());
     setError('');
   }, [editingTask, project]);
-
-  useEffect(() => {
-    const refreshBuildings = () => setBuildingOptions(getBuildingOptions());
-    window.addEventListener('psg:buildings-updated', refreshBuildings);
-    return () => window.removeEventListener('psg:buildings-updated', refreshBuildings);
-  }, []);
 
   const parentTaskOptions = useMemo(
     () => tasks.filter((task) => !editingTask || task.id !== editingTask.id),
@@ -139,43 +105,37 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  function handleBuildingBlur() {
-    const value = String(form.building || '').trim();
-    if (!value) return;
-    const nextOptions = addBuildingOption(value);
-    setBuildingOptions(nextOptions);
-  }
-
   async function submit(event) {
     event.preventDefault();
     setError('');
     setSaving(true);
     try {
-      const taskName = form.task_name_choice === 'Other' ? String(form.custom_task_name || '').trim() : form.task_name_choice;
+      const taskName = getTaskNameValue(form);
       if (!taskName) {
-        throw new Error('Task name is required.');
+        throw new Error('Please enter a task name.');
       }
 
-      const payload = {
+      await onSave({
         name: taskName,
-        building: form.building || null,
-        description: form.description || null,
+        description: form.description,
         trade: form.trade || null,
         vendor: form.vendor || null,
-        assigned_to: form.assigned_to || null,
+        vendor_secondary: form.vendor_secondary || null,
+        pm: form.pm || null,
+        assigned_to_label: form.assigned_to_label || null,
+        assignee_secondary: form.assignee_secondary || null,
+        assignee_tertiary: form.assignee_tertiary || null,
+        assignee_quaternary: form.assignee_quaternary || null,
         parent_task_id: form.parent_task_id || null,
-        status: form.status,
-        priority: form.priority,
+        status: form.status || 'not_started',
+        priority: form.priority || 'normal',
         start_date: form.start_date,
         end_date: form.end_date,
         percent_complete: Number(form.percent_complete),
         color: form.color,
         sort_order: form.sort_order === '' ? undefined : Number(form.sort_order)
-      };
-
-      await onSave(payload);
+      });
       if (!editingTask) setForm(blankTask(project));
-      if (form.building) setBuildingOptions(addBuildingOption(form.building));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -197,9 +157,9 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         <label>
           Task name
           <select disabled={!canEdit} value={form.task_name_choice} onChange={(event) => updateField('task_name_choice', event.target.value)}>
-            <option value="">Select a task name</option>
-            {taskNameOptions.map((option) => (
-              <option key={option} value={option}>{option}</option>
+            <option value="">Unassigned</option>
+            {taskNameOptions.map((taskName) => (
+              <option key={taskName} value={taskName}>{taskName}</option>
             ))}
           </select>
         </label>
@@ -211,54 +171,69 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
               disabled={!canEdit}
               value={form.custom_task_name}
               onChange={(event) => updateField('custom_task_name', event.target.value)}
-              placeholder="Type a custom task name"
-              rows={3}
+              placeholder="Enter a custom task name"
             />
           </label>
         )}
 
-        <label>
-          Building
-          <input
-            disabled={!canEdit}
-            list="task-building-options"
-            value={form.building}
-            onChange={(event) => updateField('building', event.target.value)}
-            onBlur={handleBuildingBlur}
-            placeholder="Search or type a building"
-          />
-          <datalist id="task-building-options">
-            {buildingOptions.map((building) => (
-              <option key={building} value={building} />
-            ))}
-          </datalist>
-        </label>
-
-        <div className="three-col">
+        <div className="two-col">
           <label>
             Trade
             <select disabled={!canEdit} value={form.trade} onChange={(event) => updateField('trade', event.target.value)}>
-              <option value=""> </option>
+              <option value="">Unassigned</option>
               {tradeOptions.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
             </select>
           </label>
           <label>
+            Parent task
+            <select disabled={!canEdit} value={form.parent_task_id} onChange={(event) => updateField('parent_task_id', event.target.value)}>
+              <option value="">Unassigned</option>
+              {parentTaskOptions.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}
+            </select>
+          </label>
+        </div>
+
+        <div className="two-col">
+          <label>
             Vendor
             <select disabled={!canEdit} value={form.vendor} onChange={(event) => updateField('vendor', event.target.value)}>
-              <option value=""> </option>
+              <option value="">Unassigned</option>
               {vendorOptions.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
             </select>
           </label>
           <label>
-            Assignee
-            <select disabled={!canEdit} value={form.assigned_to} onChange={(event) => updateField('assigned_to', event.target.value)}>
+            Vendor 2
+            <select disabled={!canEdit} value={form.vendor_secondary} onChange={(event) => updateField('vendor_secondary', event.target.value)}>
               <option value="">Unassigned</option>
-              {members.map((member) => (
-                <option key={member.user_id} value={member.user_id}>{member.name}</option>
-              ))}
+              {vendorOptions.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
             </select>
           </label>
         </div>
+
+        <div className="four-col assignee-grid">
+          {[
+            ['assigned_to_label', form.assigned_to_label],
+            ['assignee_secondary', form.assignee_secondary],
+            ['assignee_tertiary', form.assignee_tertiary],
+            ['assignee_quaternary', form.assignee_quaternary]
+          ].map(([field, value], index) => (
+            <label key={field}>
+              {assigneeFieldTitle(index + 1)}
+              <select disabled={!canEdit} value={value} onChange={(event) => updateField(field, event.target.value)}>
+                <option value="">Unassigned</option>
+                {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
+              </select>
+            </label>
+          ))}
+        </div>
+
+        <label>
+          PM
+          <select disabled={!canEdit} value={form.pm} onChange={(event) => updateField('pm', event.target.value)}>
+            <option value="">Unassigned</option>
+            {projectManagerOptions.map((pm) => <option key={pm} value={pm}>{pm}</option>)}
+          </select>
+        </label>
 
         <label>
           Description

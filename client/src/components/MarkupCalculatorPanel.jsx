@@ -1,103 +1,104 @@
 import { useMemo, useState } from 'react';
 
-const sections = [
-  {
-    id: 'markup-47',
-    title: 'Mark up report',
-    rate: 0.047,
-    rateLabel: 'Material (+4.7%)',
-    totalLabel: 'Total mark up 4.7%',
-    inputs: [6557.743, 736.2, '', '', '', '']
-  },
-  {
-    id: 'markup-50',
-    title: 'Mark up report',
-    rate: 0.05,
-    rateLabel: 'Material (+5.0%)',
-    totalLabel: 'Total mark up 5.0%',
-    inputs: [16.32, 2317, '', '', '', '']
-  }
-];
-
-function formatMoney(value) {
-  const number = Number(value || 0);
-  return Number.isFinite(number)
-    ? number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : '0.00';
+function toNumber(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
 }
 
-function normalizeInput(value) {
-  if (value === '') return '';
-  const number = Number(value);
-  return Number.isFinite(number) ? number : '';
+function calcTotal(items, rate) {
+  const materialTotal = items.reduce((sum, value) => sum + toNumber(value), 0);
+  const markupTotal = materialTotal * toNumber(rate);
+  return {
+    materialTotal,
+    markupTotal
+  };
 }
 
-function SectionCard({ section }) {
-  const [materials, setMaterials] = useState(section.inputs);
+function currency(value) {
+  return Number(value || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 3
+  });
+}
 
-  const totals = useMemo(() => {
-    const numeric = materials.map((value) => Number(value || 0));
-    const materialTotal = numeric.reduce((sum, value) => sum + value, 0);
-    const markupTotal = numeric.reduce((sum, value) => sum + value * section.rate, 0);
-    const rows = numeric.map((value) => ({ material: value, markup: value * section.rate }));
-    return { materialTotal, markupTotal, rows };
-  }, [materials, section.rate]);
+function ReportCard({ title, rateLabel, initialRate, initialItems }) {
+  const [rate, setRate] = useState(String(initialRate));
+  const [items, setItems] = useState(initialItems.map((item) => String(item)));
+
+  const summary = useMemo(() => calcTotal(items, rate), [items, rate]);
 
   return (
-    <article className="panel markup-card">
+    <article className="panel markup-report-card">
       <div className="panel-heading">
         <div>
-          <h2>{section.title}</h2>
-          <p>{section.rateLabel} using the workbook formulas.</p>
+          <h3>{title}</h3>
+          <p>{rateLabel}</p>
         </div>
       </div>
 
       <div className="markup-grid">
-        <div className="markup-grid-head">Material amount</div>
-        <div className="markup-grid-head">Markup formula</div>
-        {materials.map((value, index) => (
-          <div className="markup-row" key={`${section.id}-${index}`}>
+        <label>
+          Mark up rate
+          <input type="number" step="0.001" value={rate} onChange={(event) => setRate(event.target.value)} />
+        </label>
+
+        {items.map((item, index) => (
+          <label key={index}>
+            Material line {index + 1}
             <input
               type="number"
-              step="0.01"
-              value={value}
+              step="0.001"
+              value={item}
               onChange={(event) => {
-                const next = [...materials];
-                next[index] = normalizeInput(event.target.value);
-                setMaterials(next);
+                const next = [...items];
+                next[index] = event.target.value;
+                setItems(next);
               }}
-              placeholder="Enter amount"
             />
-            <output>${formatMoney(totals.rows[index].markup)}</output>
-          </div>
+          </label>
         ))}
-        <div className="markup-total-label">Totals</div>
-        <div className="markup-total-value">
-          <strong>${formatMoney(totals.markupTotal)}</strong>
-          <small>Material total: ${formatMoney(totals.materialTotal)}</small>
-        </div>
       </div>
 
-      <p className="markup-note">{section.totalLabel} = each material amount × {section.rateLabel.replace('Material (+', '').replace('%)', '%')}.</p>
+      <div className="markup-summary">
+        <div>
+          <span>Material total</span>
+          <strong>{currency(summary.materialTotal)}</strong>
+        </div>
+        <div>
+          <span>Total mark up</span>
+          <strong>{currency(summary.markupTotal)}</strong>
+        </div>
+      </div>
     </article>
   );
 }
 
 export default function MarkupCalculatorPanel() {
   return (
-    <section className="panel markup-panel">
-      <div className="panel-heading">
-        <div>
-          <h2>Markup calculator</h2>
-          <p>Owner-only workbook formulas translated into a quick calculator.</p>
+    <section className="dashboard-stack markup-calculator-panel">
+      <section className="panel">
+        <div className="panel-heading">
+          <div>
+            <h2>Mark up calculator</h2>
+            <p>Built from the workbook formulas: total the material lines, then multiply by the mark up rate.</p>
+          </div>
         </div>
-      </div>
 
-      <div className="markup-panel-grid">
-        {sections.map((section) => (
-          <SectionCard key={section.id} section={section} />
-        ))}
-      </div>
+        <div className="markup-report-grid">
+          <ReportCard
+            title="MARK UP REPORT"
+            rateLabel="Material (+4.7%)"
+            initialRate={0.047}
+            initialItems={[6557.743, 736.2, 0, 0, 0, 0]}
+          />
+          <ReportCard
+            title="MARK UP REPORT"
+            rateLabel="Material (+5.0%)"
+            initialRate={0.05}
+            initialItems={[16.32, 2317, 0, 0, 0, 0]}
+          />
+        </div>
+      </section>
     </section>
   );
 }

@@ -6,14 +6,14 @@ import SiteBanner from './components/SiteBanner';
 import { api, getToken, setToken } from './lib/api';
 
 const backgroundOptions = [
-  { value: 'midnight', label: 'Midnight' },
-  { value: 'ember', label: 'Ember' },
-  { value: 'slate', label: 'Slate' },
-  { value: 'steel', label: 'Steel' },
   { value: 'sunrise', label: 'Sunrise' },
+  { value: 'coral', label: 'Coral' },
+  { value: 'ocean', label: 'Ocean' },
   { value: 'forest', label: 'Forest' },
-  { value: 'dune', label: 'Dune' },
-  { value: 'cobalt', label: 'Cobalt' }
+  { value: 'plum', label: 'Plum' },
+  { value: 'aurora', label: 'Aurora' },
+  { value: 'graphite', label: 'Graphite' },
+  { value: 'neon', label: 'Neon' }
 ];
 
 function backgroundStorageKey(userId) {
@@ -162,6 +162,11 @@ export default function App() {
       <button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
         {theme === 'dark' ? 'Light mode' : 'Dark mode'}
       </button>
+      {user && (
+        <button className="ghost-button compact logout-floating-button" onClick={logout} type="button">
+          Logout
+        </button>
+      )}
       <label className="background-select-wrap">
         <span className="sr-only">Background</span>
         <select className="background-select" value={background} onChange={(event) => changeBackground(event.target.value)} aria-label="Change app background">
@@ -182,7 +187,7 @@ export default function App() {
   }
 
   if (selectedProjectId) {
-    return <>{floatingControls}<ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} onLogout={logout} /></>;
+    return <>{floatingControls}<ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></>;
   }
 
   return (
