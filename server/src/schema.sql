@@ -57,13 +57,15 @@ CREATE TABLE IF NOT EXISTS projects (
   description text,
   notes text NOT NULL DEFAULT '',
   project_status text NOT NULL DEFAULT 'active',
+  completed_at timestamptz,
+  archived_at timestamptz,
   start_date date NOT NULL,
   end_date date NOT NULL,
   created_by integer REFERENCES users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT projects_date_order CHECK (end_date >= start_date),
-  CONSTRAINT projects_project_status_check CHECK (project_status IN ('active', 'completed'))
+  CONSTRAINT projects_project_status_check CHECK (project_status IN ('active', 'completed', 'archived'))
 );
 
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS notes text NOT NULL DEFAULT '';
@@ -71,12 +73,14 @@ UPDATE projects SET notes = '' WHERE notes IS NULL;
 ALTER TABLE projects ALTER COLUMN notes SET DEFAULT '';
 ALTER TABLE projects ALTER COLUMN notes SET NOT NULL;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS project_status text NOT NULL DEFAULT 'active';
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS completed_at timestamptz;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'projects_project_status_check'
   ) THEN
-    ALTER TABLE projects ADD CONSTRAINT projects_project_status_check CHECK (project_status IN ('active', 'completed'));
+    ALTER TABLE projects ADD CONSTRAINT projects_project_status_check CHECK (project_status IN ('active', 'completed', 'archived'));
   END IF;
 END $$;
 
@@ -94,15 +98,16 @@ CREATE TABLE IF NOT EXISTS tasks (
   project_id integer NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   parent_task_id integer REFERENCES tasks(id) ON DELETE SET NULL,
   name text NOT NULL,
+  task_name_choice text,
+  task_name_custom text,
   description text,
   trade text,
   vendor text,
-  vendor_2 text,
-  assignee_1 text,
-  assignee_2 text,
-  assignee_3 text,
-  assignee_4 text,
-  security_team_member text,
+  vendor_secondary text,
+  assignee_one text,
+  assignee_two text,
+  assignee_three text,
+  assignee_four text,
   pm text,
   assigned_to integer REFERENCES users(id) ON DELETE SET NULL,
   status text NOT NULL DEFAULT 'not_started',
@@ -118,55 +123,36 @@ CREATE TABLE IF NOT EXISTS tasks (
   CONSTRAINT tasks_status_check CHECK (status IN ('not_started', 'in_progress', 'blocked', 'complete')),
   CONSTRAINT tasks_priority_check CHECK (priority IN ('low', 'normal', 'high', 'critical')),
   CONSTRAINT tasks_trade_check CHECK (trade IS NULL OR trade IN ('CCure', 'Cameras', 'CCure & Cameras')),
-  CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas')),
-  CONSTRAINT tasks_vendor_2_check CHECK (vendor_2 IS NULL OR vendor_2 IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas')),
-  CONSTRAINT tasks_assignee_1_check CHECK (assignee_1 IS NULL OR assignee_1 IN ('Bennett', 'Bill', 'Chris', 'Derick', 'Derick & James', 'Derick & Justin', 'Derick & Justin, Suvam', 'Derick & Kenna', 'Derick & Kyra', 'Derick & Locksmiths', 'Derick & Ryan', 'Derick & Suvam', 'James', 'James & Derick', 'James & Justin', 'James & Justin, Suvam', 'James & Kenna', 'James & Kyra', 'James & Locksmiths', 'James & Ryan', 'James & Suvam', 'Jim', 'Justin', 'Justin & Derick', 'Justin & James', 'Justin & Kenna', 'Justin & Kyra', 'Justin & Locksmiths', 'Justin & Ryan', 'Justin & Suvam', 'Kenna', 'Kenna & Derick', 'Kenna & Justin', 'Kenna & Justin, Suvam', 'Kenna & Kyra', 'Kenna & Locksmiths', 'Kenna & Ryan', 'Kenna & Suvam', 'Kyra', 'Ryan', 'Suvam', 'Suvam & Derick', 'Suvam & James', 'Suvam & Justin', 'Suvam & Kenna', 'Suvam & Kyra', 'Suvam & Locksmiths', 'Suvam & Ryan')),
-  CONSTRAINT tasks_assignee_2_check CHECK (assignee_2 IS NULL OR assignee_2 IN ('Bennett', 'Bill', 'Chris', 'Derick', 'Derick & James', 'Derick & Justin', 'Derick & Justin, Suvam', 'Derick & Kenna', 'Derick & Kyra', 'Derick & Locksmiths', 'Derick & Ryan', 'Derick & Suvam', 'James', 'James & Derick', 'James & Justin', 'James & Justin, Suvam', 'James & Kenna', 'James & Kyra', 'James & Locksmiths', 'James & Ryan', 'James & Suvam', 'Jim', 'Justin', 'Justin & Derick', 'Justin & James', 'Justin & Kenna', 'Justin & Kyra', 'Justin & Locksmiths', 'Justin & Ryan', 'Justin & Suvam', 'Kenna', 'Kenna & Derick', 'Kenna & Justin', 'Kenna & Justin, Suvam', 'Kenna & Kyra', 'Kenna & Locksmiths', 'Kenna & Ryan', 'Kenna & Suvam', 'Kyra', 'Ryan', 'Suvam', 'Suvam & Derick', 'Suvam & James', 'Suvam & Justin', 'Suvam & Kenna', 'Suvam & Kyra', 'Suvam & Locksmiths', 'Suvam & Ryan')),
-  CONSTRAINT tasks_assignee_3_check CHECK (assignee_3 IS NULL OR assignee_3 IN ('Bennett', 'Bill', 'Chris', 'Derick', 'Derick & James', 'Derick & Justin', 'Derick & Justin, Suvam', 'Derick & Kenna', 'Derick & Kyra', 'Derick & Locksmiths', 'Derick & Ryan', 'Derick & Suvam', 'James', 'James & Derick', 'James & Justin', 'James & Justin, Suvam', 'James & Kenna', 'James & Kyra', 'James & Locksmiths', 'James & Ryan', 'James & Suvam', 'Jim', 'Justin', 'Justin & Derick', 'Justin & James', 'Justin & Kenna', 'Justin & Kyra', 'Justin & Locksmiths', 'Justin & Ryan', 'Justin & Suvam', 'Kenna', 'Kenna & Derick', 'Kenna & Justin', 'Kenna & Justin, Suvam', 'Kenna & Kyra', 'Kenna & Locksmiths', 'Kenna & Ryan', 'Kenna & Suvam', 'Kyra', 'Ryan', 'Suvam', 'Suvam & Derick', 'Suvam & James', 'Suvam & Justin', 'Suvam & Kenna', 'Suvam & Kyra', 'Suvam & Locksmiths', 'Suvam & Ryan')),
-  CONSTRAINT tasks_assignee_4_check CHECK (assignee_4 IS NULL OR assignee_4 IN ('Bennett', 'Bill', 'Chris', 'Derick', 'Derick & James', 'Derick & Justin', 'Derick & Justin, Suvam', 'Derick & Kenna', 'Derick & Kyra', 'Derick & Locksmiths', 'Derick & Ryan', 'Derick & Suvam', 'James', 'James & Derick', 'James & Justin', 'James & Justin, Suvam', 'James & Kenna', 'James & Kyra', 'James & Locksmiths', 'James & Ryan', 'James & Suvam', 'Jim', 'Justin', 'Justin & Derick', 'Justin & James', 'Justin & Kenna', 'Justin & Kyra', 'Justin & Locksmiths', 'Justin & Ryan', 'Justin & Suvam', 'Kenna', 'Kenna & Derick', 'Kenna & Justin', 'Kenna & Justin, Suvam', 'Kenna & Kyra', 'Kenna & Locksmiths', 'Kenna & Ryan', 'Kenna & Suvam', 'Kyra', 'Ryan', 'Suvam', 'Suvam & Derick', 'Suvam & James', 'Suvam & Justin', 'Suvam & Kenna', 'Suvam & Kyra', 'Suvam & Locksmiths', 'Suvam & Ryan')),
-  CONSTRAINT tasks_security_team_member_check CHECK (security_team_member IS NULL OR security_team_member IN ('Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam')),
   CONSTRAINT tasks_pm_check CHECK (pm IS NULL OR pm IN ('Kurt', 'Austin')),
+  CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas')),
+  CONSTRAINT tasks_vendor_secondary_check CHECK (vendor_secondary IS NULL OR vendor_secondary IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas')),
   CONSTRAINT tasks_progress_check CHECK (percent_complete >= 0 AND percent_complete <= 100),
   CONSTRAINT tasks_date_order CHECK (end_date >= start_date)
 );
 
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS trade text;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS vendor text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS vendor_2 text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_1 text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_2 text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_3 text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_4 text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS security_team_member text;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS vendor_secondary text;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_one text;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_two text;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_three text;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_four text;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS pm text;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS task_name_choice text;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS task_name_custom text;
 
 UPDATE tasks SET trade = NULL WHERE trade IS NOT NULL AND trade NOT IN ('CCure', 'Cameras', 'CCure & Cameras');
 UPDATE tasks SET vendor = NULL WHERE vendor IS NOT NULL AND vendor NOT IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas');
-UPDATE tasks SET vendor_2 = NULL WHERE vendor_2 IS NOT NULL AND vendor_2 NOT IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas');
-UPDATE tasks SET assignee_1 = NULL WHERE assignee_1 IS NOT NULL AND assignee_1 NOT IN ('Bennett', 'Bill', 'Chris', 'Derick', 'Derick & James', 'Derick & Justin', 'Derick & Justin, Suvam', 'Derick & Kenna', 'Derick & Kyra', 'Derick & Locksmiths', 'Derick & Ryan', 'Derick & Suvam', 'James', 'James & Derick', 'James & Justin', 'James & Justin, Suvam', 'James & Kenna', 'James & Kyra', 'James & Locksmiths', 'James & Ryan', 'James & Suvam', 'Jim', 'Justin', 'Justin & Derick', 'Justin & James', 'Justin & Kenna', 'Justin & Kyra', 'Justin & Locksmiths', 'Justin & Ryan', 'Justin & Suvam', 'Kenna', 'Kenna & Derick', 'Kenna & Justin', 'Kenna & Justin, Suvam', 'Kenna & Kyra', 'Kenna & Locksmiths', 'Kenna & Ryan', 'Kenna & Suvam', 'Kyra', 'Ryan', 'Suvam', 'Suvam & Derick', 'Suvam & James', 'Suvam & Justin', 'Suvam & Kenna', 'Suvam & Kyra', 'Suvam & Locksmiths', 'Suvam & Ryan');
-UPDATE tasks SET assignee_2 = NULL WHERE assignee_2 IS NOT NULL AND assignee_2 NOT IN ('Bennett', 'Bill', 'Chris', 'Derick', 'Derick & James', 'Derick & Justin', 'Derick & Justin, Suvam', 'Derick & Kenna', 'Derick & Kyra', 'Derick & Locksmiths', 'Derick & Ryan', 'Derick & Suvam', 'James', 'James & Derick', 'James & Justin', 'James & Justin, Suvam', 'James & Kenna', 'James & Kyra', 'James & Locksmiths', 'James & Ryan', 'James & Suvam', 'Jim', 'Justin', 'Justin & Derick', 'Justin & James', 'Justin & Kenna', 'Justin & Kyra', 'Justin & Locksmiths', 'Justin & Ryan', 'Justin & Suvam', 'Kenna', 'Kenna & Derick', 'Kenna & Justin', 'Kenna & Justin, Suvam', 'Kenna & Kyra', 'Kenna & Locksmiths', 'Kenna & Ryan', 'Kenna & Suvam', 'Kyra', 'Ryan', 'Suvam', 'Suvam & Derick', 'Suvam & James', 'Suvam & Justin', 'Suvam & Kenna', 'Suvam & Kyra', 'Suvam & Locksmiths', 'Suvam & Ryan');
-UPDATE tasks SET assignee_3 = NULL WHERE assignee_3 IS NOT NULL AND assignee_3 NOT IN ('Bennett', 'Bill', 'Chris', 'Derick', 'Derick & James', 'Derick & Justin', 'Derick & Justin, Suvam', 'Derick & Kenna', 'Derick & Kyra', 'Derick & Locksmiths', 'Derick & Ryan', 'Derick & Suvam', 'James', 'James & Derick', 'James & Justin', 'James & Justin, Suvam', 'James & Kenna', 'James & Kyra', 'James & Locksmiths', 'James & Ryan', 'James & Suvam', 'Jim', 'Justin', 'Justin & Derick', 'Justin & James', 'Justin & Kenna', 'Justin & Kyra', 'Justin & Locksmiths', 'Justin & Ryan', 'Justin & Suvam', 'Kenna', 'Kenna & Derick', 'Kenna & Justin', 'Kenna & Justin, Suvam', 'Kenna & Kyra', 'Kenna & Locksmiths', 'Kenna & Ryan', 'Kenna & Suvam', 'Kyra', 'Ryan', 'Suvam', 'Suvam & Derick', 'Suvam & James', 'Suvam & Justin', 'Suvam & Kenna', 'Suvam & Kyra', 'Suvam & Locksmiths', 'Suvam & Ryan');
-UPDATE tasks SET assignee_4 = NULL WHERE assignee_4 IS NOT NULL AND assignee_4 NOT IN ('Bennett', 'Bill', 'Chris', 'Derick', 'Derick & James', 'Derick & Justin', 'Derick & Justin, Suvam', 'Derick & Kenna', 'Derick & Kyra', 'Derick & Locksmiths', 'Derick & Ryan', 'Derick & Suvam', 'James', 'James & Derick', 'James & Justin', 'James & Justin, Suvam', 'James & Kenna', 'James & Kyra', 'James & Locksmiths', 'James & Ryan', 'James & Suvam', 'Jim', 'Justin', 'Justin & Derick', 'Justin & James', 'Justin & Kenna', 'Justin & Kyra', 'Justin & Locksmiths', 'Justin & Ryan', 'Justin & Suvam', 'Kenna', 'Kenna & Derick', 'Kenna & Justin', 'Kenna & Justin, Suvam', 'Kenna & Kyra', 'Kenna & Locksmiths', 'Kenna & Ryan', 'Kenna & Suvam', 'Kyra', 'Ryan', 'Suvam', 'Suvam & Derick', 'Suvam & James', 'Suvam & Justin', 'Suvam & Kenna', 'Suvam & Kyra', 'Suvam & Locksmiths', 'Suvam & Ryan');
-UPDATE tasks SET security_team_member = NULL WHERE security_team_member IS NOT NULL AND security_team_member NOT IN ('Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam');
+UPDATE tasks SET vendor_secondary = NULL WHERE vendor_secondary IS NOT NULL AND vendor_secondary NOT IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas');
 UPDATE tasks SET pm = NULL WHERE pm IS NOT NULL AND pm NOT IN ('Kurt', 'Austin');
 
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_trade_check;
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_vendor_check;
-ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_vendor_2_check;
-ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_assignee_1_check;
-ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_assignee_2_check;
-ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_assignee_3_check;
-ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_assignee_4_check;
-ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_security_team_member_check;
+ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_vendor_secondary_check;
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_pm_check;
 ALTER TABLE tasks ADD CONSTRAINT tasks_trade_check CHECK (trade IS NULL OR trade IN ('CCure', 'Cameras', 'CCure & Cameras'));
 ALTER TABLE tasks ADD CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas'));
-ALTER TABLE tasks ADD CONSTRAINT tasks_vendor_2_check CHECK (vendor_2 IS NULL OR vendor_2 IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas'));
-ALTER TABLE tasks ADD CONSTRAINT tasks_assignee_1_check CHECK (assignee_1 IS NULL OR assignee_1 IN ('Bennett', 'Bill', 'Chris', 'Derick', 'Derick & James', 'Derick & Justin', 'Derick & Justin, Suvam', 'Derick & Kenna', 'Derick & Kyra', 'Derick & Locksmiths', 'Derick & Ryan', 'Derick & Suvam', 'James', 'James & Derick', 'James & Justin', 'James & Justin, Suvam', 'James & Kenna', 'James & Kyra', 'James & Locksmiths', 'James & Ryan', 'James & Suvam', 'Jim', 'Justin', 'Justin & Derick', 'Justin & James', 'Justin & Kenna', 'Justin & Kyra', 'Justin & Locksmiths', 'Justin & Ryan', 'Justin & Suvam', 'Kenna', 'Kenna & Derick', 'Kenna & Justin', 'Kenna & Justin, Suvam', 'Kenna & Kyra', 'Kenna & Locksmiths', 'Kenna & Ryan', 'Kenna & Suvam', 'Kyra', 'Ryan', 'Suvam', 'Suvam & Derick', 'Suvam & James', 'Suvam & Justin', 'Suvam & Kenna', 'Suvam & Kyra', 'Suvam & Locksmiths', 'Suvam & Ryan'));
-ALTER TABLE tasks ADD CONSTRAINT tasks_assignee_2_check CHECK (assignee_2 IS NULL OR assignee_2 IN ('Bennett', 'Bill', 'Chris', 'Derick', 'Derick & James', 'Derick & Justin', 'Derick & Justin, Suvam', 'Derick & Kenna', 'Derick & Kyra', 'Derick & Locksmiths', 'Derick & Ryan', 'Derick & Suvam', 'James', 'James & Derick', 'James & Justin', 'James & Justin, Suvam', 'James & Kenna', 'James & Kyra', 'James & Locksmiths', 'James & Ryan', 'James & Suvam', 'Jim', 'Justin', 'Justin & Derick', 'Justin & James', 'Justin & Kenna', 'Justin & Kyra', 'Justin & Locksmiths', 'Justin & Ryan', 'Justin & Suvam', 'Kenna', 'Kenna & Derick', 'Kenna & Justin', 'Kenna & Justin, Suvam', 'Kenna & Kyra', 'Kenna & Locksmiths', 'Kenna & Ryan', 'Kenna & Suvam', 'Kyra', 'Ryan', 'Suvam', 'Suvam & Derick', 'Suvam & James', 'Suvam & Justin', 'Suvam & Kenna', 'Suvam & Kyra', 'Suvam & Locksmiths', 'Suvam & Ryan'));
-ALTER TABLE tasks ADD CONSTRAINT tasks_assignee_3_check CHECK (assignee_3 IS NULL OR assignee_3 IN ('Bennett', 'Bill', 'Chris', 'Derick', 'Derick & James', 'Derick & Justin', 'Derick & Justin, Suvam', 'Derick & Kenna', 'Derick & Kyra', 'Derick & Locksmiths', 'Derick & Ryan', 'Derick & Suvam', 'James', 'James & Derick', 'James & Justin', 'James & Justin, Suvam', 'James & Kenna', 'James & Kyra', 'James & Locksmiths', 'James & Ryan', 'James & Suvam', 'Jim', 'Justin', 'Justin & Derick', 'Justin & James', 'Justin & Kenna', 'Justin & Kyra', 'Justin & Locksmiths', 'Justin & Ryan', 'Justin & Suvam', 'Kenna', 'Kenna & Derick', 'Kenna & Justin', 'Kenna & Justin, Suvam', 'Kenna & Kyra', 'Kenna & Locksmiths', 'Kenna & Ryan', 'Kenna & Suvam', 'Kyra', 'Ryan', 'Suvam', 'Suvam & Derick', 'Suvam & James', 'Suvam & Justin', 'Suvam & Kenna', 'Suvam & Kyra', 'Suvam & Locksmiths', 'Suvam & Ryan'));
-ALTER TABLE tasks ADD CONSTRAINT tasks_assignee_4_check CHECK (assignee_4 IS NULL OR assignee_4 IN ('Bennett', 'Bill', 'Chris', 'Derick', 'Derick & James', 'Derick & Justin', 'Derick & Justin, Suvam', 'Derick & Kenna', 'Derick & Kyra', 'Derick & Locksmiths', 'Derick & Ryan', 'Derick & Suvam', 'James', 'James & Derick', 'James & Justin', 'James & Justin, Suvam', 'James & Kenna', 'James & Kyra', 'James & Locksmiths', 'James & Ryan', 'James & Suvam', 'Jim', 'Justin', 'Justin & Derick', 'Justin & James', 'Justin & Kenna', 'Justin & Kyra', 'Justin & Locksmiths', 'Justin & Ryan', 'Justin & Suvam', 'Kenna', 'Kenna & Derick', 'Kenna & Justin', 'Kenna & Justin, Suvam', 'Kenna & Kyra', 'Kenna & Locksmiths', 'Kenna & Ryan', 'Kenna & Suvam', 'Kyra', 'Ryan', 'Suvam', 'Suvam & Derick', 'Suvam & James', 'Suvam & Justin', 'Suvam & Kenna', 'Suvam & Kyra', 'Suvam & Locksmiths', 'Suvam & Ryan'));
-ALTER TABLE tasks ADD CONSTRAINT tasks_security_team_member_check CHECK (security_team_member IS NULL OR security_team_member IN ('Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam'));
+ALTER TABLE tasks ADD CONSTRAINT tasks_vendor_secondary_check CHECK (vendor_secondary IS NULL OR vendor_secondary IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas'));
 ALTER TABLE tasks ADD CONSTRAINT tasks_pm_check CHECK (pm IS NULL OR pm IN ('Kurt', 'Austin'));
 
 CREATE TABLE IF NOT EXISTS task_dependencies (
@@ -310,7 +296,6 @@ CREATE TABLE IF NOT EXISTS project_blueprints (
   id integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
   project_id integer NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   original_name text NOT NULL,
-  file_name text NOT NULL,
   mime_type text NOT NULL DEFAULT 'application/octet-stream',
   size_bytes integer NOT NULL CHECK (size_bytes > 0),
   file_data bytea NOT NULL,
@@ -320,11 +305,23 @@ CREATE TABLE IF NOT EXISTS project_blueprints (
 
 -- Upgrade older blueprint tables that used file_name/file_size column names.
 ALTER TABLE project_blueprints ADD COLUMN IF NOT EXISTS original_name text;
-ALTER TABLE project_blueprints ADD COLUMN IF NOT EXISTS file_name text;
-UPDATE project_blueprints SET original_name = COALESCE(NULLIF(original_name, ''), NULLIF(file_name, ''), concat('blueprint-', id)) WHERE original_name IS NULL OR original_name = '';
-UPDATE project_blueprints SET file_name = COALESCE(NULLIF(file_name, ''), NULLIF(original_name, ''), concat('blueprint-', id)) WHERE file_name IS NULL OR file_name = '';
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'project_blueprints'
+      AND column_name = 'file_name'
+  ) THEN
+    UPDATE project_blueprints
+    SET original_name = file_name
+    WHERE original_name IS NULL AND file_name IS NOT NULL;
+    EXECUTE 'ALTER TABLE project_blueprints ALTER COLUMN file_name DROP NOT NULL';
+  END IF;
+END $$;
+UPDATE project_blueprints SET original_name = concat('blueprint-', id) WHERE original_name IS NULL;
 ALTER TABLE project_blueprints ALTER COLUMN original_name SET NOT NULL;
-ALTER TABLE project_blueprints ALTER COLUMN file_name SET NOT NULL;
 
 ALTER TABLE project_blueprints ADD COLUMN IF NOT EXISTS size_bytes integer;
 DO $$
@@ -339,6 +336,7 @@ BEGIN
     UPDATE project_blueprints
     SET size_bytes = file_size
     WHERE size_bytes IS NULL AND file_size IS NOT NULL;
+    EXECUTE 'ALTER TABLE project_blueprints ALTER COLUMN file_size DROP NOT NULL';
   END IF;
 END $$;
 UPDATE project_blueprints SET size_bytes = octet_length(file_data) WHERE size_bytes IS NULL AND file_data IS NOT NULL;
@@ -392,6 +390,7 @@ CREATE TABLE IF NOT EXISTS owner_cms_work_orders (
   sheet_key text PRIMARY KEY,
   sheet_name text NOT NULL,
   cells jsonb NOT NULL DEFAULT '[]'::jsonb,
+  archived_cells jsonb NOT NULL DEFAULT '[]'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -402,6 +401,8 @@ VALUES
   ('austins_cms_wos', 'Austins CMS WOs', '[]'::jsonb)
 ON CONFLICT (sheet_key) DO UPDATE SET
   sheet_name = EXCLUDED.sheet_name;
+
+ALTER TABLE owner_cms_work_orders ADD COLUMN IF NOT EXISTS archived_cells jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_owner_cms_work_orders_sheet_key ON owner_cms_work_orders(sheet_key);
 CREATE INDEX IF NOT EXISTS idx_audit_log_project ON audit_log(project_id, created_at DESC);
