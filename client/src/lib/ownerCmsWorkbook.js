@@ -294,7 +294,7 @@ Utility Sytems
   { key: 'walk_scheduled', label: 'Walk Scheduled', type: 'date', width: 140 },
   { key: 'install_date', label: 'Install Date', type: 'date', width: 140 },
   { key: 'deadline', label: 'Deadline', type: 'date', width: 140 },
-  { key: 'bill_by_year_end', label: 'Bill by year end', type: 'date', width: 150 },
+  { key: 'bill_by_year_end', label: 'Bill by year end', type: 'select', width: 150, options: ['Yes', 'No', 'NA'] },
   { key: 'category', label: 'Category', type: 'select', width: 180, options: linesToOptions(`
 COST ESTIAMTE
 CCURE
@@ -313,24 +313,25 @@ CCURE & CCTV
   { key: 'security', label: 'Security', type: 'select', width: 290, options: securityOptions },
   { key: 'child_wo', label: 'Child WO', type: 'select', width: 110, options: ['Yes', 'No', 'NA'] },
   { key: 'vendor', label: 'Vendor', type: 'select', width: 160, options: linesToOptions(`
-AVTEC
+Accent Automatic
 Beacon
+Bid Walk
 Convergint
 DSI
-EverBase
+Everbase
 G4S
+IC&E
 Ideacom
 IES
-PTI
-S101
-Stone
-Pavion
-Yamas
-USHOP
 Misc
+Nelson Fire
+OTIS
+Pavion
+Pye Barker
+S101
 SMT
-Accent Auto
-Bid Walk
+Stone Security
+USHOP
 `) },
   { key: 'status', label: 'Status', type: 'select', width: 220, options: linesToOptions(`
 Cost Estimate
@@ -387,16 +388,16 @@ Uploaded
 export const ownerCmsColumnCount = OWNER_CMS_COLUMN_COUNT;
 export const ownerCmsRowCount = OWNER_CMS_ROW_COUNT;
 
-export function buildBlankOwnerCmsGrid() {
-  return Array.from({ length: OWNER_CMS_ROW_COUNT }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+export function buildBlankOwnerCmsGrid(rowCount = OWNER_CMS_ROW_COUNT) {
+  return Array.from({ length: Math.max(0, rowCount) }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
 }
 
 export function normalizeOwnerCmsGrid(cells) {
-  const grid = buildBlankOwnerCmsGrid();
-  if (!Array.isArray(cells)) return grid;
+  const source = Array.isArray(cells) ? cells : [];
+  const grid = buildBlankOwnerCmsGrid(Math.max(OWNER_CMS_ROW_COUNT, source.length));
 
-  for (let rowIndex = 0; rowIndex < Math.min(cells.length, OWNER_CMS_ROW_COUNT); rowIndex += 1) {
-    const row = cells[rowIndex];
+  for (let rowIndex = 0; rowIndex < source.length; rowIndex += 1) {
+    const row = source[rowIndex];
     if (!Array.isArray(row)) continue;
     for (let colIndex = 0; colIndex < Math.min(row.length, OWNER_CMS_COLUMN_COUNT); colIndex += 1) {
       const value = row[colIndex];
@@ -439,4 +440,13 @@ export function normalizeOwnerCmsArchivedRows(rows) {
       };
     })
     .filter((row) => row.cells.some((value) => String(value || '').trim().length > 0));
+}
+
+
+export function insertBlankOwnerCmsRow(cells, rowIndex) {
+  const grid = normalizeOwnerCmsGrid(cells);
+  const blankRow = Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => '');
+  const targetIndex = Number.isInteger(rowIndex) ? Math.max(0, Math.min(rowIndex, grid.length)) : grid.length;
+  grid.splice(targetIndex, 0, blankRow);
+  return grid;
 }

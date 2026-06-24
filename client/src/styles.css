@@ -2580,6 +2580,124 @@ html[data-theme='dark'] .theme-toggle-button {
   display: grid;
   gap: 1rem;
 }
+.owner-cms-panel--fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  padding: 1rem;
+  background: inherit;
+  overflow: auto;
+}
+
+.owner-cms-panel--fullscreen > .panel {
+  min-height: calc(100vh - 2rem);
+  margin: 0;
+  border-radius: 22px;
+}
+
+.markup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.markup-card {
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
+  padding: 1rem;
+}
+
+.markup-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.markup-card-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.markup-card-header p {
+  margin: 0.25rem 0 0;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.markup-lines {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.markup-line {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.markup-line span {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #475569;
+}
+
+.markup-line input {
+  width: 100%;
+}
+
+.markup-line small {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.markup-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.markup-totals > div {
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 16px;
+  padding: 0.8rem 0.9rem;
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.markup-totals span {
+  display: block;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.markup-totals strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1rem;
+}
+
+html[data-theme='dark'] .owner-cms-panel--fullscreen > .panel,
+html[data-theme='dark'] .markup-card {
+  background: rgba(15, 23, 42, 0.96);
+  border-color: rgba(51, 65, 85, 0.9);
+}
+
+html[data-theme='dark'] .markup-card-header p,
+html[data-theme='dark'] .markup-line span,
+html[data-theme='dark'] .markup-line small,
+html[data-theme='dark'] .markup-totals span {
+  color: #94a3b8;
+}
+
+html[data-theme='dark'] .markup-totals > div {
+  background: rgba(15, 23, 42, 0.78);
+  border-color: rgba(51, 65, 85, 0.9);
+}
+
 
 .cms-sheet-tabs {
   display: flex;
@@ -2673,6 +2791,13 @@ html[data-theme='dark'] .theme-toggle-button {
   width: 92px;
   padding: 0.45rem 0.35rem;
   text-align: center;
+}
+
+.cms-grid-row-header .row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
 }
 
 .cms-grid-cell {

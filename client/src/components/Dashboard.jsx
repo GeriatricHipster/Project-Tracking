@@ -3,6 +3,7 @@ import { addDays, formatDate, todayIso } from '../lib/dates';
 import { buildingOptions } from '../lib/buildings';
 import SiteMembersPanel from './SiteMembersPanel';
 import OwnerCmsWosPanel from './OwnerCmsWosPanel';
+import MarkupCalculatorPanel from './MarkupCalculatorPanel';
 import SiteBanner from './SiteBanner';
 
 const dashboardTabs = [
@@ -11,6 +12,7 @@ const dashboardTabs = [
   { id: 'archive', label: 'Archive' },
   { id: 'assignments', label: 'Projects' },
   { id: 'calendar', label: 'Calendar overview' },
+  { id: 'markup-calc', label: 'Markup calculator' },
   { id: 'site-members', label: 'Site members', managersOnly: true },
   { id: 'owner-cms', label: 'CMS WOs', ownersOnly: true }
 ];
@@ -660,6 +662,10 @@ export default function Dashboard({
     );
   }
 
+  function renderMarkupCalculatorTab() {
+    return <MarkupCalculatorPanel />;
+  }
+
   return (
     <main className="app-page">
       <SiteBanner />
@@ -710,6 +716,7 @@ export default function Dashboard({
       {activeTab === 'archive' && renderArchiveTab()}
       {activeTab === 'assignments' && renderAssignmentsTab()}
       {activeTab === 'calendar' && renderCalendarTab()}
+      {activeTab === 'markup-calc' && renderMarkupCalculatorTab()}
       {activeTab === 'site-members' && canManageSite && <SiteMembersPanel currentUser={user} onOpenProject={onOpenProject} />}
       {activeTab === 'owner-cms' && canAccessOwnerCms && <OwnerCmsWosPanel user={user} />}
     </main>

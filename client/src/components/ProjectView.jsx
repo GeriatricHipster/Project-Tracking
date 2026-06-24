@@ -3,6 +3,7 @@ import { api, getToken } from '../lib/api';
 import { createProjectSocket } from '../lib/socket';
 import { formatDate } from '../lib/dates';
 import ActivityPanel from './ActivityPanel';
+import BlueprintsPanel from './BlueprintsPanel';
 import DependencyPanel from './DependencyPanel';
 import GanttChart from './GanttChart';
 import GanttChecklist from './GanttChecklist';
@@ -147,6 +148,18 @@ export default function ProjectView({ projectId, user, onBack }) {
     await loadProject({ quiet: true });
   }
 
+  async function uploadBlueprint(file) {
+    const formData = new FormData();
+    formData.append('blueprint', file);
+    await api(`/projects/${projectId}/blueprints`, { method: 'POST', body: formData });
+    await loadProject({ quiet: true });
+  }
+
+  async function deleteBlueprint(blueprint) {
+    await api(`/blueprints/${blueprint.id}`, { method: 'DELETE' });
+    await loadProject({ quiet: true });
+  }
+
   async function addProjectNote(body) {
     await api(`/projects/${projectId}/notes`, { method: 'POST', body: { body } });
     await loadProject({ quiet: true });
@@ -183,7 +196,7 @@ export default function ProjectView({ projectId, user, onBack }) {
     );
   }
 
-  const { project, members, dependencies, checklist, audit } = data;
+  const { project, members, dependencies, checklist, blueprints, audit } = data;
 
   return (
     <main className="app-page project-view">
@@ -231,6 +244,12 @@ export default function ProjectView({ projectId, user, onBack }) {
             canEdit={canEdit}
             onAddDependency={addDependency}
             onDeleteDependency={deleteDependency}
+          />
+          <BlueprintsPanel
+            blueprints={blueprints || []}
+            canEdit={canEdit}
+            onUpload={uploadBlueprint}
+            onDelete={deleteBlueprint}
           />
           <MembersPanel
             currentUser={user}

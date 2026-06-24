@@ -18,34 +18,57 @@ const priorityOptions = [
 ];
 
 const tradeOptions = ['CCure', 'Cameras', 'CCure & Cameras'];
-const vendorOptions = [...new Set([
+const vendorOptions = [
+  'AVTEC',
   'Accent Automatic',
-  'Accent Auto',
   'Beacon',
+  'Bid Walk',
   'Convergint',
   'DSI',
-  'EverBase',
   'Everbase',
   'G4S',
   'IC&E',
   'Ideacom',
   'IES',
+  'Misc',
   'Nelson Fire',
   'OTIS',
   'Pavion',
+  'PTI',
   'Pye Barker',
   'S101',
   'SMT',
-  'Stone',
   'Stone Security',
-  'USHOP',
-  'Utah Yamas',
-  'Yamas'
-])].sort((a, b) => a.localeCompare(b));
+  'USHOP'
+].sort((a, b) => a.localeCompare(b));
 const pmOptions = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));
+const taskNameOptions = [
+  'Parts Procurement',
+  'Preprogramming (Vendor)',
+  'Preprogramming (Ccure Team) clearances/schedules etc.',
+  'Ccure Operator Established',
+  'UIT (IP Addresses, Firewall)',
+  'Conduit Install',
+  'Cable Install',
+  'ADA Install',
+  'Ccure Hardware Install',
+  'Camera Hardware Install',
+  'Panel Install',
+  'Fire Integration',
+  'Alarm Panel Install/Integration',
+  'Elevator Integration',
+  'Final Programming',
+  'Vendor Testing',
+  'CCure/Camera Testing',
+  'Key Shop Hardware Change',
+  'Punchlist',
+  'Closeout',
+  'Other'
+];
+
 const presetAssigneeNames = [
-  'Bennett',
   'Bill',
+  'Bennett',
   'Chris',
   'Derick',
   'Derick & James',
@@ -92,7 +115,7 @@ const presetAssigneeNames = [
   'Suvam & Kyra',
   'Suvam & Locksmiths',
   'Suvam & Ryan'
-];
+].sort((a, b) => a.localeCompare(b));
 
 function sortUnique(values) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
@@ -101,7 +124,8 @@ function sortUnique(values) {
 function blankTask(project) {
   const start = project?.start_date || todayIso();
   return {
-    name: '',
+    name_choice: '',
+    custom_task_name: '',
     description: '',
     trade: '',
     vendor: '',
@@ -110,7 +134,6 @@ function blankTask(project) {
     assigned_to: '',
     assignee_secondary: '',
     assignee_tertiary: '',
-    assignee_quaternary: '',
     parent_task_id: '',
     status: '',
     priority: '',
@@ -122,6 +145,13 @@ function blankTask(project) {
   };
 }
 
+function deriveTaskName(taskName) {
+  const name = String(taskName || '').trim();
+  if (!name) return { name_choice: '', custom_task_name: '' };
+  if (taskNameOptions.includes(name)) return { name_choice: name, custom_task_name: '' };
+  return { name_choice: 'Other', custom_task_name: name };
+}
+
 export default function TaskForm({ project, members, tasks, editingTask, canEdit, onSave, onCancel }) {
   const [form, setForm] = useState(blankTask(project));
   const [saving, setSaving] = useState(false);
@@ -129,8 +159,10 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
 
   useEffect(() => {
     if (editingTask) {
+      const derived = deriveTaskName(editingTask.name);
       setForm({
-        name: editingTask.name || '',
+        name_choice: derived.name_choice,
+        custom_task_name: derived.custom_task_name,
         description: editingTask.description || '',
         trade: editingTask.trade || '',
         vendor: editingTask.vendor || '',
@@ -139,7 +171,6 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         assigned_to: editingTask.assigned_to || '',
         assignee_secondary: editingTask.assignee_secondary || '',
         assignee_tertiary: editingTask.assignee_tertiary || '',
-        assignee_quaternary: editingTask.assignee_quaternary || '',
         parent_task_id: editingTask.parent_task_id || '',
         status: editingTask.status || '',
         priority: editingTask.priority || '',
@@ -162,8 +193,8 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
 
   const assigneeOptions = useMemo(
     () => sortUnique([
-      ...members.map((member) => member.name).filter(Boolean),
-      ...presetAssigneeNames
+      ...presetAssigneeNames,
+      ...members.map((member) => member.name).filter(Boolean)
     ]),
     [members]
   );
@@ -177,8 +208,17 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     setError('');
     setSaving(true);
     try {
+      const taskName = form.name_choice === 'Other'
+        ? String(form.custom_task_name || '').trim()
+        : String(form.name_choice || '').trim();
+
+      if (!taskName) {
+        throw new Error('Please choose a task name or enter a custom task name.');
+      }
+
       await onSave({
         ...form,
+        name: taskName,
         trade: form.trade || null,
         vendor: form.vendor || null,
         vendor_secondary: form.vendor_secondary || null,
@@ -186,7 +226,6 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         assigned_to: form.assigned_to || null,
         assignee_secondary: form.assignee_secondary || null,
         assignee_tertiary: form.assignee_tertiary || null,
-        assignee_quaternary: form.assignee_quaternary || null,
         parent_task_id: form.parent_task_id || null,
         status: form.status || 'not_started',
         priority: form.priority || 'normal',
@@ -201,6 +240,8 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     }
   }
 
+  const showCustomName = form.name_choice === 'Other';
+
   return (
     <section className="panel task-form-panel">
       <div className="panel-heading">
@@ -214,8 +255,28 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       <form className="stack" onSubmit={submit}>
         <label>
           Task name
-          <input disabled={!canEdit} value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Panel installation" />
+          <select
+            disabled={!canEdit}
+            value={form.name_choice}
+            onChange={(event) => updateField('name_choice', event.target.value)}
+          >
+            <option value="">Unassigned</option>
+            {taskNameOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
         </label>
+
+        {showCustomName && (
+          <label>
+            Custom task name
+            <textarea
+              disabled={!canEdit}
+              rows={4}
+              value={form.custom_task_name}
+              onChange={(event) => updateField('custom_task_name', event.target.value)}
+              placeholder="Enter your custom task name here"
+            />
+          </label>
+        )}
 
         <div className="two-col">
           <label>
@@ -251,19 +312,14 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
           </label>
         </div>
 
-        <div className="four-col">
+        <div className="three-col">
           <label>
-            Assignee
+            Assignee 1
             <select disabled={!canEdit} value={form.assigned_to} onChange={(event) => updateField('assigned_to', event.target.value)}>
               <option value="">Unassigned</option>
-              {members
-                .slice()
-                .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')) )
-                .map((member) => (
-                  <option key={member.user_id} value={member.user_id}>
-                    {member.name}{member.email ? ` (${member.email})` : ''}
-                  </option>
-                ))}
+              {assigneeOptions.map((member) => (
+                <option key={member} value={member}>{member}</option>
+              ))}
             </select>
           </label>
           <label>
@@ -276,13 +332,6 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
           <label>
             Assignee 3
             <select disabled={!canEdit} value={form.assignee_tertiary} onChange={(event) => updateField('assignee_tertiary', event.target.value)}>
-              <option value="">Unassigned</option>
-              {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
-            </select>
-          </label>
-          <label>
-            Assignee 4
-            <select disabled={!canEdit} value={form.assignee_quaternary} onChange={(event) => updateField('assignee_quaternary', event.target.value)}>
               <option value="">Unassigned</option>
               {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
             </select>
