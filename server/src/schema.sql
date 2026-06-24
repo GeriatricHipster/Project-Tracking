@@ -123,7 +123,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   CONSTRAINT tasks_trade_check CHECK (trade IS NULL OR trade IN ('CCure', 'Cameras', 'CCure & Cameras')),
   CONSTRAINT tasks_security_team_member_check CHECK (security_team_member IS NULL OR security_team_member IN ('Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam')),
   CONSTRAINT tasks_pm_check CHECK (pm IS NULL OR pm IN ('Kurt', 'Austin')),
-  CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('AVTEC', 'Accent Automatic', 'Beacon', 'Bid Walk', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Misc', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI', 'Pye Barker', 'S101', 'SMT', 'Stone Security', 'USHOP')),
+  CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'S101', 'SMT', 'Stone Security', 'USHOP')),
   CONSTRAINT tasks_progress_check CHECK (percent_complete >= 0 AND percent_complete <= 100),
   CONSTRAINT tasks_date_order CHECK (end_date >= start_date)
 );
@@ -138,7 +138,7 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_tertiary text;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_quaternary text;
 
 UPDATE tasks SET trade = NULL WHERE trade IS NOT NULL AND trade NOT IN ('CCure', 'Cameras', 'CCure & Cameras');
-UPDATE tasks SET vendor = NULL WHERE vendor IS NOT NULL AND vendor NOT IN ('AVTEC', 'Accent Automatic', 'Beacon', 'Bid Walk', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Misc', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI', 'Pye Barker', 'S101', 'SMT', 'Stone Security', 'USHOP');
+UPDATE tasks SET vendor = NULL WHERE vendor IS NOT NULL AND vendor NOT IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'S101', 'SMT', 'Stone Security', 'USHOP');
 UPDATE tasks SET security_team_member = NULL WHERE security_team_member IS NOT NULL AND security_team_member NOT IN ('Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam');
 UPDATE tasks SET pm = NULL WHERE pm IS NOT NULL AND pm NOT IN ('Kurt', 'Austin');
 
@@ -147,7 +147,7 @@ ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_vendor_check;
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_security_team_member_check;
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_pm_check;
 ALTER TABLE tasks ADD CONSTRAINT tasks_trade_check CHECK (trade IS NULL OR trade IN ('CCure', 'Cameras', 'CCure & Cameras'));
-ALTER TABLE tasks ADD CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('AVTEC', 'Accent Automatic', 'Beacon', 'Bid Walk', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Misc', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI', 'Pye Barker', 'S101', 'SMT', 'Stone Security', 'USHOP'));
+ALTER TABLE tasks ADD CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'S101', 'SMT', 'Stone Security', 'USHOP'));
 ALTER TABLE tasks ADD CONSTRAINT tasks_security_team_member_check CHECK (security_team_member IS NULL OR security_team_member IN ('Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam'));
 ALTER TABLE tasks ADD CONSTRAINT tasks_pm_check CHECK (pm IS NULL OR pm IN ('Kurt', 'Austin'));
 

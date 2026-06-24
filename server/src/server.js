@@ -46,7 +46,7 @@ const projectLifecycleStatuses = new Set(['active', 'completed', 'archived']);
 const priorities = new Set(['low', 'normal', 'high', 'critical']);
 const roles = new Set(['owner', 'manager', 'editor', 'viewer']);
 const inviteRoles = new Set(['manager', 'editor', 'viewer']);
-const vendors = new Set(['AVTEC', 'Accent Automatic', 'Beacon', 'Bid Walk', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Misc', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI', 'Pye Barker', 'S101', 'SMT', 'Stone Security', 'USHOP']);
+const vendors = new Set(['Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'S101', 'SMT', 'Stone Security', 'USHOP']);
 const trades = new Set(['CCure', 'Cameras', 'CCure & Cameras']);
 const securityTeamMembers = new Set(['Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam']);
 const projectManagers = new Set(['Kurt', 'Austin']);
@@ -572,24 +572,24 @@ function requireSiteOwner(user) {
 const OWNER_CMS_ROW_COUNT = 150;
 const OWNER_CMS_COLUMN_COUNT = 20;
 
-function buildBlankOwnerCmsGrid(rowCount = OWNER_CMS_ROW_COUNT) {
-  return Array.from({ length: Math.max(0, rowCount) }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+function buildBlankOwnerCmsGrid() {
+  return Array.from({ length: OWNER_CMS_ROW_COUNT }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
 }
 
 function normalizeOwnerCmsGrid(cells) {
-  const source = Array.isArray(cells) ? cells : [];
-  const grid = buildBlankOwnerCmsGrid(Math.max(OWNER_CMS_ROW_COUNT, source.length));
+  const blank = buildBlankOwnerCmsGrid();
+  if (!Array.isArray(cells)) return blank;
 
-  for (let rowIndex = 0; rowIndex < source.length; rowIndex += 1) {
-    const row = source[rowIndex];
+  for (let rowIndex = 0; rowIndex < Math.min(cells.length, OWNER_CMS_ROW_COUNT); rowIndex += 1) {
+    const row = cells[rowIndex];
     if (!Array.isArray(row)) continue;
     for (let colIndex = 0; colIndex < Math.min(row.length, OWNER_CMS_COLUMN_COUNT); colIndex += 1) {
       const value = row[colIndex];
-      grid[rowIndex][colIndex] = value === null || value === undefined ? '' : String(value);
+      blank[rowIndex][colIndex] = value === null || value === undefined ? '' : String(value);
     }
   }
 
-  return grid;
+  return blank;
 }
 
 function normalizeOwnerCmsArchivedRows(rows) {
@@ -620,14 +620,6 @@ function normalizeOwnerCmsArchivedRows(rows) {
       };
     })
     .filter((row) => row.cells.some((value) => String(value || '').trim().length > 0));
-}
-
-function insertBlankOwnerCmsRow(cells, rowIndex) {
-  const grid = normalizeOwnerCmsGrid(cells);
-  const blankRow = Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => '');
-  const targetIndex = Number.isInteger(rowIndex) ? Math.max(0, Math.min(rowIndex, grid.length)) : grid.length;
-  grid.splice(targetIndex, 0, blankRow);
-  return grid;
 }
 
 function rowHasContent(row) {
@@ -1159,7 +1151,7 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
     label: 'row_index',
     defaultValue: 0,
     min: 0,
-    max: 999999
+    max: OWNER_CMS_ROW_COUNT - 1
   });
   const colIndex = clampInteger(req.body.col_index ?? req.body.colIndex, {
     label: 'col_index',
@@ -1177,9 +1169,6 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
     if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
 
     const normalized = normalizeOwnerCmsGrid(current.rows[0].cells);
-    while (rowIndex >= normalized.length) {
-      normalized.push(Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
-    }
     normalized[rowIndex][colIndex] = cellValue;
     const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
 
@@ -1202,50 +1191,6 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
   res.json({ sheet: updated });
 }));
 
-app.post('/api/owner/cms-wos/:sheetKey/rows', requireAuth, asyncHandler(async (req, res) => {
-  requireSiteOwner(req.user);
-  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
-  const rowIndexInput = req.body.row_index ?? req.body.rowIndex;
-  const rowIndex = rowIndexInput === undefined || rowIndexInput === null || rowIndexInput === ''
-    ? null
-    : clampInteger(rowIndexInput, {
-      label: 'row_index',
-      defaultValue: 0,
-      min: 0,
-      max: 999999
-    });
-
-  const updated = await tx(async (client) => {
-    const current = await client.query(
-      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
-      [sheet.sheet_key]
-    );
-    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
-
-    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
-    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
-    const targetIndex = rowIndex === null ? activeRows.length : Math.max(0, Math.min(rowIndex, activeRows.length));
-    activeRows.splice(targetIndex, 0, Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
-
-    const saveResult = await client.query(
-      `UPDATE owner_cms_work_orders
-       SET cells = $1,
-           archived_cells = $2
-       WHERE sheet_key = $3
-       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
-      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
-    );
-
-    return {
-      ...saveResult.rows[0],
-      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
-      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
-    };
-  });
-
-  res.status(201).json({ sheet: updated });
-}));
-
 app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/archive', requireAuth, asyncHandler(async (req, res) => {
   requireSiteOwner(req.user);
   const sheet = requireOwnerCmsSheet(req.params.sheetKey);
@@ -1253,7 +1198,7 @@ app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/archive', requireAuth, asy
     label: 'rowIndex',
     defaultValue: 0,
     min: 0,
-    max: 999999
+    max: OWNER_CMS_ROW_COUNT - 1
   });
 
   const updated = await tx(async (client) => {
@@ -1321,13 +1266,10 @@ app.post('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex/restore', requireA
     if (!archivedRow) throw httpError(404, 'Archived row not found.');
 
     let targetIndex = archivedRow.row_number ? Number(archivedRow.row_number) - 1 : activeRows.findIndex((row) => !rowHasContent(row));
-    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex > activeRows.length || rowHasContent(activeRows[targetIndex])) {
+    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= OWNER_CMS_ROW_COUNT || rowHasContent(activeRows[targetIndex])) {
       targetIndex = activeRows.findIndex((row) => !rowHasContent(row));
     }
-    if (targetIndex < 0) {
-      activeRows.push(Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
-      targetIndex = activeRows.length - 1;
-    }
+    if (targetIndex < 0) throw httpError(400, 'No empty rows are available to restore this entry.');
 
     activeRows[targetIndex] = [...archivedRow.cells];
     archivedRows.splice(archiveIndex, 1);
