@@ -5,31 +5,11 @@ import ProjectView from './components/ProjectView';
 import SiteBanner from './components/SiteBanner';
 import { api, getToken, setToken } from './lib/api';
 
-const backgroundOptions = [
-  { value: 'midnight', label: 'Midnight' },
-  { value: 'ember', label: 'Sunset' },
-  { value: 'slate', label: 'Slate' },
-  { value: 'steel', label: 'Ocean' }
-];
-
-function backgroundStorageKey(userId) {
-  return userId ? `psg-background:${userId}` : 'psg-background:guest';
-}
-
-function readBackgroundPreference(userId) {
-  if (typeof window === 'undefined') return 'midnight';
-  const userKey = backgroundStorageKey(userId);
-  return window.localStorage.getItem(userKey)
-    || window.localStorage.getItem('psg-background:guest')
-    || backgroundOptions[0].value;
-}
-
 export default function App() {
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') return 'light';
     return window.localStorage.getItem('psg-theme') || 'light';
   });
-  const [background, setBackground] = useState(() => readBackgroundPreference(null));
   const [token, setTokenState] = useState(getToken());
   const [user, setUser] = useState(null);
   const [projects, setProjects] = useState([]);
@@ -50,21 +30,6 @@ export default function App() {
     window.localStorage.setItem('psg-theme', theme);
   }, [theme]);
 
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    document.documentElement.dataset.background = background;
-    if (user?.id) {
-      window.localStorage.setItem(backgroundStorageKey(user.id), background);
-    } else {
-      window.localStorage.setItem('psg-background:guest', background);
-    }
-  }, [background, user?.id]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    setBackground(readBackgroundPreference(user.id));
-  }, [user?.id]);
-
   function openProjectFromUrl(nextProjects) {
     const requestedProjectId = projectIdFromUrl();
     if (!requestedProjectId) return;
@@ -84,7 +49,6 @@ export default function App() {
       setLoadingProjects(false);
     }
   }
-
   function routeAfterAuth(nextProjects) {
     openProjectFromUrl(nextProjects);
   }
@@ -100,7 +64,6 @@ export default function App() {
       try {
         const me = await api('/me');
         setUser(me.user);
-        setBackground(readBackgroundPreference(me.user.id));
         const nextProjects = await loadProjects();
         await routeAfterAuth(nextProjects);
       } catch (error) {
@@ -117,7 +80,6 @@ export default function App() {
     setToken(data.token, rememberMe);
     setTokenState(data.token);
     setUser(data.user);
-    setBackground(readBackgroundPreference(data.user.id));
     const nextProjects = await loadProjects();
     await routeAfterAuth(nextProjects);
   }
@@ -141,10 +103,6 @@ export default function App() {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
   }
 
-  function changeBackground(value) {
-    setBackground(value);
-  }
-
   function logout() {
     setToken(null);
     setTokenState(null);
@@ -153,37 +111,27 @@ export default function App() {
     setSelectedProjectId(null);
   }
 
-  const floatingControls = (
-    <div className="floating-controls" aria-label="Display controls">
-      <button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
-        {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-      </button>
-      <label className="background-select-wrap">
-        <span className="sr-only">Background</span>
-        <select className="background-select" value={background} onChange={(event) => changeBackground(event.target.value)} aria-label="Change app background">
-          {backgroundOptions.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
-      </label>
-    </div>
+  const themeToggle = (
+    <button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
+      {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+    </button>
   );
 
   if (booting) {
-    return <>{floatingControls}<main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main></>;
+    return <><button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button><main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main></>;
   }
 
   if (!token || !user) {
-    return <>{floatingControls}<AuthScreen onAuth={handleAuth} /></>;
+    return <><button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button><AuthScreen onAuth={handleAuth} /></>;
   }
 
   if (selectedProjectId) {
-    return <>{floatingControls}<ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></>;
+    return <><button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button><ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></>;
   }
 
   return (
     <>
-      {floatingControls}
+      {themeToggle}
       <Dashboard
         user={user}
         projects={projects}

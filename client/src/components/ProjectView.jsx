@@ -208,7 +208,6 @@ export default function ProjectView({ projectId, user, onBack }) {
             <h1>{project.name}</h1>
             <span className={`role-pill role-${project.role}`}>{titleCase(project.role)}</span>
             {project.project_status === 'completed' && <span className="status-pill status-completed">Completed</span>}
-            {project.project_status === 'archived' && <span className="status-pill status-archived">Archived</span>}
           </div>
           <p>{project.location || 'No location set'} · {formatDate(project.start_date)} to {formatDate(project.end_date)}</p>
           {project.description && <p className="project-description">{project.description}</p>}

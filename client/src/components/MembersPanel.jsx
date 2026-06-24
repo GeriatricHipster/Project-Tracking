@@ -1,7 +1,3 @@
-import { useState } from 'react';
-
-const allRoles = ['owner', 'manager', 'editor', 'viewer'];
-
 function describeNotification(_result, baseMessage) {
   return baseMessage;
 }
