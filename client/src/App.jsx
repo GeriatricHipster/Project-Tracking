@@ -1,28 +1,71 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import AuthScreen from './components/AuthScreen';
 import Dashboard from './components/Dashboard';
 import ProjectView from './components/ProjectView';
 import SiteBanner from './components/SiteBanner';
 import { api, getToken, setToken } from './lib/api';
 
-const backgroundChoices = [
-  { id: 'redwood', label: 'Redwood' },
-  { id: 'sunset', label: 'Sunset' },
-  { id: 'ocean', label: 'Ocean' },
-  { id: 'forest', label: 'Forest' },
-  { id: 'violet', label: 'Violet' },
-  { id: 'slate', label: 'Slate' }
+const backgroundOptions = [
+  { value: 'sunrise', label: 'Sunrise' },
+  { value: 'aurora', label: 'Aurora' },
+  { value: 'tropical', label: 'Tropical' },
+  { value: 'electric', label: 'Electric' },
+  { value: 'midnight', label: 'Midnight' },
+  { value: 'graphite', label: 'Graphite' }
 ];
+
+function backgroundStorageKey(userId) {
+  return userId ? `psg-background:${userId}` : 'psg-background:guest';
+}
+
+function readBackgroundPreference(userId) {
+  if (typeof window === 'undefined') return 'sunrise';
+  const userKey = backgroundStorageKey(userId);
+  return window.localStorage.getItem(userKey)
+    || window.localStorage.getItem('psg-background:guest')
+    || backgroundOptions[0].value;
+}
+
+
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <main className="app-page">
+          <SiteBanner />
+          {this.props.floatingControls}
+          <section className="panel error-boundary-card">
+            <h2>Something went wrong</h2>
+            <p>Try refreshing the page. If the problem keeps happening, this section may have a bad field value.</p>
+            <pre>{String(this.state.error?.message || this.state.error)}</pre>
+          </section>
+        </main>
+      );
+    }
+    return (
+      <>
+        {this.props.floatingControls}
+        {this.props.children}
+      </>
+    );
+  }
+}
 
 export default function App() {
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') return 'light';
     return window.localStorage.getItem('psg-theme') || 'light';
   });
-  const [background, setBackground] = useState(() => {
-    if (typeof window === 'undefined') return 'redwood';
-    return window.localStorage.getItem('psg-background') || 'redwood';
-  });
+  const [background, setBackground] = useState(() => readBackgroundPreference(null));
   const [token, setTokenState] = useState(getToken());
   const [user, setUser] = useState(null);
   const [projects, setProjects] = useState([]);
@@ -39,11 +82,24 @@ export default function App() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.documentElement.dataset.theme = theme;
-    document.documentElement.dataset.background = background;
     document.documentElement.style.colorScheme = theme;
     window.localStorage.setItem('psg-theme', theme);
-    window.localStorage.setItem('psg-background', background);
-  }, [theme, background]);
+  }, [theme]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.dataset.background = background;
+    if (user?.id) {
+      window.localStorage.setItem(backgroundStorageKey(user.id), background);
+    } else {
+      window.localStorage.setItem('psg-background:guest', background);
+    }
+  }, [background, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    setBackground(readBackgroundPreference(user.id));
+  }, [user?.id]);
 
   function openProjectFromUrl(nextProjects) {
     const requestedProjectId = projectIdFromUrl();
@@ -80,6 +136,7 @@ export default function App() {
       try {
         const me = await api('/me');
         setUser(me.user);
+        setBackground(readBackgroundPreference(me.user.id));
         const nextProjects = await loadProjects();
         await routeAfterAuth(nextProjects);
       } catch (error) {
@@ -96,6 +153,7 @@ export default function App() {
     setToken(data.token, rememberMe);
     setTokenState(data.token);
     setUser(data.user);
+    setBackground(readBackgroundPreference(data.user.id));
     const nextProjects = await loadProjects();
     await routeAfterAuth(nextProjects);
   }
@@ -119,6 +177,10 @@ export default function App() {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
   }
 
+  function changeBackground(value) {
+    setBackground(value);
+  }
+
   function logout() {
     setToken(null);
     setTokenState(null);
@@ -127,39 +189,36 @@ export default function App() {
     setSelectedProjectId(null);
   }
 
-  const controls = (
-    <div className="site-controls">
+  const floatingControls = (
+    <div className="floating-controls" aria-label="Display controls">
       <button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
         {theme === 'dark' ? 'Light mode' : 'Dark mode'}
       </button>
-      <details className="background-menu">
-        <summary className="theme-toggle-button">Background</summary>
-        <div className="background-menu-panel">
-          {backgroundChoices.map((choice) => (
-            <button key={choice.id} className={background === choice.id ? 'active' : ''} onClick={() => setBackground(choice.id)} type="button">
-              {choice.label}
-            </button>
+      <label className="background-select-wrap">
+        <span className="sr-only">Background</span>
+        <select className="background-select" value={background} onChange={(event) => changeBackground(event.target.value)} aria-label="Change app background">
+          {backgroundOptions.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
           ))}
-        </div>
-      </details>
+        </select>
+      </label>
     </div>
   );
 
   if (booting) {
-    return <><div className="top-right-controls">{controls}</div><main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main></>;
+    return <AppErrorBoundary floatingControls={floatingControls}><main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main></AppErrorBoundary>;
   }
 
   if (!token || !user) {
-    return <><div className="top-right-controls">{controls}</div><AuthScreen onAuth={handleAuth} /></>;
+    return <AppErrorBoundary floatingControls={floatingControls}><AuthScreen onAuth={handleAuth} /></AppErrorBoundary>;
   }
 
   if (selectedProjectId) {
-    return <><div className="top-right-controls">{controls}</div><ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></>;
+    return <AppErrorBoundary floatingControls={floatingControls}><ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></AppErrorBoundary>;
   }
 
   return (
-    <>
-      <div className="top-right-controls">{controls}</div>
+    <AppErrorBoundary floatingControls={floatingControls}>
       <Dashboard
         user={user}
         projects={projects}
@@ -171,6 +230,6 @@ export default function App() {
         onRefresh={loadProjects}
         onLogout={logout}
       />
-    </>
+    </AppErrorBoundary>
   );
 }

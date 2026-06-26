@@ -42,16 +42,16 @@ const roleRank = {
 };
 
 const statuses = new Set(['not_started', 'in_progress', 'blocked', 'complete']);
-const projectLifecycleStatuses = new Set(['active', 'completed']);
+const projectLifecycleStatuses = new Set(['active', 'completed', 'archived']);
 const priorities = new Set(['low', 'normal', 'high', 'critical']);
 const roles = new Set(['owner', 'manager', 'editor', 'viewer']);
 const inviteRoles = new Set(['manager', 'editor', 'viewer']);
 const vendors = new Set(['Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas']);
-const trades = new Set(['CCure', 'Cameras', 'CCure & Cameras', 'Lock Smiths']);
-const securityTeamMembers = new Set(['Bill', 'Bennett', 'Chris', 'Derick', 'Jim', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam']);
-const projectManagers = new Set(['Austin', 'Kurt']);
+const trades = new Set(['CCure', 'Cameras', 'CCure & Cameras', 'Lock smiths']);
+const securityTeamMembers = new Set(['Bill', 'Bennett', 'Chris', 'Derick', 'James', 'James & Derick', 'James & Justin', 'James & Justin, Suvam', 'James & Kenna', 'James & Kyra', 'James & Locksmiths', 'James & Ryan', 'James & Suvam', 'Jim', 'Justin', 'Justin & Derick', 'Justin & James', 'Justin & Kyra', 'Justin & Locksmiths', 'Justin & Ryan', 'Justin & Suvam', 'Justin & Kenna', 'Kenna', 'Kenna & Derick', 'Kenna & Justin', 'Kenna & Justin, Suvam', 'Kenna & Kyra', 'Kenna & Locksmiths', 'Kenna & Ryan', 'Kenna & Suvam', 'Kyra', 'Locksmiths', 'Ryan', 'Suvam', 'Suvam & Derick', 'Suvam & James', 'Suvam & Justin', 'Suvam & Kyra', 'Suvam & Locksmiths', 'Suvam & Ryan', 'Suvam & Kenna']);
+const projectManagers = new Set(['Kurt', 'Austin']);
+const userTrades = new Set(['CCure Team', 'Camera Team', 'Lock Smith', 'Vendor', 'PM', 'Manger', 'Supervisor']);
 const siteRoles = new Set(['owner', 'manager', 'member']);
-const userTradeOptions = new Set(['CCure Team', 'Camera Team', 'Lock Smith', 'Vendor', 'PM', 'Manger', 'Supervisor']);
 const dependencyTypes = new Set(['FS', 'SS', 'FF', 'SF']);
 const managerSiteRoles = new Set(['owner', 'manager']);
 const ownerCmsWorkOrderSheets = [
@@ -393,21 +393,20 @@ function normalizeBoolean(value, defaultValue = false) {
 
 function normalizeDate(value, label) {
   const text = String(value || '').trim();
-  if (!text) throw httpError(400, `${label} must be a MM-DD-YYYY date.`);
-
-  let year;
-  let month;
-  let day;
-
-  if (/^\d{2}-\d{2}-\d{4}$/.test(text)) {
-    [month, day, year] = text.split('-');
-  } else if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    [year, month, day] = text.split('-');
-  } else {
-    throw httpError(400, `${label} must be a MM-DD-YYYY date.`);
+  if (!text) {
+    throw httpError(400, `${label} is required.`);
   }
 
-  const normalized = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  let normalized = text;
+  if (/^\d{2}-\d{2}-\d{4}$/.test(text)) {
+    const [month, day, year] = text.split('-');
+    normalized = `${year}-${month}-${day}`;
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    normalized = text;
+  } else {
+    throw httpError(400, `${label} must be a MM-DD-YYYY or YYYY-MM-DD date.`);
+  }
+
   const timestamp = Date.parse(`${normalized}T00:00:00.000Z`);
   if (Number.isNaN(timestamp)) {
     throw httpError(400, `${label} is not a valid date.`);
@@ -442,6 +441,19 @@ function normalizeTaskChoice(value, allowed, label, partial = false) {
   if (partial && value === undefined) return undefined;
   const text = cleanText(value);
   if (!text) return null;
+  if (!allowed.has(text)) {
+    throw httpError(400, `${label} must be one of: ${Array.from(allowed).join(', ')}.`);
+  }
+  return text;
+}
+
+function normalizeUserTrade(value, partial = false) {
+  if (partial && value === undefined) return undefined;
+  const text = cleanText(value);
+  if (!text) return null;
+  if (!userTrades.has(text)) {
+    throw httpError(400, `trade must be one of: ${Array.from(userTrades).join(', ')}.`);
+  }
   return text;
 }
 
@@ -478,10 +490,8 @@ function normalizeProgress(value) {
 
 function normalizeOptionalId(value, label) {
   if (value === undefined) return undefined;
-  if (value === null) return null;
-  const text = String(value).trim();
-  if (!text || text === 'Unassigned' || text === 'None') return null;
-  const number = Number(text);
+  if (value === null || value === '') return null;
+  const number = Number(value);
   if (!Number.isInteger(number) || number <= 0) return null;
   return number;
 }
@@ -510,7 +520,7 @@ async function requireAuth(req, res, next) {
     if (!token) throw httpError(401, 'Authentication token required.');
 
     const payload = jwt.verify(token, JWT_SECRET);
-    const result = await query('SELECT id, name, email, trade, site_role, access_revoked FROM users WHERE id = $1', [payload.sub]);
+    const result = await query('SELECT id, name, email, site_role, access_revoked, trade FROM users WHERE id = $1', [payload.sub]);
     if (!result.rowCount) throw httpError(401, 'User no longer exists.');
     if (result.rows[0].access_revoked) throw httpError(403, 'Your site access has been revoked. Contact a manager or owner.');
 
@@ -584,30 +594,72 @@ function requireSiteOwner(user) {
   return siteRole;
 }
 
-const OWNER_CMS_ROW_COUNT = 150;
+const OWNER_CMS_MIN_ROW_COUNT = 150;
 const OWNER_CMS_COLUMN_COUNT = 20;
 
-function buildBlankOwnerCmsGrid(rowCount = OWNER_CMS_ROW_COUNT, columnCount = OWNER_CMS_COLUMN_COUNT) {
-  return Array.from({ length: rowCount }, () => Array.from({ length: columnCount }, () => ''));
+function buildBlankOwnerCmsGrid(rowCount = OWNER_CMS_MIN_ROW_COUNT) {
+  return Array.from({ length: Math.max(rowCount, OWNER_CMS_MIN_ROW_COUNT) }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
 }
 
 function normalizeOwnerCmsGrid(cells) {
-  const sourceRows = Array.isArray(cells) ? cells : [];
-  const rowCount = Math.max(OWNER_CMS_ROW_COUNT, sourceRows.length);
-  const columnCount = Math.max(OWNER_CMS_COLUMN_COUNT, ...sourceRows.map((row) => (Array.isArray(row) ? row.length : 0)), OWNER_CMS_COLUMN_COUNT);
-  const blank = buildBlankOwnerCmsGrid(rowCount, columnCount);
+  const rowCount = Math.max(OWNER_CMS_MIN_ROW_COUNT, Array.isArray(cells) ? cells.length : 0);
+  const blank = buildBlankOwnerCmsGrid(rowCount);
+  if (!Array.isArray(cells)) return blank;
 
-  for (let rowIndex = 0; rowIndex < sourceRows.length; rowIndex += 1) {
-    const row = sourceRows[rowIndex];
+  for (let rowIndex = 0; rowIndex < Math.min(cells.length, blank.length); rowIndex += 1) {
+    const row = cells[rowIndex];
     if (!Array.isArray(row)) continue;
-    if (!blank[rowIndex]) blank[rowIndex] = Array.from({ length: columnCount }, () => '');
-    for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+    for (let colIndex = 0; colIndex < Math.min(row.length, OWNER_CMS_COLUMN_COUNT); colIndex += 1) {
       const value = row[colIndex];
       blank[rowIndex][colIndex] = value === null || value === undefined ? '' : String(value);
     }
   }
 
   return blank;
+}
+
+function normalizeOwnerCmsArchivedRows(rows) {
+  if (!Array.isArray(rows)) return [];
+
+  return rows
+    .map((row, index) => {
+      if (Array.isArray(row)) {
+        return {
+          row_number: index + 1,
+          archived_at: null,
+          cells: normalizeOwnerCmsGrid([row])[0]
+        };
+      }
+
+      if (row && typeof row === 'object') {
+        return {
+          row_number: Number.isInteger(Number(row.row_number)) ? Number(row.row_number) : index + 1,
+          archived_at: row.archived_at || null,
+          cells: normalizeOwnerCmsGrid([Array.isArray(row.cells) ? row.cells : []])[0]
+        };
+      }
+
+      return {
+        row_number: index + 1,
+        archived_at: null,
+        cells: Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => '')
+      };
+    })
+    .filter((row) => row.cells.some((value) => String(value || '').trim().length > 0));
+}
+
+function rowHasContent(row) {
+  return Array.isArray(row) && row.some((value) => String(value || '').trim().length > 0);
+}
+
+async function archiveStaleCompletedProjects(db = { query }) {
+  await db.query(
+    `UPDATE projects
+     SET project_status = 'archived',
+         archived_at = COALESCE(archived_at, now())
+     WHERE project_status = 'completed'
+       AND COALESCE(completed_at, updated_at, created_at) <= now() - interval '30 days'`
+  );
 }
 
 function requireOwnerCmsSheet(sheetKey) {
@@ -789,12 +841,10 @@ const taskSelect = `
   t.description,
   t.trade,
   t.vendor,
-  t.vendor_2,
-  t.security_systems_1,
+  t.security_team_member,
   t.security_systems_2,
   t.locksmiths,
-  t.other_assignee,
-  t.security_team_member,
+  t.other_assignment,
   t.pm,
   t.assigned_to,
   assignee.name AS assigned_to_name,
@@ -838,6 +888,7 @@ async function verifyParentTask(db, projectId, parentTaskId, taskId = null) {
 }
 
 async function loadProjectPayload(projectId, userId) {
+  await archiveStaleCompletedProjects();
   const access = await requireProjectAccess(projectId, userId);
 
   const projectResult = await query(
@@ -968,14 +1019,13 @@ function buildTaskInput(body, partial = false) {
 
   if (!partial || body.name !== undefined) input.name = requireText(body.name, 'Task name');
   if (!partial || body.description !== undefined) input.description = cleanText(body.description);
-  if (!partial || body.trade !== undefined) input.trade = normalizeTaskChoice(body.trade, trades, 'trade', partial);
+  if (!partial || body.trade !== undefined) input.trade = cleanText(body.trade);
   if (!partial || body.vendor !== undefined) input.vendor = normalizeVendor(body.vendor, partial);
-  if (!partial || body.security_systems_1 !== undefined) input.security_systems_1 = cleanText(body.security_systems_1);
+  if (!partial || body.security_team_member !== undefined) input.security_team_member = cleanText(body.security_team_member);
   if (!partial || body.security_systems_2 !== undefined) input.security_systems_2 = cleanText(body.security_systems_2);
   if (!partial || body.locksmiths !== undefined) input.locksmiths = cleanText(body.locksmiths);
-  if (!partial || body.other_assignee !== undefined) input.other_assignee = cleanText(body.other_assignee);
-  if (!partial || body.security_team_member !== undefined) input.security_team_member = cleanText(body.security_team_member);
-  if (!partial || body.pm !== undefined) input.pm = cleanText(body.pm);
+  if (!partial || body.other_assignment !== undefined) input.other_assignment = cleanText(body.other_assignment);
+  if (!partial || body.pm !== undefined) input.pm = normalizeTaskChoice(body.pm, projectManagers, 'pm', partial);
   if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeOptionalId(body.assigned_to, 'assigned_to');
   if (!partial || body.parent_task_id !== undefined) input.parent_task_id = normalizeOptionalId(body.parent_task_id, 'parent_task_id');
 
@@ -1047,7 +1097,7 @@ app.post('/api/auth/register', asyncHandler(async (req, res) => {
   const name = requireText(req.body.name, 'Name');
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || '');
-  const trade = cleanText(req.body.trade);
+  const trade = normalizeUserTrade(req.body.trade);
 
   if (!/^\S+@\S+\.\S+$/.test(email)) throw httpError(400, 'A valid email is required.');
   if (password.length < 8) throw httpError(400, 'Password must be at least 8 characters.');
@@ -1058,8 +1108,8 @@ app.post('/api/auth/register', asyncHandler(async (req, res) => {
 
   try {
     const result = await query(
-      'INSERT INTO users (name, email, password_hash, trade, site_role) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, trade, site_role, access_revoked',
-      [name, email, passwordHash, trade || null, siteRole]
+      'INSERT INTO users (name, email, password_hash, site_role, trade) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, site_role, access_revoked, trade',
+      [name, email, passwordHash, siteRole, trade]
     );
     const user = result.rows[0];
     res.status(201).json({ user: publicUser(user), token: signToken(user) });
@@ -1073,7 +1123,7 @@ app.post('/api/auth/login', asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || '');
 
-  const result = await query('SELECT id, name, email, trade, password_hash, site_role, access_revoked FROM users WHERE email = $1', [email]);
+  const result = await query('SELECT id, name, email, password_hash, site_role, access_revoked, trade FROM users WHERE email = $1', [email]);
   if (!result.rowCount) throw httpError(401, 'Invalid email or password.');
 
   const user = result.rows[0];
@@ -1094,23 +1144,25 @@ app.get('/api/owner/cms-wos', requireAuth, asyncHandler(async (req, res) => {
 
   const result = await tx(async (client) => {
     await client.query(
-      `INSERT INTO owner_cms_work_orders (sheet_key, sheet_name, cells)
+      `INSERT INTO owner_cms_work_orders (sheet_key, sheet_name, cells, archived_cells)
        VALUES
-         ('kurts_cms_wos', 'Kurts CMS WOs', '[]'::jsonb),
-         ('austins_cms_wos', 'Austins CMS WOs', '[]'::jsonb)
+         ('kurts_cms_wos', 'Kurts CMS WOs', '[]'::jsonb, '[]'::jsonb),
+         ('austins_cms_wos', 'Austins CMS WOs', '[]'::jsonb, '[]'::jsonb)
        ON CONFLICT (sheet_key) DO UPDATE SET
-         sheet_name = EXCLUDED.sheet_name`
+         sheet_name = EXCLUDED.sheet_name,
+         archived_cells = COALESCE(owner_cms_work_orders.archived_cells, '[]'::jsonb)`
     );
 
     const rows = await client.query(
-      `SELECT sheet_key, sheet_name, cells, created_at, updated_at
+      `SELECT sheet_key, sheet_name, cells, archived_cells, created_at, updated_at
        FROM owner_cms_work_orders
        ORDER BY sheet_name ASC`
     );
 
     return rows.rows.map((sheet) => ({
       ...sheet,
-      cells: normalizeOwnerCmsGrid(sheet.cells)
+      cells: normalizeOwnerCmsGrid(sheet.cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(sheet.archived_cells)
     }));
   });
 
@@ -1136,31 +1188,212 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
 
   const updated = await tx(async (client) => {
     const current = await client.query(
-      'SELECT sheet_key, sheet_name, cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
       [sheet.sheet_key]
     );
     if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
 
     const normalized = normalizeOwnerCmsGrid(current.rows[0].cells);
-    while (normalized.length <= rowIndex) {
-      normalized.push(Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
-    }
-    while (normalized[rowIndex].length < OWNER_CMS_COLUMN_COUNT) {
-      normalized[rowIndex].push('');
-    }
     normalized[rowIndex][colIndex] = cellValue;
+    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
 
     const saveResult = await client.query(
       `UPDATE owner_cms_work_orders
-       SET cells = $1
-       WHERE sheet_key = $2
-       RETURNING sheet_key, sheet_name, cells, created_at, updated_at`,
-      [JSON.stringify(normalized), sheet.sheet_key]
+       SET cells = $1,
+           archived_cells = $2
+       WHERE sheet_key = $3
+       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
+      [JSON.stringify(normalized), JSON.stringify(archivedRows), sheet.sheet_key]
     );
 
     return {
       ...saveResult.rows[0],
-      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells)
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
+    };
+  });
+
+  res.json({ sheet: updated });
+}));
+
+app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/archive', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
+  const rowIndex = clampInteger(req.params.rowIndex, {
+    label: 'rowIndex',
+    defaultValue: 0,
+    min: 0,
+    max: 9999
+  });
+
+  const updated = await tx(async (client) => {
+    const current = await client.query(
+      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      [sheet.sheet_key]
+    );
+    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
+
+    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
+    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
+    const row = activeRows[rowIndex];
+    if (!row) throw httpError(404, 'Row not found.');
+
+    if (!rowHasContent(row)) {
+      throw httpError(400, 'That row is already blank.');
+    }
+
+    archivedRows.unshift({
+      row_number: rowIndex + 1,
+      archived_at: new Date().toISOString(),
+      cells: [...row]
+    });
+    activeRows[rowIndex] = Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => '');
+
+    const saveResult = await client.query(
+      `UPDATE owner_cms_work_orders
+       SET cells = $1,
+           archived_cells = $2
+       WHERE sheet_key = $3
+       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
+      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
+    );
+
+    return {
+      ...saveResult.rows[0],
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
+    };
+  });
+
+  res.json({ sheet: updated });
+}));
+
+app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/insert', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
+  const rowIndex = clampInteger(req.params.rowIndex, {
+    label: 'rowIndex',
+    defaultValue: 0,
+    min: 0,
+    max: 9999
+  });
+
+  const updated = await tx(async (client) => {
+    const current = await client.query(
+      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      [sheet.sheet_key]
+    );
+    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
+
+    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
+    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
+    const targetIndex = Math.min(Math.max(rowIndex, 0), activeRows.length);
+    activeRows.splice(targetIndex, 0, Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+
+    const saveResult = await client.query(
+      `UPDATE owner_cms_work_orders
+       SET cells = $1,
+           archived_cells = $2
+       WHERE sheet_key = $3
+       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
+      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
+    );
+
+    return {
+      ...saveResult.rows[0],
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
+    };
+  });
+
+  res.json({ sheet: updated });
+}));
+
+app.post('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex/restore', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
+  const archiveIndex = clampInteger(req.params.archiveIndex, {
+    label: 'archiveIndex',
+    defaultValue: 0,
+    min: 0,
+    max: 999999
+  });
+
+  const updated = await tx(async (client) => {
+    const current = await client.query(
+      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      [sheet.sheet_key]
+    );
+    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
+
+    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
+    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
+    const archivedRow = archivedRows[archiveIndex];
+    if (!archivedRow) throw httpError(404, 'Archived row not found.');
+
+    let targetIndex = archivedRow.row_number ? Number(archivedRow.row_number) - 1 : activeRows.findIndex((row) => !rowHasContent(row));
+    if (!Number.isInteger(targetIndex) || targetIndex < 0 || rowHasContent(activeRows[targetIndex])) {
+      targetIndex = activeRows.findIndex((row) => !rowHasContent(row));
+    }
+    if (targetIndex < 0) throw httpError(400, 'No empty rows are available to restore this entry.');
+
+    activeRows[targetIndex] = [...archivedRow.cells];
+    archivedRows.splice(archiveIndex, 1);
+
+    const saveResult = await client.query(
+      `UPDATE owner_cms_work_orders
+       SET cells = $1,
+           archived_cells = $2
+       WHERE sheet_key = $3
+       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
+      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
+    );
+
+    return {
+      ...saveResult.rows[0],
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
+    };
+  });
+
+  res.json({ sheet: updated });
+}));
+
+app.delete('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
+  const archiveIndex = clampInteger(req.params.archiveIndex, {
+    label: 'archiveIndex',
+    defaultValue: 0,
+    min: 0,
+    max: 999999
+  });
+
+  const updated = await tx(async (client) => {
+    const current = await client.query(
+      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      [sheet.sheet_key]
+    );
+    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
+
+    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
+    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
+    if (!archivedRows[archiveIndex]) throw httpError(404, 'Archived row not found.');
+    archivedRows.splice(archiveIndex, 1);
+
+    const saveResult = await client.query(
+      `UPDATE owner_cms_work_orders
+       SET cells = $1,
+           archived_cells = $2
+       WHERE sheet_key = $3
+       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
+      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
+    );
+
+    return {
+      ...saveResult.rows[0],
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
     };
   });
 
@@ -1168,6 +1401,7 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
 }));
 
 app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
+  await archiveStaleCompletedProjects();
   const result = await query(
     `WITH portfolio_access AS (
        SELECT (
@@ -1266,6 +1500,7 @@ app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
      SELECT
        project_rows.*,
        CASE
+         WHEN project_status = 'archived' THEN 'archived'
          WHEN project_status = 'completed' THEN 'completed'
          ELSE schedule_status
        END AS status
@@ -1309,8 +1544,8 @@ app.get('/api/site/users', requireAuth, asyncHandler(async (req, res) => {
        u.id,
        u.name,
        u.email,
-       u.trade,
        u.site_role,
+       u.trade,
        u.access_revoked,
        u.created_at,
        u.updated_at,
@@ -1332,7 +1567,7 @@ app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) 
 
   const updatedUser = await tx(async (client) => {
     const targetResult = await client.query(
-      'SELECT id, name, email, trade, site_role, access_revoked FROM users WHERE id = $1',
+      'SELECT id, name, email, site_role, access_revoked, trade FROM users WHERE id = $1',
       [targetUserId]
     );
     if (!targetResult.rowCount) throw httpError(404, 'User not found.');
@@ -1345,6 +1580,10 @@ app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) 
     let nextRevoked;
     if (req.body.access_revoked !== undefined || req.body.revoked !== undefined) {
       nextRevoked = normalizeBoolean(req.body.access_revoked ?? req.body.revoked, targetUser.access_revoked);
+    }
+    let nextTrade;
+    if (req.body.trade !== undefined) {
+      nextTrade = normalizeUserTrade(req.body.trade);
     }
 
     ensureSiteActorCanManageTarget(actorRole, targetUser, nextRole);
@@ -1373,6 +1612,10 @@ app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) 
       values.push(nextRevoked);
       sets.push(`access_revoked = $${values.length}`);
     }
+    if (nextTrade !== undefined) {
+      values.push(nextTrade);
+      sets.push(`trade = $${values.length}`);
+    }
     if (!sets.length) return targetUser;
 
     values.push(targetUserId);
@@ -1380,7 +1623,7 @@ app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) 
       `UPDATE users
        SET ${sets.join(', ')}
        WHERE id = $${values.length}
-       RETURNING id, name, email, site_role, access_revoked, created_at, updated_at`,
+       RETURNING id, name, email, site_role, trade, access_revoked, created_at, updated_at`,
       values
     );
 
@@ -1405,32 +1648,28 @@ app.patch('/api/site/users/:userId/password', requireAuth, asyncHandler(async (r
   const password = String(req.body.password || '');
   if (password.length < 8) throw httpError(400, 'Password must be at least 8 characters.');
 
-  const updated = await tx(async (client) => {
+  const passwordHash = await bcrypt.hash(password, 12);
+  await tx(async (client) => {
     const targetResult = await client.query('SELECT id, name, email, site_role, access_revoked FROM users WHERE id = $1', [targetUserId]);
     if (!targetResult.rowCount) throw httpError(404, 'User not found.');
     const targetUser = targetResult.rows[0];
-    if (targetUserId === req.user.id) throw httpError(400, 'Use the password screen to change your own password.');
     ensureSiteActorCanManageTarget(actorRole, targetUser);
+    if (targetUserId === req.user.id) {
+      throw httpError(400, 'Use the login screen to change your own password.');
+    }
 
-    const passwordHash = await bcrypt.hash(password, 12);
-    const result = await client.query(
-      'UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING id, name, email, site_role, access_revoked, created_at, updated_at',
-      [passwordHash, targetUserId]
-    );
-
+    await client.query('UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2', [passwordHash, targetUserId]);
     await writeAudit(client, {
       userId: req.user.id,
-      action: 'site_user_password_changed',
+      action: 'site_user_password_updated',
       entityType: 'site_user',
       entityId: targetUserId,
       before: targetUser,
-      after: { id: targetUserId }
+      after: { ...targetUser, password_hash: '[redacted]' }
     });
-
-    return result.rows[0];
   });
 
-  res.json({ user: updated });
+  res.json({ ok: true });
 }));
 
 app.delete('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) => {
@@ -1439,7 +1678,7 @@ app.delete('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res)
 
   await tx(async (client) => {
     const targetResult = await client.query(
-      'SELECT id, name, email, trade, site_role, access_revoked FROM users WHERE id = $1',
+      'SELECT id, name, email, site_role, access_revoked, trade FROM users WHERE id = $1',
       [targetUserId]
     );
     if (!targetResult.rowCount) throw httpError(404, 'User not found.');
@@ -1545,8 +1784,18 @@ app.patch('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res)
     }
     if (req.body.project_status !== undefined || req.body.lifecycle_status !== undefined) {
       const requestedStatus = req.body.project_status !== undefined ? req.body.project_status : req.body.lifecycle_status;
-      values.push(requireEnum(requestedStatus, projectLifecycleStatuses, 'project_status'));
+      const nextStatus = requireEnum(requestedStatus, projectLifecycleStatuses, 'project_status');
+      values.push(nextStatus);
       sets.push(`project_status = $${values.length}`);
+      if (nextStatus === 'completed') {
+        sets.push('completed_at = COALESCE(completed_at, now())');
+        sets.push('archived_at = NULL');
+      } else if (nextStatus === 'active') {
+        sets.push('completed_at = NULL');
+        sets.push('archived_at = NULL');
+      } else if (nextStatus === 'archived') {
+        sets.push('archived_at = COALESCE(archived_at, now())');
+      }
     }
     if (req.body.start_date !== undefined) {
       values.push(nextStart);
@@ -1686,7 +1935,7 @@ app.delete('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res
   const projectId = parseId(req.params.projectId, 'projectId');
 
   await tx(async (client) => {
-    await requireProjectMembership(projectId, req.user.id, 'owner', client);
+    requireSiteOwner(req.user);
     const beforeResult = await client.query('SELECT * FROM projects WHERE id = $1', [projectId]);
     if (!beforeResult.rowCount) throw httpError(404, 'Project not found.');
     await writeAudit(client, {
@@ -1759,7 +2008,10 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
   const role = requireEnum(req.body.role, roles, 'role');
 
   const updated = await tx(async (client) => {
-    await requireProjectMembership(projectId, req.user.id, 'manager', client);
+    const membership = await requireProjectMembership(projectId, req.user.id, 'manager', client);
+    if (role === 'owner' && membership.role !== 'owner') {
+      throw httpError(403, 'Only project owners can assign another owner.');
+    }
 
     const before = await client.query('SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2', [
       projectId,
@@ -1809,7 +2061,7 @@ app.delete('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler
   const targetUserId = parseId(req.params.userId, 'userId');
 
   await tx(async (client) => {
-    await requireProjectMembership(projectId, req.user.id, 'manager', client);
+    requireSiteOwner(req.user);
     const before = await client.query('SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2', [
       projectId,
       targetUserId
@@ -1901,10 +2153,10 @@ app.post('/api/projects/:projectId/blueprints', requireAuth, asyncHandler(async 
     await requireProjectMembership(projectId, req.user.id, 'editor', client);
     const result = await client.query(
       `INSERT INTO project_blueprints
-        (project_id, original_name, mime_type, size_bytes, file_data, uploaded_by)
-       VALUES ($1, $2, $3, $4, $5, $6)
+        (project_id, original_name, file_name, mime_type, size_bytes, file_size, file_data, uploaded_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, project_id, original_name, mime_type, size_bytes, uploaded_by, created_at`,
-      [projectId, originalName, mimeType, req.file.size, req.file.buffer, req.user.id]
+      [projectId, originalName, originalName, mimeType, req.file.size, req.file.size, req.file.buffer, req.user.id]
     );
 
     await writeAudit(client, {
@@ -1991,9 +2243,9 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
 
     const insertResult = await client.query(
       `INSERT INTO tasks
-        (project_id, parent_task_id, name, description, trade, vendor, vendor_2, security_systems_1, security_systems_2, locksmiths, other_assignee, security_team_member, pm, assigned_to, status, priority, start_date, end_date,
+        (project_id, parent_task_id, name, description, trade, vendor, security_team_member, security_systems_2, locksmiths, other_assignment, pm, assigned_to, status, priority, start_date, end_date,
          percent_complete, color, sort_order, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
        RETURNING id`,
       [
         projectId,
@@ -2002,13 +2254,11 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
         input.description,
         input.trade,
         input.vendor,
-        input.vendor_2 ?? null,
-        input.security_systems_1 ?? null,
-        input.security_systems_2 ?? null,
-        input.locksmiths ?? null,
-        input.other_assignee ?? null,
-        input.security_team_member ?? null,
-        input.pm ?? null,
+        input.security_team_member,
+        input.security_systems_2,
+        input.locksmiths,
+        input.other_assignment,
+        input.pm,
         input.assigned_to ?? null,
         input.status,
         input.priority,
@@ -2241,7 +2491,7 @@ io.use(async (socket, next) => {
     const token = socket.handshake.auth && socket.handshake.auth.token;
     if (!token) throw httpError(401, 'Socket authentication token required.');
     const payload = jwt.verify(token, JWT_SECRET);
-    const result = await query('SELECT id, name, email, trade, site_role, access_revoked FROM users WHERE id = $1', [payload.sub]);
+    const result = await query('SELECT id, name, email, site_role, access_revoked, trade FROM users WHERE id = $1', [payload.sub]);
     if (!result.rowCount) throw httpError(401, 'Socket user not found.');
     if (result.rows[0].access_revoked) throw httpError(403, 'Socket user access has been revoked.');
     socket.user = result.rows[0];

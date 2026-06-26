@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 
-const userTradeOptions = ['CCure Team', 'Camera Team', 'Lock Smith', 'Vendor', 'PM', 'Manger', 'Supervisor'];
+const tradeOptions = ['CCure Team', 'Camera Team', 'Lock Smith', 'Vendor', 'PM', 'Manger', 'Supervisor'];
 
 export default function AuthScreen({ onAuth }) {
   const [mode, setMode] = useState('login');
@@ -27,7 +27,7 @@ export default function AuthScreen({ onAuth }) {
     setLoading(true);
     try {
       const payload = mode === 'register'
-        ? { name: form.name, email: form.email, password: form.password, trade: form.trade || null }
+        ? { name: form.name, email: form.email, password: form.password, trade: form.trade }
         : { email: form.email, password: form.password };
       const data = await api(`/auth/${mode}`, { method: 'POST', body: payload, token: null });
       if (typeof window !== 'undefined') {
@@ -59,19 +59,19 @@ export default function AuthScreen({ onAuth }) {
 
         <form className="stack" onSubmit={submit}>
           {mode === 'register' && (
-            <>
-              <label>
-                Name
-                <input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Jane Project Manager" />
-              </label>
-              <label>
-                Trade
-                <select value={form.trade} onChange={(event) => updateField('trade', event.target.value)}>
-                  <option value="">Unassigned</option>
-                  {userTradeOptions.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
-                </select>
-              </label>
-            </>
+            <label>
+              Name
+              <input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Jane Project Manager" />
+            </label>
+          )}
+          {mode === 'register' && (
+            <label>
+              Trade
+              <select value={form.trade} onChange={(event) => updateField('trade', event.target.value)}>
+                <option value="">Unassigned</option>
+                {tradeOptions.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
+              </select>
+            </label>
           )}
           <label>
             Email
