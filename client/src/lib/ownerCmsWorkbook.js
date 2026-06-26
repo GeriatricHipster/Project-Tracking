@@ -242,7 +242,7 @@ Utility Sytems
   { key: 'walk_scheduled', label: 'Walk Scheduled', type: 'date', width: 140 },
   { key: 'install_date', label: 'Install Date', type: 'date', width: 140 },
   { key: 'deadline', label: 'Deadline', type: 'date', width: 140 },
-  { key: 'bill_by_year_end', label: 'Bill by year end', type: 'select', width: 150, options: ['Yes', 'No', 'NA'] },
+  { key: 'bill_by_year_end', label: 'Bill by Year end', type: 'select', width: 150, options: ['Yes', 'No', 'NA'] },
   { key: 'category', label: 'Category', type: 'select', width: 180, options: linesToOptions(`
 COST ESTIAMTE
 CCURE
@@ -381,24 +381,19 @@ Uploaded
 export const ownerCmsColumnCount = COLUMN_COUNT;
 export const ownerCmsRowCount = ROW_COUNT;
 
-export function buildBlankOwnerCmsGrid(rowCount = ROW_COUNT) {
-  return Array.from({ length: rowCount }, () => Array.from({ length: COLUMN_COUNT }, () => ''));
+export function buildBlankOwnerCmsGrid() {
+  return Array.from({ length: ROW_COUNT }, () => Array.from({ length: COLUMN_COUNT }, () => ''));
 }
 
 export function normalizeOwnerCmsGrid(cells) {
-  const rowCount = Math.max(ROW_COUNT, Array.isArray(cells) ? cells.length : 0);
-  const grid = buildBlankOwnerCmsGrid(rowCount);
+  const grid = buildBlankOwnerCmsGrid();
   if (!Array.isArray(cells)) return grid;
 
-  for (let rowIndex = 0; rowIndex < cells.length; rowIndex += 1) {
+  for (let rowIndex = 0; rowIndex < Math.min(cells.length, ROW_COUNT); rowIndex += 1) {
     const row = cells[rowIndex];
     if (!Array.isArray(row)) continue;
-    if (!grid[rowIndex]) grid[rowIndex] = Array.from({ length: COLUMN_COUNT }, () => '');
-    const normalizedRow = row.length === COLUMN_COUNT - 1
-      ? [...row.slice(0, 7), '', ...row.slice(7)]
-      : row;
-    for (let colIndex = 0; colIndex < Math.min(normalizedRow.length, COLUMN_COUNT); colIndex += 1) {
-      const value = normalizedRow[colIndex];
+    for (let colIndex = 0; colIndex < Math.min(row.length, COLUMN_COUNT); colIndex += 1) {
+      const value = row[colIndex];
       grid[rowIndex][colIndex] = value === null || value === undefined ? '' : String(value);
     }
   }

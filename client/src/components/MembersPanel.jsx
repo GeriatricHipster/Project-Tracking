@@ -7,13 +7,13 @@ function describeNotification(_result, baseMessage) {
 }
 
 export default function MembersPanel({ currentUser, projectRole, members, canManage, onAddMember, onUpdateMember, onRemoveMember }) {
+  const canOwner = projectRole === 'owner';
   const [form, setForm] = useState({ email: '', role: 'editor' });
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
   const [updatingUserId, setUpdatingUserId] = useState(null);
 
-  const canOwner = projectRole === 'owner';
   const roleOptions = canOwner ? allRoles : allRoles.filter((role) => role !== 'owner');
 
   async function submit(event) {
@@ -87,7 +87,7 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
               ) : (
                 <span className={`role-pill role-${member.role}`}>{member.role}</span>
               )}
-              {canOwner && member.user_id !== currentUser?.id && (
+              {canManage && member.user_id !== currentUser?.id && (
                 <button className="danger-button compact" onClick={() => onRemoveMember(member)} type="button">Remove</button>
               )}
             </div>

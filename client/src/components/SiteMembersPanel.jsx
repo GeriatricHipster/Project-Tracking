@@ -61,25 +61,6 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
     }
   }
 
-  async function updatePassword(user) {
-    const password = String(passwordDrafts[user.id] || '').trim();
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
-      return;
-    }
-    setSavingUserId(user.id);
-    setError('');
-    try {
-      await api(`/site/users/${user.id}/password`, { method: 'PATCH', body: { password } });
-      setPasswordDrafts((current) => ({ ...current, [user.id]: '' }));
-      await loadUsers();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSavingUserId(null);
-    }
-  }
-
   async function deleteUser(user) {
     const confirmed = window.confirm(`Delete ${user.name}? This removes their login and project assignments.`);
     if (!confirmed) return;
@@ -127,7 +108,6 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
                       </div>
                       <p className="muted">{siteUser.email}</p>
                       <p>{siteUser.project_count} assigned project{siteUser.project_count === 1 ? '' : 's'}</p>
-                      <p className="muted">Trade: {siteUser.trade_role || 'Unassigned'}</p>
                     </div>
 
                     <div className="site-user-actions">
@@ -144,34 +124,37 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
                       <label>
                         New password
                         <input
-                          disabled={!canChange || busy}
                           type="password"
-                          placeholder="Enter new password"
+                          disabled={!canChange || busy}
                           value={passwordDrafts[siteUser.id] || ''}
                           onChange={(event) => setPasswordDrafts((current) => ({ ...current, [siteUser.id]: event.target.value }))}
+                          placeholder="Leave blank to keep current"
                         />
                       </label>
-                      <div className="row-actions">
-                        <button className="primary-button compact" disabled={!canChange || busy} onClick={() => updatePassword(siteUser)} type="button">
-                          {busy ? 'Saving...' : 'Change password'}
-                        </button>
-                        <button
-                          className={siteUser.access_revoked ? 'ghost-button compact' : 'danger-button compact'}
-                          disabled={!canChange || busy}
-                          onClick={() => updateUser(siteUser, { access_revoked: !siteUser.access_revoked })}
-                          type="button"
-                        >
-                          {siteUser.access_revoked ? 'Restore access' : 'Revoke access'}
-                        </button>
-                        <button
-                          className="danger-button compact"
-                          disabled={!canChange || busy}
-                          onClick={() => deleteUser(siteUser)}
-                          type="button"
-                        >
-                          Delete user
-                        </button>
-                      </div>
+                      <button
+                        className="ghost-button compact"
+                        disabled={!canChange || busy || !String(passwordDrafts[siteUser.id] || '').trim()}
+                        onClick={() => updateUser(siteUser, { password: passwordDrafts[siteUser.id] })}
+                        type="button"
+                      >
+                        Change password
+                      </button>
+                      <button
+                        className={siteUser.access_revoked ? 'ghost-button compact' : 'danger-button compact'}
+                        disabled={!canChange || busy}
+                        onClick={() => updateUser(siteUser, { access_revoked: !siteUser.access_revoked })}
+                        type="button"
+                      >
+                        {siteUser.access_revoked ? 'Restore access' : 'Revoke access'}
+                      </button>
+                      <button
+                        className="danger-button compact"
+                        disabled={!canChange || busy}
+                        onClick={() => deleteUser(siteUser)}
+                        type="button"
+                      >
+                        Delete user
+                      </button>
                     </div>
                   </div>
 
