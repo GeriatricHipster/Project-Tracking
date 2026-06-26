@@ -15,6 +15,7 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
   const [updatingUserId, setUpdatingUserId] = useState(null);
 
   const roleOptions = canOwner ? allRoles : allRoles.filter((role) => role !== 'owner');
+  const canManageMemberRoles = canManage;
 
   async function submit(event) {
     event.preventDefault();
@@ -80,14 +81,14 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
               <span>{member.email}</span>
             </div>
             <div className="member-actions">
-              {canManage ? (
+              {canManageMemberRoles ? (
                 <select disabled={updatingUserId === member.user_id} value={member.role} onChange={(event) => changeMemberRole(member, event.target.value)}>
-                  {roleOptions.map((role) => <option key={role} value={role}>{role}</option>)}
+                  {allRoles.filter((role) => canOwner || role !== 'owner').map((role) => <option key={role} value={role}>{role}</option>)}
                 </select>
               ) : (
                 <span className={`role-pill role-${member.role}`}>{member.role}</span>
               )}
-              {canManage && member.user_id !== currentUser?.id && (
+              {canOwner && member.user_id !== currentUser?.id && (
                 <button className="danger-button compact" onClick={() => onRemoveMember(member)} type="button">Remove</button>
               )}
             </div>

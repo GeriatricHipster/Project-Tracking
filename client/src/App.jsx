@@ -4,16 +4,28 @@ import Dashboard from './components/Dashboard';
 import ProjectView from './components/ProjectView';
 import SiteBanner from './components/SiteBanner';
 import { api, getToken, setToken } from './lib/api';
+import { backgroundOptions } from './lib/options';
+
+function backgroundStorageKey(userId) {
+  return userId ? `psg-background:${userId}` : 'psg-background:guest';
+}
+
+function readBackgroundPreference(userId) {
+  if (typeof window === 'undefined') return backgroundOptions[0].value;
+  const userKey = backgroundStorageKey(userId);
+  const stored = window.localStorage.getItem(userKey) || window.localStorage.getItem('psg-background:guest');
+  if (stored && backgroundOptions.some((option) => option.value === stored)) return stored;
+  if (stored === 'slate') return 'forest';
+  if (stored === 'steel') return 'ocean';
+  return backgroundOptions[0].value;
+}
 
 export default function App() {
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') return 'light';
     return window.localStorage.getItem('psg-theme') || 'light';
   });
-  const [background, setBackground] = useState(() => {
-    if (typeof window === 'undefined') return 'aurora';
-    return window.localStorage.getItem('psg-background') || 'aurora';
-  });
+  const [background, setBackground] = useState(() => readBackgroundPreference(null));
   const [token, setTokenState] = useState(getToken());
   const [user, setUser] = useState(null);
   const [projects, setProjects] = useState([]);
@@ -30,11 +42,24 @@ export default function App() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.documentElement.dataset.theme = theme;
-    document.documentElement.dataset.bg = background;
     document.documentElement.style.colorScheme = theme;
     window.localStorage.setItem('psg-theme', theme);
-    window.localStorage.setItem('psg-background', background);
-  }, [theme, background]);
+  }, [theme]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.dataset.background = background;
+    if (user?.id) {
+      window.localStorage.setItem(backgroundStorageKey(user.id), background);
+    } else {
+      window.localStorage.setItem('psg-background:guest', background);
+    }
+  }, [background, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    setBackground(readBackgroundPreference(user.id));
+  }, [user?.id]);
 
   function openProjectFromUrl(nextProjects) {
     const requestedProjectId = projectIdFromUrl();
@@ -55,6 +80,7 @@ export default function App() {
       setLoadingProjects(false);
     }
   }
+
   function routeAfterAuth(nextProjects) {
     openProjectFromUrl(nextProjects);
   }
@@ -70,6 +96,7 @@ export default function App() {
       try {
         const me = await api('/me');
         setUser(me.user);
+        setBackground(readBackgroundPreference(me.user.id));
         const nextProjects = await loadProjects();
         await routeAfterAuth(nextProjects);
       } catch (error) {
@@ -86,6 +113,7 @@ export default function App() {
     setToken(data.token, rememberMe);
     setTokenState(data.token);
     setUser(data.user);
+    setBackground(readBackgroundPreference(data.user.id));
     const nextProjects = await loadProjects();
     await routeAfterAuth(nextProjects);
   }
@@ -109,8 +137,8 @@ export default function App() {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
   }
 
-  function changeBackground(event) {
-    setBackground(event.target.value);
+  function changeBackground(value) {
+    setBackground(value);
   }
 
   function logout() {
@@ -121,37 +149,37 @@ export default function App() {
     setSelectedProjectId(null);
   }
 
-  const themeToggle = (
-    <div className="theme-controls">
-      <select className="background-select" value={background} onChange={changeBackground} aria-label="Background theme">
-        <option value="aurora">Aurora</option>
-        <option value="sunset">Sunset</option>
-        <option value="ocean">Ocean</option>
-        <option value="forest">Forest</option>
-        <option value="violet">Violet</option>
-        <option value="ember">Ember</option>
-      </select>
+  const floatingControls = (
+    <div className="floating-controls" aria-label="Display controls">
       <button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
         {theme === 'dark' ? 'Light mode' : 'Dark mode'}
       </button>
+      <label className="background-select-wrap">
+        <span className="sr-only">Background</span>
+        <select className="background-select" value={background} onChange={(event) => changeBackground(event.target.value)} aria-label="Change app background">
+          {backgroundOptions.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </label>
     </div>
   );
 
   if (booting) {
-    return <>{themeToggle}<main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main></>;
+    return <>{floatingControls}<main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main></>;
   }
 
   if (!token || !user) {
-    return <>{themeToggle}<AuthScreen onAuth={handleAuth} /></>;
+    return <>{floatingControls}<AuthScreen onAuth={handleAuth} /></>;
   }
 
   if (selectedProjectId) {
-    return <>{themeToggle}<ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></>;
+    return <>{floatingControls}<ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></>;
   }
 
   return (
     <>
-      {themeToggle}
+      {floatingControls}
       <Dashboard
         user={user}
         projects={projects}
