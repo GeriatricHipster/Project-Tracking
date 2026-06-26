@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 
+const tradeOptions = ['CCure Team', 'Camera Team', 'Lock Smith', 'Vendor'];
+
 export default function AuthScreen({ onAuth }) {
   const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({ name: '', email: 'admin@demo.com', password: 'Construction123!', rememberMe: true });
+  const [form, setForm] = useState({ name: '', email: 'admin@demo.com', password: 'Construction123!', trade: '', rememberMe: true });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -25,7 +27,7 @@ export default function AuthScreen({ onAuth }) {
     setLoading(true);
     try {
       const payload = mode === 'register'
-        ? { name: form.name, email: form.email, password: form.password }
+        ? { name: form.name, email: form.email, password: form.password, trade: form.trade }
         : { email: form.email, password: form.password };
       const data = await api(`/auth/${mode}`, { method: 'POST', body: payload, token: null });
       if (typeof window !== 'undefined') {
@@ -57,10 +59,19 @@ export default function AuthScreen({ onAuth }) {
 
         <form className="stack" onSubmit={submit}>
           {mode === 'register' && (
-            <label>
-              Name
-              <input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Jane Project Manager" />
-            </label>
+            <>
+              <label>
+                Name
+                <input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Jane Project Manager" />
+              </label>
+              <label>
+                Trade
+                <select value={form.trade} onChange={(event) => updateField('trade', event.target.value)}>
+                  <option value="">Unassigned</option>
+                  {tradeOptions.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
+                </select>
+              </label>
+            </>
           )}
           <label>
             Email

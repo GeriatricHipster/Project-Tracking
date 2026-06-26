@@ -1,102 +1,78 @@
 import { useMemo, useState } from 'react';
 
-function toNumber(value) {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : 0;
-}
+const DEFAULT_ROWS = [
+  { label: 'Material 1', value: 0 },
+  { label: 'Material 2', value: 0 },
+  { label: 'Material 3', value: 0 },
+  { label: 'Material 4', value: 0 },
+  { label: 'Material 5', value: 0 },
+  { label: 'Material 6', value: 0 }
+];
 
-function calcTotal(items, rate) {
-  const materialTotal = items.reduce((sum, value) => sum + toNumber(value), 0);
-  const markupTotal = materialTotal * toNumber(rate);
-  return {
-    materialTotal,
-    markupTotal
-  };
-}
-
-function currency(value) {
-  return Number(value || 0).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 3
-  });
-}
-
-function ReportCard({ title, rateLabel, initialRate, initialItems }) {
-  const [rate, setRate] = useState(String(initialRate));
-  const [items, setItems] = useState(initialItems.map((item) => String(item)));
-
-  const summary = useMemo(() => calcTotal(items, rate), [items, rate]);
-
-  return (
-    <article className="panel markup-report-card">
-      <div className="panel-heading">
-        <div>
-          <h3>{title}</h3>
-          <p>{rateLabel}</p>
-        </div>
-      </div>
-
-      <div className="markup-grid">
-        <label>
-          Mark up rate
-          <input type="number" step="0.001" value={rate} onChange={(event) => setRate(event.target.value)} />
-        </label>
-
-        {items.map((item, index) => (
-          <label key={index}>
-            Material line {index + 1}
-            <input
-              type="number"
-              step="0.001"
-              value={item}
-              onChange={(event) => {
-                const next = [...items];
-                next[index] = event.target.value;
-                setItems(next);
-              }}
-            />
-          </label>
-        ))}
-      </div>
-
-      <div className="markup-summary">
-        <div>
-          <span>Material total</span>
-          <strong>{currency(summary.materialTotal)}</strong>
-        </div>
-        <div>
-          <span>Total mark up</span>
-          <strong>{currency(summary.markupTotal)}</strong>
-        </div>
-      </div>
-    </article>
-  );
+function money(value) {
+  const number = Number(value || 0);
+  return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default function MarkupCalculatorPanel() {
+  const [rows, setRows] = useState(DEFAULT_ROWS);
+
+  const totalMaterial = useMemo(
+    () => rows.reduce((sum, row) => sum + Number(row.value || 0), 0),
+    [rows]
+  );
+  const markup = totalMaterial * 0.05;
+  const grandTotal = totalMaterial + markup;
+
+  function updateRow(index, field, value) {
+    setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)));
+  }
+
   return (
-    <section className="dashboard-stack markup-calculator-panel">
+    <section className="dashboard-stack">
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <h2>Mark up calculator</h2>
-            <p>Built from the workbook formulas: total the material lines, then multiply by the mark up rate.</p>
+            <h2>Markup calculator</h2>
+            <p>5% markup only. Values update automatically as you type.</p>
           </div>
         </div>
 
-        <div className="markup-report-grid">
-          <ReportCard
-            title="MARK UP REPORT"
-            rateLabel="Material (+4.7%)"
-            initialRate={0.047}
-            initialItems={[6557.743, 736.2, 0, 0, 0, 0]}
-          />
-          <ReportCard
-            title="MARK UP REPORT"
-            rateLabel="Material (+5.0%)"
-            initialRate={0.05}
-            initialItems={[16.32, 2317, 0, 0, 0, 0]}
-          />
+        <div className="markup-table-wrap">
+          <table className="markup-table">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th>Material</th>
+                <th>5% Markup</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => {
+                const value = Number(row.value || 0);
+                const rowMarkup = value * 0.05;
+                return (
+                  <tr key={index}>
+                    <td>
+                      <input value={row.label} onChange={(event) => updateRow(index, 'label', event.target.value)} />
+                    </td>
+                    <td>
+                      <input type="number" min="0" step="0.01" value={row.value} onChange={(event) => updateRow(index, 'value', event.target.value)} />
+                    </td>
+                    <td>{money(rowMarkup)}</td>
+                    <td>{money(value + rowMarkup)}</td>
+                  </tr>
+                );
+              })}
+              <tr className="markup-total-row">
+                <td>Total</td>
+                <td>{money(totalMaterial)}</td>
+                <td>{money(markup)}</td>
+                <td>{money(grandTotal)}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
     </section>

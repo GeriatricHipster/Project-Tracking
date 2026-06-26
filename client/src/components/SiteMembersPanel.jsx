@@ -14,6 +14,7 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingUserId, setSavingUserId] = useState(null);
+  const [passwordDrafts, setPasswordDrafts] = useState({});
 
   const currentSiteRole = currentUser?.site_role || 'member';
   const currentIsOwner = currentSiteRole === 'owner';
@@ -81,7 +82,7 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
         <div className="panel-heading">
           <div>
             <h2>Site member management</h2>
-            <p>Managers and owners can review users, revoke access, delete accounts, and change site role.</p>
+            <p>Managers and owners can review users, revoke access, delete accounts, change passwords, and change site role.</p>
           </div>
           <button className="ghost-button compact" onClick={loadUsers} type="button">Refresh users</button>
         </div>
@@ -120,6 +121,24 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
                           {allowedRoleOptions(siteUser).map((role) => <option key={role} value={role}>{titleCase(role)}</option>)}
                         </select>
                       </label>
+                      <label>
+                        New password
+                        <input
+                          type="password"
+                          disabled={!canChange || busy}
+                          value={passwordDrafts[siteUser.id] || ''}
+                          onChange={(event) => setPasswordDrafts((current) => ({ ...current, [siteUser.id]: event.target.value }))}
+                          placeholder="Leave blank to keep current"
+                        />
+                      </label>
+                      <button
+                        className="ghost-button compact"
+                        disabled={!canChange || busy || !String(passwordDrafts[siteUser.id] || '').trim()}
+                        onClick={() => updateUser(siteUser, { password: passwordDrafts[siteUser.id] })}
+                        type="button"
+                      >
+                        Change password
+                      </button>
                       <button
                         className={siteUser.access_revoked ? 'ghost-button compact' : 'danger-button compact'}
                         disabled={!canChange || busy}

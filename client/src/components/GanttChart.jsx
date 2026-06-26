@@ -18,13 +18,9 @@ function taskMeta(task) {
   const parts = [];
   if (task.trade) parts.push(task.trade);
   if (task.vendor) parts.push(task.vendor);
-  if (task.vendor_secondary) parts.push(task.vendor_secondary);
   if (task.security_team_member) parts.push(`Security: ${task.security_team_member}`);
   if (task.pm) parts.push(`PM: ${task.pm}`);
-  if (task.assigned_to_label || task.assigned_to_name) parts.push(`Assignee: ${task.assigned_to_label || task.assigned_to_name}`);
-  if (task.assignee_secondary) parts.push(`Assignee 2: ${task.assignee_secondary}`);
-  if (task.assignee_tertiary) parts.push(`Assignee 3: ${task.assignee_tertiary}`);
-  if (task.assignee_quaternary) parts.push(`Assignee 4: ${task.assignee_quaternary}`);
+  if (task.assigned_to_name) parts.push(`Assignee: ${task.assigned_to_name}`);
   return parts.join(' · ');
 }
 
@@ -49,6 +45,7 @@ function statusLabel(value) {
 
 export default function GanttChart({ project, tasks, dependencies, onEditTask }) {
   const scrollRef = useRef(null);
+  const shellRef = useRef(null);
   const [zoomIndex, setZoomIndex] = useState(2);
   const allStartDates = [project.start_date, ...tasks.map((task) => task.start_date)];
   const allEndDates = [project.end_date, ...tasks.map((task) => task.end_date)];
@@ -113,6 +110,15 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
     if (!scrollRef.current) return;
     const pixels = (days / scale.stepDays) * scale.unitWidth;
     scrollRef.current.scrollBy({ left: pixels, behavior: 'smooth' });
+  }
+
+  function toggleFullscreen() {
+    if (!shellRef.current) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+      return;
+    }
+    shellRef.current.requestFullscreen?.();
   }
 
   function exportGanttPdf() {
@@ -264,13 +270,14 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
   }
 
   return (
-    <section className="panel gantt-panel expanded-gantt-panel">
+    <section className="panel gantt-panel expanded-gantt-panel" ref={shellRef}>
       <div className="panel-heading gantt-heading">
         <div>
           <h2>Gantt chart</h2>
           <p>{formatDate(rangeStart)} to {formatDate(rangeEnd)} · scale: {scale.label} · zoom: {Math.round(zoom * 100)}%</p>
         </div>
         <div className="gantt-toolbar" aria-label="Gantt navigation controls">
+          <button className="ghost-button compact" onClick={toggleFullscreen} type="button">Full screen</button>
           <button className="ghost-button compact" onClick={scrollToStart} type="button">Start</button>
           <button className="ghost-button compact" onClick={() => scrollByDays(-30)} type="button">Prev 30 days</button>
           <button className="ghost-button compact" onClick={scrollToToday} disabled={todayOffset === null} type="button">Today</button>
