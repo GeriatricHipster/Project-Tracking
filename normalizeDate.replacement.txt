@@ -1,0 +1,47 @@
+function normalizeDate(value, label) {
+  const text = String(value || '').trim();
+
+  if (!text) {
+    throw httpError(400, `${label} must be a MM-DD-YYYY date.`);
+  }
+
+  let year;
+  let month;
+  let day;
+  let match = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+
+  if (match) {
+    [, month, day, year] = match;
+  } else {
+    match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+
+    if (!match) {
+      throw httpError(400, `${label} must be a MM-DD-YYYY date.`);
+    }
+
+    [, year, month, day] = match;
+  }
+
+  const yearNumber = Number(year);
+  const monthNumber = Number(month);
+  const dayNumber = Number(day);
+  const candidate = new Date(Date.UTC(yearNumber, monthNumber - 1, dayNumber));
+
+  const isValid =
+    Number.isInteger(yearNumber) &&
+    Number.isInteger(monthNumber) &&
+    Number.isInteger(dayNumber) &&
+    yearNumber >= 1000 &&
+    monthNumber >= 1 &&
+    monthNumber <= 12 &&
+    dayNumber >= 1 &&
+    candidate.getUTCFullYear() === yearNumber &&
+    candidate.getUTCMonth() === monthNumber - 1 &&
+    candidate.getUTCDate() === dayNumber;
+
+  if (!isValid) {
+    throw httpError(400, `${label} is not a valid date.`);
+  }
+
+  return `${String(yearNumber).padStart(4, '0')}-${String(monthNumber).padStart(2, '0')}-${String(dayNumber).padStart(2, '0')}`;
+}

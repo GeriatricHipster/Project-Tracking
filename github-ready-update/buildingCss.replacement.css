@@ -1,0 +1,21 @@
+
+.select-with-button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.select-with-button select {
+  width: 100%;
+}
+
+.select-with-button .ghost-button {
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .select-with-button {
+    grid-template-columns: 1fr;
+  }
+}
