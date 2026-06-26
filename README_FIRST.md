@@ -1,7 +1,37 @@
-# Project-Tracking GitHub-ready update ZIP
+# Project-Tracking hotfix
 
-Open `github-ready-update/README_APPLY_UPDATE.md` for the apply steps.
+Open the `github-ready-hotfix` folder. The recommended commit message is:
 
-Commit message:
+```text
+Fix project view date parsing and building dropdown button
+```
 
-Use MM-DD-YYYY dates and add building button
+Unzip this package into the root of your local Project-Tracking repo so it looks like this:
+
+```text
+Project-Tracking/
+  client/
+  server/
+  package.json
+  github-ready-hotfix/
+```
+
+Then run one of these from the repo root.
+
+Mac/Linux:
+
+```bash
+bash github-ready-hotfix/apply-and-commit.sh
+```
+
+Windows PowerShell:
+
+```powershell
+.\github-ready-hotfix\apply-and-commit.ps1
+```
+
+Then push:
+
+```bash
+git push origin main
+```
