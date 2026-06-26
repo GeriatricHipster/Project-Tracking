@@ -2617,7 +2617,7 @@ html[data-theme='dark'] .theme-toggle-button {
 .cms-grid-table {
   border-collapse: separate;
   border-spacing: 0;
-  min-width: 3300px;
+  min-width: 3500px;
   width: max-content;
 }
 
@@ -2728,58 +2728,291 @@ html[data-theme='dark'] .cms-grid-table td {
   }
 
   .cms-grid-table {
-    min-width: 3300px;
+    min-width: 3500px;
   }
 }
 
-.theme-controls {
+
+.top-right-controls {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.top-right-controls .theme-toggle-button {
+  position: static;
+}
+
+html[data-background='aurora'] body {
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.26), transparent 22rem),
+    radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.18), transparent 22rem),
+    #f3f4f6;
+}
+
+html[data-background='sunset'] body {
+  background:
+    radial-gradient(circle at top left, rgba(249, 115, 22, 0.24), transparent 22rem),
+    radial-gradient(circle at bottom right, rgba(239, 68, 68, 0.18), transparent 22rem),
+    #fff7ed;
+}
+
+html[data-background='mint'] body {
+  background:
+    radial-gradient(circle at top left, rgba(16, 185, 129, 0.20), transparent 22rem),
+    radial-gradient(circle at bottom right, rgba(6, 182, 212, 0.16), transparent 22rem),
+    #f0fdf4;
+}
+
+html[data-background='indigo'] body {
+  background:
+    radial-gradient(circle at top left, rgba(99, 102, 241, 0.24), transparent 22rem),
+    radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.18), transparent 22rem),
+    #eef2ff;
+}
+
+html[data-background='ember'] body {
+  background:
+    radial-gradient(circle at top left, rgba(220, 38, 38, 0.24), transparent 22rem),
+    radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.18), transparent 22rem),
+    #fff1f2;
+}
+
+html[data-background='ocean'] body {
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.22), transparent 22rem),
+    radial-gradient(circle at bottom right, rgba(20, 184, 166, 0.18), transparent 22rem),
+    #eff6ff;
+}
+
+html[data-theme='dark'][data-background='aurora'] body {
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.20), transparent 22rem),
+    radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.16), transparent 22rem),
+    #070b14;
+}
+
+html[data-theme='dark'][data-background='sunset'] body {
+  background:
+    radial-gradient(circle at top left, rgba(249, 115, 22, 0.18), transparent 22rem),
+    radial-gradient(circle at bottom right, rgba(239, 68, 68, 0.16), transparent 22rem),
+    #111827;
+}
+
+html[data-theme='dark'][data-background='mint'] body {
+  background:
+    radial-gradient(circle at top left, rgba(16, 185, 129, 0.18), transparent 22rem),
+    radial-gradient(circle at bottom right, rgba(6, 182, 212, 0.14), transparent 22rem),
+    #070b14;
+}
+
+html[data-theme='dark'][data-background='indigo'] body {
+  background:
+    radial-gradient(circle at top left, rgba(99, 102, 241, 0.18), transparent 22rem),
+    radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.16), transparent 22rem),
+    #0b1020;
+}
+
+html[data-theme='dark'][data-background='ember'] body {
+  background:
+    radial-gradient(circle at top left, rgba(220, 38, 38, 0.18), transparent 22rem),
+    radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.14), transparent 22rem),
+    #111827;
+}
+
+html[data-theme='dark'][data-background='ocean'] body {
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.18), transparent 22rem),
+    radial-gradient(circle at bottom right, rgba(20, 184, 166, 0.16), transparent 22rem),
+    #07111f;
+}
+
+.cms-sheet-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0.4rem 0 0.8rem;
+}
+
+.cms-view-tabs,
+.cms-toolbar-actions,
+.cms-row-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.cms-view-tabs button {
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: #ffffff;
+  padding: 0.55rem 0.9rem;
+  font-weight: 800;
+}
+
+.cms-view-tabs button.active {
+  background: linear-gradient(135deg, #ef4444, #991b1b);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.cms-grid-filter-row th {
+  background: #f1f5f9;
+  padding: 0.3rem;
+}
+
+.cms-grid-filter-row input,
+.cms-grid-filter-row select {
+  width: 100%;
+  min-width: 100%;
+  padding: 0.35rem 0.4rem;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+}
+
+.cms-grid-actions-col {
+  min-width: 170px;
+  width: 170px;
+  text-align: center;
+  padding: 0.45rem;
+  position: sticky;
+  right: 0;
+  background: inherit;
+}
+
+.cms-grid-filter-header {
+  position: sticky;
+  left: 0;
+  background: #f1f5f9;
+  z-index: 6;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.cms-grid-filter-cell {
+  padding: 0.25rem;
+}
+
+.cms-grid-filter-cell input,
+.cms-grid-filter-cell select {
+  font-size: 0.76rem;
+}
+
+.cms-sheet-meta,
+.cms-sheet-toolbar {
+  max-width: 100%;
+}
+
+.cms-empty-note {
+  padding: 0.75rem 0 0.25rem;
+  margin: 0;
+}
+
+.owner-cms-panel.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 1rem;
+  overflow: auto;
+}
+
+html[data-theme='dark'] .owner-cms-panel.is-fullscreen {
+  background: rgba(2, 6, 23, 0.96);
+}
+
+html[data-theme='dark'] .cms-view-tabs button {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #e5e7eb;
+}
+
+html[data-theme='dark'] .cms-grid-filter-row th,
+html[data-theme='dark'] .cms-grid-filter-row input,
+html[data-theme='dark'] .cms-grid-filter-row select,
+html[data-theme='dark'] .cms-grid-filter-header {
+  background: #111827;
+  color: #e5e7eb;
+  border-color: #334155;
+}
+
+html[data-theme='dark'] .cms-grid-actions-col {
+  background: #111827;
+}
+
+
+
+.markup-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.markup-grid {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr 1fr;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.markup-grid-head {
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7280;
+  padding: 0.25rem 0.35rem;
+}
+
+.markup-grid-cell {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  min-height: 44px;
   display: flex;
   align-items: center;
+  padding: 0.45rem 0.6rem;
+  background: #ffffff;
+}
+
+.markup-grid-cell.input {
+  width: 100%;
+}
+
+.markup-grid-cell.total {
+  font-weight: 900;
+  background: #f8fafc;
+}
+
+.markup-grid-cell.label {
+  font-weight: 800;
+}
+
+html[data-theme='dark'] .markup-grid-head {
+  color: #94a3b8;
+}
+
+html[data-theme='dark'] .markup-grid-cell {
+  background: #0b1220;
+  border-color: #334155;
+  color: #e5e7eb;
+}
+
+html[data-theme='dark'] .markup-grid-cell.total {
+  background: #111827;
+}
+
+
+.cms-toolbar-left {
+  display: flex;
   gap: 0.75rem;
-}
-
-.background-select {
-  min-width: 140px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  padding: 0.55rem 0.9rem;
-  font: inherit;
-}
-
-html[data-theme='light'][data-bg='aurora'] body {
-  background: radial-gradient(circle at top left, rgba(248, 113, 113, 0.28), transparent 26%), radial-gradient(circle at top right, rgba(59, 130, 246, 0.24), transparent 24%), linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
-}
-html[data-theme='light'][data-bg='sunset'] body {
-  background: radial-gradient(circle at top left, rgba(251, 146, 60, 0.34), transparent 24%), radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.22), transparent 22%), linear-gradient(180deg, #fff7ed 0%, #ffe4e6 100%);
-}
-html[data-theme='light'][data-bg='ocean'] body {
-  background: radial-gradient(circle at top left, rgba(34, 197, 94, 0.24), transparent 24%), radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.28), transparent 22%), linear-gradient(180deg, #eff6ff 0%, #ecfeff 100%);
-}
-html[data-theme='light'][data-bg='forest'] body {
-  background: radial-gradient(circle at top left, rgba(34, 197, 94, 0.28), transparent 24%), radial-gradient(circle at bottom right, rgba(132, 204, 22, 0.2), transparent 22%), linear-gradient(180deg, #f0fdf4 0%, #ecfccb 100%);
-}
-html[data-theme='light'][data-bg='violet'] body {
-  background: radial-gradient(circle at top left, rgba(139, 92, 246, 0.28), transparent 24%), radial-gradient(circle at bottom right, rgba(217, 70, 239, 0.2), transparent 22%), linear-gradient(180deg, #f5f3ff 0%, #fce7f3 100%);
-}
-html[data-theme='light'][data-bg='ember'] body {
-  background: radial-gradient(circle at top left, rgba(239, 68, 68, 0.28), transparent 24%), radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.22), transparent 22%), linear-gradient(180deg, #fff1f2 0%, #ffedd5 100%);
-}
-
-html[data-theme='dark'][data-bg='aurora'] body {
-  background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.18), transparent 24%), radial-gradient(circle at top right, rgba(168, 85, 247, 0.18), transparent 24%), linear-gradient(180deg, #020617 0%, #0f172a 100%);
-}
-html[data-theme='dark'][data-bg='sunset'] body {
-  background: radial-gradient(circle at top left, rgba(249, 115, 22, 0.18), transparent 22%), radial-gradient(circle at bottom right, rgba(244, 63, 94, 0.16), transparent 22%), linear-gradient(180deg, #111827 0%, #1f2937 100%);
-}
-html[data-theme='dark'][data-bg='ocean'] body {
-  background: radial-gradient(circle at top left, rgba(14, 165, 233, 0.18), transparent 24%), radial-gradient(circle at bottom right, rgba(6, 182, 212, 0.14), transparent 22%), linear-gradient(180deg, #020617 0%, #082f49 100%);
-}
-html[data-theme='dark'][data-bg='forest'] body {
-  background: radial-gradient(circle at top left, rgba(34, 197, 94, 0.16), transparent 24%), radial-gradient(circle at bottom right, rgba(132, 204, 22, 0.14), transparent 22%), linear-gradient(180deg, #0f172a 0%, #14532d 100%);
-}
-html[data-theme='dark'][data-bg='violet'] body {
-  background: radial-gradient(circle at top left, rgba(168, 85, 247, 0.18), transparent 24%), radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.16), transparent 22%), linear-gradient(180deg, #111827 0%, #312e81 100%);
-}
-html[data-theme='dark'][data-bg='ember'] body {
-  background: radial-gradient(circle at top left, rgba(248, 113, 113, 0.18), transparent 24%), radial-gradient(circle at bottom right, rgba(251, 146, 60, 0.16), transparent 22%), linear-gradient(180deg, #111827 0%, #7f1d1d 100%);
+  align-items: center;
+  flex-wrap: wrap;
 }

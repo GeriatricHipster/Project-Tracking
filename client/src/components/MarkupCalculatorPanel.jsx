@@ -1,80 +1,68 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 
-const DEFAULT_ROWS = [
-  { label: 'Material 1', value: 0 },
-  { label: 'Material 2', value: 0 },
-  { label: 'Material 3', value: 0 },
-  { label: 'Material 4', value: 0 },
-  { label: 'Material 5', value: 0 },
-  { label: 'Material 6', value: 0 }
+const lineLabels = [
+  'Material 1',
+  'Material 2',
+  'Material 3',
+  'Material 4',
+  'Material 5',
+  'Material 6'
 ];
 
-function money(value) {
-  const number = Number(value || 0);
-  return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+export default function MarkupCalculatorPanel({ canAccess }) {
+  const [values, setValues] = useState(['', '', '', '', '', '']);
 
-export default function MarkupCalculatorPanel() {
-  const [rows, setRows] = useState(DEFAULT_ROWS);
+  const results = useMemo(() => {
+    const numbers = values.map((value) => Number(value || 0));
+    const markupRate = 0.05;
+    const lines = numbers.map((amount) => Number((amount * markupRate).toFixed(2)));
+    const baseTotal = numbers.reduce((sum, amount) => sum + amount, 0);
+    const markupTotal = lines.reduce((sum, amount) => sum + amount, 0);
+    return { numbers, lines, baseTotal, markupTotal };
+  }, [values]);
 
-  const totalMaterial = useMemo(
-    () => rows.reduce((sum, row) => sum + Number(row.value || 0), 0),
-    [rows]
-  );
-  const markup = totalMaterial * 0.05;
-  const grandTotal = totalMaterial + markup;
-
-  function updateRow(index, field, value) {
-    setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)));
+  if (!canAccess) {
+    return (
+      <section className="panel">
+        <div className="empty-state">
+          <h3>Owner access only</h3>
+          <p>You do not have permission to view this area.</p>
+        </div>
+      </section>
+    );
   }
 
   return (
-    <section className="dashboard-stack">
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <h2>Markup calculator</h2>
-            <p>5% markup only. Values update automatically as you type.</p>
-          </div>
+    <section className="panel markup-panel">
+      <div className="panel-heading">
+        <div>
+          <h2>Markup calculator</h2>
+          <p>5% markup only, using the workbook formula you provided.</p>
         </div>
+      </div>
 
-        <div className="markup-table-wrap">
-          <table className="markup-table">
-            <thead>
-              <tr>
-                <th>Description</th>
-                <th>Material</th>
-                <th>5% Markup</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, index) => {
-                const value = Number(row.value || 0);
-                const rowMarkup = value * 0.05;
-                return (
-                  <tr key={index}>
-                    <td>
-                      <input value={row.label} onChange={(event) => updateRow(index, 'label', event.target.value)} />
-                    </td>
-                    <td>
-                      <input type="number" min="0" step="0.01" value={row.value} onChange={(event) => updateRow(index, 'value', event.target.value)} />
-                    </td>
-                    <td>{money(rowMarkup)}</td>
-                    <td>{money(value + rowMarkup)}</td>
-                  </tr>
-                );
-              })}
-              <tr className="markup-total-row">
-                <td>Total</td>
-                <td>{money(totalMaterial)}</td>
-                <td>{money(markup)}</td>
-                <td>{money(grandTotal)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <div className="markup-grid">
+        <div className="markup-grid-head">Item</div>
+        <div className="markup-grid-head">Material</div>
+        <div className="markup-grid-head">5% Markup</div>
+        {lineLabels.map((label, index) => (
+          <Fragment key={label}>
+            <div className="markup-grid-cell label">{label}</div>
+            <input
+              className="markup-grid-cell input"
+              type="number"
+              min="0"
+              step="0.01"
+              value={values[index]}
+              onChange={(event) => setValues((current) => current.map((item, idx) => (idx === index ? event.target.value : item)))}
+            />
+            <div className="markup-grid-cell output">${results.lines[index].toFixed(2)}</div>
+          </Fragment>
+        ))}
+        <div className="markup-grid-cell total label">Totals</div>
+        <div className="markup-grid-cell total">${results.baseTotal.toFixed(2)}</div>
+        <div className="markup-grid-cell total">${results.markupTotal.toFixed(2)}</div>
+      </div>
     </section>
   );
 }
