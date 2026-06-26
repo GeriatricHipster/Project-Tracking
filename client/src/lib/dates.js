@@ -3,22 +3,22 @@ export function dateOnly(value) {
   return String(value).slice(0, 10);
 }
 
-export function parseFlexibleDate(value) {
+export function parseDateInput(value) {
   const text = String(value || '').trim();
   if (!text) return '';
-
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
-  const mmddyyyy = text.match(/^(\d{2})-(\d{2})-(\d{4})$/);
-  if (mmddyyyy) {
-    const [, month, day, year] = mmddyyyy;
-    return `${year}-${month}-${day}`;
-  }
-  const mmddyyyySlash = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (mmddyyyySlash) {
-    const [, month, day, year] = mmddyyyySlash;
+  if (/^\d{2}-\d{2}-\d{4}$/.test(text)) {
+    const [month, day, year] = text.split('-');
     return `${year}-${month}-${day}`;
   }
   return text;
+}
+
+export function formatDateInput(value) {
+  const text = dateOnly(value);
+  if (!text) return '';
+  const [year, month, day] = text.split('-');
+  return `${month}-${day}-${year}`;
 }
 
 export function toUtcDate(value) {
@@ -50,13 +50,6 @@ export function formatDate(value) {
   if (!text) return '';
   const [year, month, day] = text.split('-');
   return `${month}/${day}/${year}`;
-}
-
-export function formatDateInput(value) {
-  const text = dateOnly(value);
-  if (!text) return '';
-  const [year, month, day] = text.split('-');
-  return `${month}-${day}-${year}`;
 }
 
 export function minIsoDate(values) {

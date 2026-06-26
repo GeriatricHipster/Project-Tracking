@@ -5,26 +5,7 @@ import ProjectView from './components/ProjectView';
 import SiteBanner from './components/SiteBanner';
 import { api, getToken, setToken } from './lib/api';
 
-const backgroundOptions = [
-  { value: 'sunrise', label: 'Sunrise' },
-  { value: 'aurora', label: 'Aurora' },
-  { value: 'tropical', label: 'Tropical' },
-  { value: 'electric', label: 'Electric' },
-  { value: 'midnight', label: 'Midnight' },
-  { value: 'graphite', label: 'Graphite' }
-];
-
-function backgroundStorageKey(userId) {
-  return userId ? `psg-background:${userId}` : 'psg-background:guest';
-}
-
-function readBackgroundPreference(userId) {
-  if (typeof window === 'undefined') return 'sunrise';
-  const userKey = backgroundStorageKey(userId);
-  return window.localStorage.getItem(userKey)
-    || window.localStorage.getItem('psg-background:guest')
-    || backgroundOptions[0].value;
-}
+const backgroundOptions = ['aurora', 'sunset', 'mint', 'indigo', 'ember', 'ocean'];
 
 
 class AppErrorBoundary extends React.Component {
@@ -37,26 +18,31 @@ class AppErrorBoundary extends React.Component {
     return { error };
   }
 
+  componentDidUpdate(prevProps) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
+      // Clear recoverable errors when the route or tab context changes.
+      // This keeps a single bad render from blanking the whole app.
+      // eslint-disable-next-line react/no-did-update-set-state
+      this.setState({ error: null });
+    }
+  }
+
   render() {
     if (this.state.error) {
       return (
         <main className="app-page">
           <SiteBanner />
-          {this.props.floatingControls}
-          <section className="panel error-boundary-card">
+          <div className="panel loading-panel">
             <h2>Something went wrong</h2>
-            <p>Try refreshing the page. If the problem keeps happening, this section may have a bad field value.</p>
-            <pre>{String(this.state.error?.message || this.state.error)}</pre>
-          </section>
+            <p>{this.state.error?.message || 'The page hit a rendering problem. Reloading usually clears it.'}</p>
+            <div className="row-actions">
+              <button className="primary-button" type="button" onClick={() => window.location.reload()}>Reload</button>
+            </div>
+          </div>
         </main>
       );
     }
-    return (
-      <>
-        {this.props.floatingControls}
-        {this.props.children}
-      </>
-    );
+    return this.props.children;
   }
 }
 
@@ -65,7 +51,10 @@ export default function App() {
     if (typeof window === 'undefined') return 'light';
     return window.localStorage.getItem('psg-theme') || 'light';
   });
-  const [background, setBackground] = useState(() => readBackgroundPreference(null));
+  const [background, setBackground] = useState(() => {
+    if (typeof window === 'undefined') return 'aurora';
+    return window.localStorage.getItem('psg-background') || 'aurora';
+  });
   const [token, setTokenState] = useState(getToken());
   const [user, setUser] = useState(null);
   const [projects, setProjects] = useState([]);
@@ -82,24 +71,11 @@ export default function App() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.background = background;
     document.documentElement.style.colorScheme = theme;
     window.localStorage.setItem('psg-theme', theme);
-  }, [theme]);
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    document.documentElement.dataset.background = background;
-    if (user?.id) {
-      window.localStorage.setItem(backgroundStorageKey(user.id), background);
-    } else {
-      window.localStorage.setItem('psg-background:guest', background);
-    }
-  }, [background, user?.id]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    setBackground(readBackgroundPreference(user.id));
-  }, [user?.id]);
+    window.localStorage.setItem('psg-background', background);
+  }, [theme, background]);
 
   function openProjectFromUrl(nextProjects) {
     const requestedProjectId = projectIdFromUrl();
@@ -136,7 +112,6 @@ export default function App() {
       try {
         const me = await api('/me');
         setUser(me.user);
-        setBackground(readBackgroundPreference(me.user.id));
         const nextProjects = await loadProjects();
         await routeAfterAuth(nextProjects);
       } catch (error) {
@@ -153,7 +128,6 @@ export default function App() {
     setToken(data.token, rememberMe);
     setTokenState(data.token);
     setUser(data.user);
-    setBackground(readBackgroundPreference(data.user.id));
     const nextProjects = await loadProjects();
     await routeAfterAuth(nextProjects);
   }
@@ -177,8 +151,11 @@ export default function App() {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
   }
 
-  function changeBackground(value) {
-    setBackground(value);
+  function cycleBackground() {
+    setBackground((current) => {
+      const index = backgroundOptions.indexOf(current);
+      return backgroundOptions[(index + 1) % backgroundOptions.length];
+    });
   }
 
   function logout() {
@@ -189,47 +166,43 @@ export default function App() {
     setSelectedProjectId(null);
   }
 
-  const floatingControls = (
-    <div className="floating-controls" aria-label="Display controls">
+  const topControls = (
+    <div className="top-right-controls">
       <button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
         {theme === 'dark' ? 'Light mode' : 'Dark mode'}
       </button>
-      <label className="background-select-wrap">
-        <span className="sr-only">Background</span>
-        <select className="background-select" value={background} onChange={(event) => changeBackground(event.target.value)} aria-label="Change app background">
-          {backgroundOptions.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
-      </label>
+      <button className="theme-toggle-button background-toggle" onClick={cycleBackground} type="button" aria-label="Change app background">
+        Background: {background}
+      </button>
     </div>
   );
 
   if (booting) {
-    return <AppErrorBoundary floatingControls={floatingControls}><main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main></AppErrorBoundary>;
+    return <>{topControls}<main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main></>;
   }
 
   if (!token || !user) {
-    return <AppErrorBoundary floatingControls={floatingControls}><AuthScreen onAuth={handleAuth} /></AppErrorBoundary>;
-  }
-
-  if (selectedProjectId) {
-    return <AppErrorBoundary floatingControls={floatingControls}><ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></AppErrorBoundary>;
+    return <>{topControls}<AuthScreen onAuth={handleAuth} /></>;
   }
 
   return (
-    <AppErrorBoundary floatingControls={floatingControls}>
-      <Dashboard
-        user={user}
-        projects={projects}
-        loading={loadingProjects}
-        onOpenProject={setSelectedProjectId}
-        onCreateProject={createProject}
-        onUpdateProject={updateProject}
-        onDeleteProject={deleteProject}
-        onRefresh={loadProjects}
-        onLogout={logout}
-      />
+    <AppErrorBoundary resetKey={selectedProjectId ? `project-${selectedProjectId}` : 'dashboard'}>
+      {topControls}
+      {selectedProjectId ? (
+        <ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} />
+      ) : (
+        <Dashboard
+          user={user}
+          projects={projects}
+          loading={loadingProjects}
+          onOpenProject={setSelectedProjectId}
+          onCreateProject={createProject}
+          onUpdateProject={updateProject}
+          onDeleteProject={deleteProject}
+          onRefresh={loadProjects}
+          onLogout={logout}
+        />
+      )}
     </AppErrorBoundary>
   );
 }

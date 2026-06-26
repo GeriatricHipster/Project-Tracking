@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { addDays, formatDateInput, parseFlexibleDate, todayIso } from '../lib/dates';
-import { addCustomListValue, getMergedList } from '../lib/customLists';
+import { addDays, todayIso } from '../lib/dates';
 
 const statusOptions = [
   ['not_started', 'Not started'],
@@ -41,7 +40,7 @@ const taskNameOptions = [
   'Other'
 ];
 
-const tradeOptions = ['CCure', 'Cameras', 'CCure & Cameras', 'Lock smiths'];
+const tradeBaseOptions = ['CCure', 'Cameras', 'CCure & Cameras', 'Lock smiths'];
 const vendorOptions = [
   'Accent Automatic',
   'Beacon',
@@ -50,105 +49,148 @@ const vendorOptions = [
   'Everbase',
   'G4S',
   'IC&E',
-  'Ideacom',
   'IES',
+  'Ideacom',
   'Nelson Fire',
   'OTIS',
   'Pavion',
   'PTI (Bosch)',
   'Pye Barker',
   'S101',
+  'Schindler',
   'SMT',
   'Stone Security',
   'Thyssenkrupp',
   'Utah Yamas'
-];
+].sort((a, b) => a.localeCompare(b));
 
-const securitySystemsOptions = [
+const assigneeOptionsBase = [
+  'James',
+  'James & Kyra',
+  'James & Ryan',
+  'James & Locksmiths',
+  'James & Suvam',
+  'James & Justin',
+  'James & Derick',
+  'James & Kenna',
+  'James & Justin, Suvam',
+  'Kenna',
+  'Kenna & Kyra',
+  'Kenna & Ryan',
+  'Kenna & Locksmiths',
+  'Kenna & Justin',
+  'Kenna & Suvam',
+  'Kenna & Derick',
+  'Kenna & Justin, Suvam',
+  'Derick',
+  'Derick & Kyra',
+  'Derick & Ryan',
+  'Derick & Locksmiths',
+  'Derick & Justin',
+  'Derick & Suvam',
+  'Derick & James',
+  'Derick & Kenna',
+  'Derick & Justin, Suvam',
+  'Justin',
+  'Justin & Kyra',
+  'Justin & Ryan',
+  'Justin & Locksmiths',
+  'Justin & Derick',
+  'Justin & Suvam',
+  'Justin & Kenna',
+  'Justin & James',
+  'Suvam',
+  'Suvam & Kyra',
+  'Suvam & Ryan',
+  'Suvam & Locksmiths',
+  'Suvam & Derick',
+  'Suvam & Kenna',
+  'Suvam & Justin',
+  'Suvam & James',
+  'Ryan',
+  'Kyra',
   'Bill',
   'Bennett',
-  'Chris',
-  'Derick',
-  'James',
-  'James & Derick',
-  'James & Justin',
-  'James & Justin, Suvam',
-  'James & Kenna',
-  'James & Kyra',
-  'James & Locksmiths',
-  'James & Ryan',
-  'James & Suvam',
   'Jim',
-  'Justin',
-  'Justin & Derick',
-  'Justin & James',
-  'Justin & Kenna',
-  'Justin & Kyra',
-  'Justin & Locksmiths',
-  'Justin & Ryan',
-  'Justin & Suvam',
-  'Kenna',
-  'Kenna & Derick',
-  'Kenna & Justin',
-  'Kenna & Justin, Suvam',
-  'Kenna & Kyra',
-  'Kenna & Locksmiths',
-  'Kenna & Ryan',
-  'Kenna & Suvam',
-  'Kyra',
-  'Locksmiths',
-  'Ryan',
-  'Suvam',
-  'Suvam & Derick',
-  'Suvam & James',
-  'Suvam & Justin',
-  'Suvam & Kenna',
-  'Suvam & Kyra',
-  'Suvam & Locksmiths',
-  'Suvam & Ryan'
-];
+  'Chris'
+].sort((a, b) => a.localeCompare(b));
 
-const locksmithOptions = ['Bill', 'Bennett', 'Chris', 'Jim', 'Custom'];
+const locksmithOptions = ['Bill', 'Bennett', 'Chris', 'Jim'].sort((a, b) => a.localeCompare(b));
 
 function blankTask(project) {
   const start = project?.start_date || todayIso();
-  const displayStart = formatDateInput(start);
   return {
-    name_mode: '',
-    custom_name: '',
     name: '',
+    name_choice: '',
+    custom_name: '',
     description: '',
     trade: '',
     trade_custom: '',
     vendor: '',
-    security_team_member: '',
-    security_team_member_custom: '',
-    security_systems_2: '',
-    security_systems_2_custom: '',
-    locksmiths: '',
-    locksmiths_custom: '',
-    other_assignment: '',
-    other_assignment_custom: '',
-    pm: '',
+    vendor_2: '',
+    assignee_1: '',
+    assignee_1_custom: '',
+    assignee_2: '',
+    assignee_2_custom: '',
+    assignee_3: '',
+    assignee_3_custom: '',
+    assignee_4: '',
+    assignee_4_custom: '',
     assigned_to: '',
     parent_task_id: '',
     status: 'not_started',
     priority: 'normal',
-    start_date: displayStart,
-    end_date: formatDateInput(addDays(start, 5)),
+    start_date: start,
+    end_date: addDays(start, 5),
     percent_complete: 0,
     color: '#2563eb',
     sort_order: ''
   };
 }
 
-function fieldValue(form, field) {
-  return form[field] || '';
+function ensureOption(list, value) {
+  const text = String(value || '').trim();
+  if (!text) return list;
+  if (list.includes(text)) return list;
+  return [...list, text].sort((a, b) => a.localeCompare(b));
 }
 
-function normalizeCustomValue(value, fallback = '') {
-  const text = String(value || '').trim();
-  return text || fallback;
+function readStoredOptions(key, fallback) {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return fallback;
+    return parsed.map((item) => String(item || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStoredOptions(key, options) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(key, JSON.stringify([...new Set(options)].sort((a, b) => a.localeCompare(b))));
+}
+
+function LabeledSelect({ label, value, onChange, options, disabled, customValue, onCustomChange, customPlaceholder = 'Enter custom value', allowCustom = true, textarea = false }) {
+  return (
+    <label>
+      {label}
+      <select disabled={disabled} value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">Unassigned</option>
+        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+        {allowCustom && <option value="__custom__">Custom</option>}
+      </select>
+      {value === '__custom__' && allowCustom && (
+        textarea ? (
+          <textarea disabled={disabled} value={customValue} onChange={(event) => onCustomChange(event.target.value)} placeholder={customPlaceholder} />
+        ) : (
+          <input disabled={disabled} value={customValue} onChange={(event) => onCustomChange(event.target.value)} placeholder={customPlaceholder} />
+        )
+      )}
+    </label>
+  );
 }
 
 export default function TaskForm({ project, members, tasks, editingTask, canEdit, onSave, onCancel }) {
@@ -156,34 +198,51 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const [assigneeOptions, setAssigneeOptions] = useState(() => readStoredOptions('psg-assignee-options', assigneeOptionsBase));
+  const [locksmithOptionsState, setLocksmithOptionsState] = useState(() => readStoredOptions('psg-locksmith-options', locksmithOptions));
+  const [tradeOptions, setTradeOptions] = useState(() => readStoredOptions('psg-trade-options', tradeBaseOptions));
+  const [taskOptions, setTaskOptions] = useState(taskNameOptions);
+
+  useEffect(() => {
+    setAssigneeOptions(readStoredOptions('psg-assignee-options', assigneeOptionsBase));
+    setLocksmithOptionsState(readStoredOptions('psg-locksmith-options', locksmithOptions));
+    setTradeOptions(readStoredOptions('psg-trade-options', tradeBaseOptions));
+  }, []);
+
   useEffect(() => {
     if (editingTask) {
-      const start = editingTask.start_date || project?.start_date || todayIso();
-      const end = editingTask.end_date || project?.end_date || addDays(start, 5);
-      const nameInList = taskNameOptions.includes(editingTask.name || '');
+      const nameInOptions = taskNameOptions.includes(editingTask.name);
+      const customName = nameInOptions ? '' : (editingTask.name || '');
+      const tradeInOptions = tradeOptions.includes(editingTask.trade);
+      const assignee1InOptions = assigneeOptions.includes(editingTask.assignee_1);
+      const assignee2InOptions = assigneeOptions.includes(editingTask.assignee_2);
+      const assignee3InOptions = locksmithOptionsState.includes(editingTask.assignee_3);
+      const assignee4InOptions = false;
+      const vendorInOptions = vendorOptions.includes(editingTask.vendor);
+      const vendor2InOptions = vendorOptions.includes(editingTask.vendor_2);
       setForm({
-        name_mode: nameInList ? editingTask.name : 'Other',
-        custom_name: nameInList ? '' : (editingTask.name || ''),
-        name: editingTask.name || '',
+        name: nameInOptions ? editingTask.name || '' : 'Other',
+        name_choice: nameInOptions ? editingTask.name || '' : '__custom__',
+        custom_name: customName,
         description: editingTask.description || '',
-        trade: editingTask.trade || '',
-        trade_custom: tradeOptions.includes(editingTask.trade || '') ? '' : (editingTask.trade || ''),
+        trade: tradeInOptions || !editingTask.trade ? (editingTask.trade || '') : '__custom__',
+        trade_custom: tradeInOptions || !editingTask.trade ? '' : (editingTask.trade || ''),
         vendor: editingTask.vendor || '',
-        security_team_member: editingTask.security_team_member || '',
-        security_team_member_custom: securitySystemsOptions.includes(editingTask.security_team_member || '') ? '' : (editingTask.security_team_member || ''),
-        security_systems_2: editingTask.security_systems_2 || '',
-        security_systems_2_custom: securitySystemsOptions.includes(editingTask.security_systems_2 || '') ? '' : (editingTask.security_systems_2 || ''),
-        locksmiths: editingTask.locksmiths || '',
-        locksmiths_custom: locksmithOptions.includes(editingTask.locksmiths || '') ? '' : (editingTask.locksmiths || ''),
-        other_assignment: editingTask.other_assignment || '',
-        other_assignment_custom: '',
-        pm: editingTask.pm || '',
+        vendor_2: editingTask.vendor_2 || '',
+        assignee_1: assignee1InOptions || !editingTask.assignee_1 ? (editingTask.assignee_1 || '') : '__custom__',
+        assignee_1_custom: assignee1InOptions || !editingTask.assignee_1 ? '' : (editingTask.assignee_1 || ''),
+        assignee_2: assignee2InOptions || !editingTask.assignee_2 ? (editingTask.assignee_2 || '') : '__custom__',
+        assignee_2_custom: assignee2InOptions || !editingTask.assignee_2 ? '' : (editingTask.assignee_2 || ''),
+        assignee_3: assignee3InOptions || !editingTask.assignee_3 ? (editingTask.assignee_3 || '') : '__custom__',
+        assignee_3_custom: assignee3InOptions || !editingTask.assignee_3 ? '' : (editingTask.assignee_3 || ''),
+        assignee_4: assignee4InOptions || !editingTask.assignee_4 ? (editingTask.assignee_4 || '') : '__custom__',
+        assignee_4_custom: !editingTask.assignee_4 ? '' : (editingTask.assignee_4 || ''),
         assigned_to: editingTask.assigned_to || '',
         parent_task_id: editingTask.parent_task_id || '',
         status: editingTask.status || 'not_started',
         priority: editingTask.priority || 'normal',
-        start_date: formatDateInput(start),
-        end_date: formatDateInput(end),
+        start_date: editingTask.start_date || project?.start_date || todayIso(),
+        end_date: editingTask.end_date || project?.start_date || todayIso(),
         percent_complete: editingTask.percent_complete || 0,
         color: editingTask.color || '#2563eb',
         sort_order: editingTask.sort_order || ''
@@ -203,20 +262,25 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  function handleChoice(field, value, defaults = []) {
-    updateField(field, value);
-    if (value !== 'Custom') {
-      updateField(`${field}_custom`, '');
-      return;
+  function updateCustomOptions(kind, value) {
+    const text = String(value || '').trim();
+    if (!text) return;
+    if (kind === 'assignee') {
+      const next = ensureOption(assigneeOptions, text);
+      setAssigneeOptions(next);
+      writeStoredOptions('psg-assignee-options', next);
+    } else if (kind === 'locksmith') {
+      const next = ensureOption(locksmithOptionsState, text);
+      setLocksmithOptionsState(next);
+      writeStoredOptions('psg-locksmith-options', next);
+    } else if (kind === 'trade') {
+      const next = ensureOption(tradeOptions, text);
+      setTradeOptions(next);
+      writeStoredOptions('psg-trade-options', next);
+    } else if (kind === 'task') {
+      const next = ensureOption(taskOptions, text);
+      setTaskOptions(next);
     }
-    const custom = window.prompt(`Enter a new ${field.replace(/_/g, ' ')} value.`);
-    if (custom && custom.trim()) {
-      const next = addCustomListValue(field, custom.trim());
-      updateField(field, custom.trim());
-      updateField(`${field}_custom`, '');
-      return next;
-    }
-    updateField(field, '');
   }
 
   async function submit(event) {
@@ -224,38 +288,22 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     setError('');
     setSaving(true);
     try {
-      const taskName = form.name_mode === 'Other'
-        ? normalizeCustomValue(form.custom_name)
-        : normalizeCustomValue(form.name || form.name_mode);
-
-      if (!taskName) {
-        throw new Error('Task name is required.');
-      }
-
+      const name = form.name_choice === '__custom__' ? form.custom_name : form.name;
       const payload = {
         ...form,
-        name: taskName,
-        trade: form.trade === 'Custom' ? normalizeCustomValue(form.trade_custom) : form.trade || null,
+        name,
+        trade: form.trade === '__custom__' ? form.trade_custom : form.trade,
         vendor: form.vendor || null,
-        security_team_member: form.security_team_member === 'Custom' ? normalizeCustomValue(form.security_team_member_custom) : form.security_team_member || null,
-        security_systems_2: form.security_systems_2 === 'Custom' ? normalizeCustomValue(form.security_systems_2_custom) : form.security_systems_2 || null,
-        locksmiths: form.locksmiths === 'Custom' ? normalizeCustomValue(form.locksmiths_custom) : form.locksmiths || null,
-        other_assignment: form.other_assignment === 'Custom' ? normalizeCustomValue(form.other_assignment_custom) : form.other_assignment || null,
-        pm: form.pm || null,
+        vendor_2: form.vendor_2 || null,
+        assignee_1: form.assignee_1 === '__custom__' ? form.assignee_1_custom : form.assignee_1,
+        assignee_2: form.assignee_2 === '__custom__' ? form.assignee_2_custom : form.assignee_2,
+        assignee_3: form.assignee_3 === '__custom__' ? form.assignee_3_custom : form.assignee_3,
+        assignee_4: form.assignee_4 === '__custom__' ? form.assignee_4_custom : form.assignee_4,
         assigned_to: form.assigned_to || null,
         parent_task_id: form.parent_task_id || null,
         percent_complete: Number(form.percent_complete),
-        start_date: parseFlexibleDate(form.start_date),
-        end_date: parseFlexibleDate(form.end_date),
         sort_order: form.sort_order === '' ? undefined : Number(form.sort_order)
       };
-
-      if (payload.trade) addCustomListValue('task_trade', payload.trade);
-      addCustomListValue('task_security_1', payload.security_team_member || '');
-      addCustomListValue('task_security_2', payload.security_systems_2 || '');
-      addCustomListValue('task_locksmiths', payload.locksmiths || '');
-      addCustomListValue('task_other', payload.other_assignment || '');
-
       await onSave(payload);
       if (!editingTask) setForm(blankTask(project));
     } catch (err) {
@@ -264,6 +312,15 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       setSaving(false);
     }
   }
+
+  const nameValue = form.name_choice === '__custom__' ? '__custom__' : (form.name || '');
+  const taskNameSelectOptions = useMemo(() => {
+    const existing = taskOptions.filter((option) => option !== 'Other');
+    return existing;
+  }, [taskOptions]);
+
+  const currentNameOptions = editingTask ? ensureOption(taskNameSelectOptions, editingTask.name || '') : taskNameSelectOptions;
+  const currentTradeOptions = form.trade === '__custom__' ? tradeOptions : tradeOptions;
 
   return (
     <section className="panel task-form-panel">
@@ -276,44 +333,142 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       </div>
 
       <form className="stack" onSubmit={submit}>
-        <div className="two-col">
-          <label>
-            Task name
-            <select disabled={!canEdit} value={form.name_mode || (taskNameOptions.includes(form.name) ? form.name : 'Other')} onChange={(event) => updateField('name_mode', event.target.value)}>
-              <option value="">Unassigned</option>
-              {taskNameOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-            </select>
-          </label>
-          <label>
-            Custom task name
+        <label>
+          Task name
+          <select disabled={!canEdit} value={nameValue} onChange={(event) => {
+            const value = event.target.value;
+            if (value === '__custom__') {
+              updateField('name_choice', '__custom__');
+              updateField('name', 'Other');
+            } else {
+              updateField('name_choice', value);
+              updateField('name', value);
+              updateField('custom_name', '');
+            }
+          }}>
+            <option value="">Choose a task</option>
+            {taskNameSelectOptions.filter((option) => option !== 'Other').map((task) => <option key={task} value={task}>{task}</option>)}
+            <option value="__custom__">Other</option>
+          </select>
+          {form.name_choice === '__custom__' && (
             <textarea
-              disabled={!canEdit || (form.name_mode !== 'Other')}
-              rows={2}
+              disabled={!canEdit}
               value={form.custom_name}
               onChange={(event) => updateField('custom_name', event.target.value)}
-              placeholder="Use this only when Other is selected"
+              placeholder="Enter a custom task name"
             />
-          </label>
+          )}
+        </label>
+
+        <div className="task-grid four-col">
+          <LabeledSelect
+            label="Trade"
+            value={form.trade}
+            options={currentTradeOptions.filter((option) => option !== 'Custom')}
+            disabled={!canEdit}
+            customValue={form.trade_custom}
+            onChange={(value) => {
+              updateField('trade', value);
+              if (value === '__custom__') return;
+              updateField('trade_custom', '');
+            }}
+            onCustomChange={(value) => {
+              updateField('trade_custom', value);
+              updateCustomOptions('trade', value);
+            }}
+            customPlaceholder="Add custom trade"
+          />
+          <LabeledSelect
+            label="Vendor"
+            value={form.vendor}
+            options={vendorOptions}
+            disabled={!canEdit}
+            allowCustom={false}
+            onChange={(value) => updateField('vendor', value)}
+            onCustomChange={() => {}}
+          />
+          <LabeledSelect
+            label="Vendor 2"
+            value={form.vendor_2}
+            options={vendorOptions}
+            disabled={!canEdit}
+            allowCustom={false}
+            onChange={(value) => updateField('vendor_2', value)}
+            onCustomChange={() => {}}
+          />
+          <LabeledSelect
+            label="Assignee 1 — CCure Team and Camera Team"
+            value={form.assignee_1}
+            options={assigneeOptions.filter((option) => option !== 'Custom')}
+            disabled={!canEdit}
+            customValue={form.assignee_1_custom}
+            onChange={(value) => {
+              updateField('assignee_1', value);
+              if (value === '__custom__') return;
+              updateField('assignee_1_custom', '');
+            }}
+            onCustomChange={(value) => {
+              updateField('assignee_1_custom', value);
+              updateCustomOptions('assignee', value);
+            }}
+            customPlaceholder="Add custom assignee"
+          />
+          <LabeledSelect
+            label="Assignee 2 — CCure Team and Camera Team"
+            value={form.assignee_2}
+            options={assigneeOptions.filter((option) => option !== 'Custom')}
+            disabled={!canEdit}
+            customValue={form.assignee_2_custom}
+            onChange={(value) => {
+              updateField('assignee_2', value);
+              if (value === '__custom__') return;
+              updateField('assignee_2_custom', '');
+            }}
+            onCustomChange={(value) => {
+              updateField('assignee_2_custom', value);
+              updateCustomOptions('assignee', value);
+            }}
+            customPlaceholder="Add custom assignee"
+          />
+          <LabeledSelect
+            label="Assignee 3 — Lock Smiths"
+            value={form.assignee_3}
+            options={locksmithOptionsState.filter((option) => option !== 'Custom')}
+            disabled={!canEdit}
+            customValue={form.assignee_3_custom}
+            onChange={(value) => {
+              updateField('assignee_3', value);
+              if (value === '__custom__') return;
+              updateField('assignee_3_custom', '');
+            }}
+            onCustomChange={(value) => {
+              updateField('assignee_3_custom', value);
+              updateCustomOptions('locksmith', value);
+            }}
+            customPlaceholder="Add custom locksmith"
+          />
+          <LabeledSelect
+            label="Assignee 4 — Other"
+            value={form.assignee_4}
+            options={[]}
+            disabled={!canEdit}
+            customValue={form.assignee_4_custom}
+            onChange={(value) => {
+              updateField('assignee_4', value);
+              if (value === '__custom__') return;
+              updateField('assignee_4_custom', '');
+            }}
+            onCustomChange={(value) => {
+              updateField('assignee_4_custom', value);
+              updateCustomOptions('assignee', value);
+            }}
+            customPlaceholder="Add custom other assignee"
+          />
         </div>
 
-        <div className="four-col">
+        <div className="two-col">
           <label>
-            Trade
-            <select disabled={!canEdit} value={form.trade} onChange={(event) => updateField('trade', event.target.value)}>
-              <option value="">Unassigned</option>
-              {getMergedList('task_trade', tradeOptions).map((trade) => <option key={trade} value={trade}>{trade}</option>)}
-              <option value="Custom">Custom</option>
-            </select>
-          </label>
-          <label>
-            Vendor
-            <select disabled={!canEdit} value={form.vendor} onChange={(event) => updateField('vendor', event.target.value)}>
-              <option value="">Unassigned</option>
-              {vendorOptions.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
-            </select>
-          </label>
-          <label>
-            Assignee
+            Project member assigned to task
             <select disabled={!canEdit} value={form.assigned_to} onChange={(event) => updateField('assigned_to', event.target.value)}>
               <option value="">Unassigned</option>
               {members.map((member) => (
@@ -322,87 +477,13 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             </select>
           </label>
           <label>
-            PM
-            <select disabled={!canEdit} value={form.pm} onChange={(event) => updateField('pm', event.target.value)}>
-              <option value="">Unassigned</option>
-              {['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b)).map((pm) => <option key={pm} value={pm}>{pm}</option>)}
+            Parent task
+            <select disabled={!canEdit} value={form.parent_task_id} onChange={(event) => updateField('parent_task_id', event.target.value)}>
+              <option value="">None</option>
+              {parentTaskOptions.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}
             </select>
           </label>
         </div>
-
-        {form.trade === 'Custom' && (
-          <label>
-            Custom trade
-            <input disabled={!canEdit} value={form.trade_custom} onChange={(event) => updateField('trade_custom', event.target.value)} placeholder="Type a custom trade" />
-          </label>
-        )}
-
-        <div className="four-col">
-          <label>
-            Security Systems 1
-            <select disabled={!canEdit} value={form.security_team_member} onChange={(event) => updateField('security_team_member', event.target.value)}>
-              <option value="">Unassigned</option>
-              {getMergedList('task_security_1', securitySystemsOptions).map((member) => <option key={member} value={member}>{member}</option>)}
-              <option value="Custom">Custom</option>
-            </select>
-          </label>
-          <label>
-            Security Systems 2
-            <select disabled={!canEdit} value={form.security_systems_2} onChange={(event) => updateField('security_systems_2', event.target.value)}>
-              <option value="">Unassigned</option>
-              {getMergedList('task_security_2', securitySystemsOptions).map((member) => <option key={member} value={member}>{member}</option>)}
-              <option value="Custom">Custom</option>
-            </select>
-          </label>
-          <label>
-            Lock Smiths
-            <select disabled={!canEdit} value={form.locksmiths} onChange={(event) => updateField('locksmiths', event.target.value)}>
-              <option value="">Unassigned</option>
-              {getMergedList('task_locksmiths', locksmithOptions).map((member) => <option key={member} value={member}>{member}</option>)}
-              <option value="Custom">Custom</option>
-            </select>
-          </label>
-          <label>
-            Other
-            <select disabled={!canEdit} value={form.other_assignment} onChange={(event) => updateField('other_assignment', event.target.value)}>
-              <option value="">Unassigned</option>
-              <option value="Custom">Custom</option>
-            </select>
-          </label>
-        </div>
-
-        {form.security_team_member === 'Custom' && (
-          <label>
-            Security Systems 1 custom
-            <input disabled={!canEdit} value={form.security_team_member_custom} onChange={(event) => updateField('security_team_member_custom', event.target.value)} placeholder="Type a custom option" />
-          </label>
-        )}
-
-        {form.security_systems_2 === 'Custom' && (
-          <label>
-            Security Systems 2 custom
-            <input disabled={!canEdit} value={form.security_systems_2_custom} onChange={(event) => updateField('security_systems_2_custom', event.target.value)} placeholder="Type a custom option" />
-          </label>
-        )}
-
-        {form.locksmiths === 'Custom' && (
-          <label>
-            Lock Smiths custom
-            <input disabled={!canEdit} value={form.locksmiths_custom} onChange={(event) => updateField('locksmiths_custom', event.target.value)} placeholder="Type a custom option" />
-          </label>
-        )}
-
-        {form.other_assignment === 'Custom' && (
-          <label>
-            Other custom value
-            <input
-              disabled={!canEdit}
-              value={form.other_assignment_custom}
-              onChange={(event) => updateField('other_assignment_custom', event.target.value)}
-              placeholder="Type a custom value"
-            />
-          </label>
-        )}
 
         <label>
           Description
@@ -412,11 +493,11 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         <div className="two-col">
           <label>
             Start
-            <input disabled={!canEdit} type="text" inputMode="numeric" value={fieldValue(form, 'start_date')} onChange={(event) => updateField('start_date', event.target.value)} placeholder="MM-DD-YYYY" />
+            <input disabled={!canEdit} type="date" value={form.start_date} onChange={(event) => updateField('start_date', event.target.value)} />
           </label>
           <label>
             Finish
-            <input disabled={!canEdit} type="text" inputMode="numeric" value={fieldValue(form, 'end_date')} onChange={(event) => updateField('end_date', event.target.value)} placeholder="MM-DD-YYYY" />
+            <input disabled={!canEdit} type="date" value={form.end_date} onChange={(event) => updateField('end_date', event.target.value)} />
           </label>
         </div>
 

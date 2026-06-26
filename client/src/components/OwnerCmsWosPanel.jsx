@@ -1,8 +1,7 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import {
   buildBlankOwnerCmsGrid,
-  normalizeOwnerCmsArchivedRows,
   normalizeOwnerCmsGrid,
   ownerCmsColumnCount,
   ownerCmsColumns,
@@ -14,32 +13,21 @@ const SHEETS = [
   { sheet_key: 'austins_cms_wos', sheet_name: 'Austins CMS WOs' }
 ];
 
-const VIEW_TABS = [
-  { id: 'active', label: 'Active rows' },
-  { id: 'archived', label: 'Archived rows' }
-];
-
 function titleize(value) {
   return String(value || '')
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function rowHasValue(row) {
-  return Array.isArray(row) && row.some((value) => String(value || '').trim().length > 0);
-}
-
-function rowMatchesFilters(row, filters) {
-  return ownerCmsColumns.every((column, columnIndex) => {
-    const query = String(filters?.[column.key] || '').trim().toLowerCase();
-    if (!query) return true;
-    const value = String(row[columnIndex] ?? '').toLowerCase();
-    return value.includes(query);
-  });
-}
-
-function archiveRowMatchesFilters(archiveRow, filters) {
-  return rowMatchesFilters(archiveRow.cells, filters);
+function matchesFilter(column, cellValue, filterValue) {
+  const filter = String(filterValue || '').trim();
+  if (!filter) return true;
+  const value = String(cellValue || '').trim();
+  if (column.type === 'select') {
+    if (filter === '__unassigned__') return !value;
+    return value === filter;
+  }
+  return value.toLowerCase().includes(filter.toLowerCase());
 }
 
 const SpreadsheetCell = memo(function SpreadsheetCell({ sheetKey, rowIndex, column, value, onCellChange, onCellCommit, disabled }) {
@@ -61,7 +49,7 @@ const SpreadsheetCell = memo(function SpreadsheetCell({ sheetKey, rowIndex, colu
             onCellCommit(sheetKey, rowIndex, column.index, nextValue);
           }}
         >
-          <option value=""> </option>
+          <option value="">Unassigned</option>
           {column.options.map((option) => (
             <option key={option} value={option}>{option}</option>
           ))}
@@ -116,178 +104,97 @@ const SpreadsheetCell = memo(function SpreadsheetCell({ sheetKey, rowIndex, colu
   );
 });
 
-function FilterCell({ column, value, onChange }) {
-  return (
-    <th className="cms-grid-filter-cell" style={{ minWidth: column.width, width: column.width }}>
-      <input
-        className="cms-grid-filter-input"
-        placeholder={`Filter ${column.label}`}
-        value={value || ''}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </th>
-  );
-}
-
-function GridHeaderRow() {
-  return (
-    <tr>
-      <th className="cms-grid-corner">#</th>
-      {ownerCmsColumns.map((column) => (
-        <th key={column.key} className="cms-grid-col-header" style={{ minWidth: column.width, width: column.width }}>
-          {column.label}
-        </th>
-      ))}
-      <th className="cms-grid-col-header cms-grid-actions-header">Actions</th>
-    </tr>
-  );
-}
-
-function GridFilterRow({ filters, onFilterChange }) {
-  return (
-    <tr className="cms-grid-filter-row">
-      <th className="cms-grid-corner cms-grid-filter-corner">Filter</th>
-      {ownerCmsColumns.map((column) => (
-        <FilterCell
-          key={column.key}
-          column={column}
-          value={filters[column.key]}
-          onChange={(nextValue) => onFilterChange(column.key, nextValue)}
-        />
-      ))}
-      <th className="cms-grid-filter-cell cms-grid-actions-header">
-        <button className="ghost-button compact" type="button" onClick={() => onFilterChange('__clear__', '')}>Clear</button>
-      </th>
-    </tr>
-  );
-}
-
-function ActiveSheetGrid({ sheetKey, rows, filters, savingCell, onCellChange, onCellCommit, onArchiveRow, onInsertRow, onFilterChange }) {
-  const visibleRows = rows
-    .map((row, rowIndex) => ({ row, rowIndex }))
-    .filter(({ row }) => rowMatchesFilters(row, filters));
+function SheetGrid({ sheet, viewMode, filters, savingCell, onCellChange, onCellCommit, onInsertRow, onArchiveRow, onSetFilter }) {
+  const rows = viewMode === 'archived' ? (sheet?.archived_rows || []) : (sheet?.cells || buildBlankOwnerCmsGrid());
+  const filteredRows = rows
+    .map((row, sourceIndex) => ({ row, sourceIndex }))
+    .filter(({ row }) => ownerCmsColumns.every((column, index) => matchesFilter(column, row?.[index], filters[column.key])));
+  const canEdit = viewMode === 'current';
 
   return (
     <div className="cms-grid-wrap">
-      <table className="cms-grid-table cms-grid-table-sticky">
+      <table className="cms-grid-table">
         <thead>
-          <GridHeaderRow />
-          <GridFilterRow filters={filters} onFilterChange={onFilterChange} />
+          <tr>
+            <th className="cms-grid-corner">#</th>
+            {ownerCmsColumns.map((column) => (
+              <th key={column.key} className="cms-grid-col-header" style={{ minWidth: column.width, width: column.width }}>
+                {column.label}
+              </th>
+            ))}
+            <th className="cms-grid-col-header cms-grid-actions-col">Actions</th>
+          </tr>
+          <tr className="cms-grid-filter-row">
+            <th className="cms-grid-filter-header">Filter</th>
+            {ownerCmsColumns.map((column) => (
+              <th key={`${column.key}-filter`} className="cms-grid-filter-cell" style={{ minWidth: column.width, width: column.width }}>
+                {column.type === 'select' ? (
+                  <select value={filters[column.key] || ''} onChange={(event) => onSetFilter(column.key, event.target.value)}>
+                    <option value="">All</option>
+                    <option value="__unassigned__">Unassigned</option>
+                    {column.options.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    value={filters[column.key] || ''}
+                    onChange={(event) => onSetFilter(column.key, event.target.value)}
+                    placeholder={`Search ${column.label}`}
+                  />
+                )}
+              </th>
+            ))}
+            <th className="cms-grid-filter-cell cms-grid-actions-col">
+              <button className="ghost-button compact" disabled={!canEdit} onClick={() => onInsertRow(0)} type="button">
+                Insert top
+              </button>
+            </th>
+          </tr>
         </thead>
         <tbody>
-          {visibleRows.map(({ row, rowIndex }) => (
-            <tr key={rowIndex}>
-              <th className="cms-grid-row-header">
-                <span>{rowIndex + 1}</span>
-                <div className="row-actions">
-                  <button className="ghost-button compact" type="button" onClick={() => onInsertRow(rowIndex + 1)}>
-                    Insert below
-                  </button>
-                  <button className="danger-button compact" type="button" onClick={() => onArchiveRow(rowIndex)}>
-                    Delete / archive
-                  </button>
-                </div>
-              </th>
+          {filteredRows.map(({ row, sourceIndex }) => (
+            <tr key={sourceIndex}>
+              <th className="cms-grid-row-header">{sourceIndex + 1}</th>
               {ownerCmsColumns.map((column, colIndex) => (
                 <SpreadsheetCell
-                  key={`${rowIndex}-${column.key}`}
-                  sheetKey={sheetKey}
-                  rowIndex={rowIndex}
+                  key={`${sourceIndex}-${column.key}`}
+                  sheetKey={sheet.sheet_key}
+                  rowIndex={sourceIndex}
                   column={{ ...column, index: colIndex }}
                   value={row[colIndex] ?? ''}
                   onCellChange={onCellChange}
                   onCellCommit={onCellCommit}
-                  disabled={savingCell === `${sheetKey}-active-${rowIndex}-${colIndex}`}
+                  disabled={!canEdit || savingCell === `${sheet.sheet_key}-${sourceIndex}-${colIndex}`}
                 />
               ))}
-              <td className="cms-grid-cell cms-grid-actions-cell">
-                <span className="muted">Active</span>
+              <td className="cms-grid-actions-col">
+                {canEdit ? (
+                  <div className="cms-row-actions">
+                    <button className="ghost-button compact" onClick={() => onInsertRow(sourceIndex + 1)} type="button">Insert below</button>
+                    <button className="danger-button compact" onClick={() => onArchiveRow(sourceIndex)} type="button">Delete</button>
+                  </div>
+                ) : (
+                  <span className="muted">Archived</span>
+                )}
               </td>
             </tr>
           ))}
-          {!visibleRows.length && (
-            <tr>
-              <td colSpan={ownerCmsColumnCount + 2}>
-                <div className="empty-state table-empty">
-                  <h3>No matching active rows</h3>
-                  <p>Clear filters to see the full 150-row grid.</p>
-                </div>
-              </td>
-            </tr>
-          )}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function ArchivedSheetGrid({ sheetKey, archivedRows, filters, savingCell, onRestoreRow, onDeleteArchivedRow, onFilterChange }) {
-  const visibleRows = archivedRows
-    .map((row, archiveIndex) => ({ row, archiveIndex }))
-    .filter(({ row }) => archiveRowMatchesFilters(row, filters));
-
-  return (
-    <div className="cms-grid-wrap">
-      <table className="cms-grid-table cms-grid-table-sticky archived-grid">
-        <thead>
-          <GridHeaderRow />
-          <GridFilterRow filters={filters} onFilterChange={onFilterChange} />
-        </thead>
-        <tbody>
-          {visibleRows.map(({ row, archiveIndex }) => (
-            <tr key={`${row.row_number || archiveIndex}-${archiveIndex}`}>
-              <th className="cms-grid-row-header archived-row-header">
-                <span>{row.row_number || archiveIndex + 1}</span>
-                <small>{row.archived_at ? new Date(row.archived_at).toLocaleDateString() : 'Archived row'}</small>
-              </th>
-              {ownerCmsColumns.map((column, colIndex) => (
-                <td key={`${archiveIndex}-${column.key}`} className="cms-grid-cell" style={{ minWidth: column.width, width: column.width }}>
-                  {column.type === 'textarea' ? (
-                    <textarea className="cms-grid-editor cms-grid-textarea" disabled value={row.cells[colIndex] ?? ''} readOnly />
-                  ) : column.type === 'select' || column.type === 'date' ? (
-                    <input className="cms-grid-editor" disabled value={row.cells[colIndex] ?? ''} readOnly />
-                  ) : (
-                    <input className="cms-grid-editor" disabled value={row.cells[colIndex] ?? ''} readOnly spellCheck={false} />
-                  )}
-                </td>
-              ))}
-              <td className="cms-grid-cell cms-grid-actions-cell">
-                <div className="row-actions">
-                  <button className="primary-button compact" disabled={savingCell === `${sheetKey}-restore-${archiveIndex}`} type="button" onClick={() => onRestoreRow(archiveIndex)}>
-                    Restore
-                  </button>
-                  <button className="danger-button compact" disabled={savingCell === `${sheetKey}-delete-${archiveIndex}`} type="button" onClick={() => onDeleteArchivedRow(archiveIndex)}>
-                    Delete forever
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-          {!visibleRows.length && (
-            <tr>
-              <td colSpan={ownerCmsColumnCount + 2}>
-                <div className="empty-state table-empty">
-                  <h3>No archived rows yet</h3>
-                  <p>Deleted rows will appear here so they can be restored later.</p>
-                </div>
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+      {!filteredRows.length && <p className="muted cms-empty-note">No rows match the current filters.</p>}
     </div>
   );
 }
 
 export default function OwnerCmsWosPanel({ user }) {
   const [activeSheetKey, setActiveSheetKey] = useState(SHEETS[0].sheet_key);
-  const [activeView, setActiveView] = useState('active');
+  const [viewModeBySheet, setViewModeBySheet] = useState({ kurts_cms_wos: 'current', austins_cms_wos: 'current' });
+  const [filtersBySheet, setFiltersBySheet] = useState({ kurts_cms_wos: {}, austins_cms_wos: {} });
   const [sheets, setSheets] = useState({});
   const [loading, setLoading] = useState(true);
   const [savingCell, setSavingCell] = useState('');
   const [error, setError] = useState('');
-  const [filters, setFilters] = useState({});
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const containerRef = useRef(null);
 
   const canAccess = user?.site_role === 'owner' && !user?.access_revoked;
 
@@ -298,9 +205,8 @@ export default function OwnerCmsWosPanel({ user }) {
     archived_rows: []
   };
 
-  const activeRows = useMemo(() => normalizeOwnerCmsGrid(activeSheet.cells), [activeSheet.cells]);
-  const archivedRows = useMemo(() => normalizeOwnerCmsArchivedRows(activeSheet.archived_rows), [activeSheet.archived_rows]);
-  const currentFilters = filters[`${activeSheetKey}:${activeView}`] || {};
+  const activeView = viewModeBySheet[activeSheetKey] || 'current';
+  const activeFilters = filtersBySheet[activeSheetKey] || {};
 
   const refreshSheets = useCallback(async () => {
     setLoading(true);
@@ -312,7 +218,7 @@ export default function OwnerCmsWosPanel({ user }) {
         nextSheets[sheet.sheet_key] = {
           ...sheet,
           cells: normalizeOwnerCmsGrid(sheet.cells),
-          archived_rows: normalizeOwnerCmsArchivedRows(sheet.archived_rows)
+          archived_rows: Array.isArray(sheet.archived_rows) ? sheet.archived_rows : []
         };
       }
       setSheets(nextSheets);
@@ -328,30 +234,23 @@ export default function OwnerCmsWosPanel({ user }) {
     refreshSheets();
   }, [canAccess, refreshSheets]);
 
-  async function saveCell(sheetKey, rowIndex, colIndex, value) {
-    const nextValue = String(value ?? '');
-    setError('');
-    setSavingCell(`${sheetKey}-active-${rowIndex}-${colIndex}`);
-    try {
-      await api(`/owner/cms-wos/${sheetKey}/cell`, {
-        method: 'PATCH',
-        body: { row_index: rowIndex, col_index: colIndex, value: nextValue }
-      });
-      setSheets((current) => {
-        const next = { ...current };
-        const sheet = next[sheetKey] || { sheet_key: sheetKey, sheet_name: titleize(sheetKey), cells: buildBlankOwnerCmsGrid(), archived_rows: [] };
-        const cells = normalizeOwnerCmsGrid(sheet.cells);
-        cells[rowIndex][colIndex] = nextValue;
-        next[sheetKey] = { ...sheet, cells };
-        return next;
-      });
-    } catch (err) {
-      setError(err.message);
-      await refreshSheets();
-    } finally {
-      setSavingCell('');
+  useEffect(() => {
+    function onFullscreenChange() {
+      setIsFullscreen(Boolean(document.fullscreenElement));
     }
-  }
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  const updateFilter = useCallback((sheetKey, columnKey, value) => {
+    setFiltersBySheet((current) => ({
+      ...current,
+      [sheetKey]: {
+        ...(current[sheetKey] || {}),
+        [columnKey]: value
+      }
+    }));
+  }, []);
 
   const updateCell = useCallback((sheetKey, rowIndex, colIndex, value) => {
     setSheets((current) => {
@@ -369,73 +268,63 @@ export default function OwnerCmsWosPanel({ user }) {
     });
   }, []);
 
+  async function saveCell(sheetKey, rowIndex, colIndex, value) {
+    const nextValue = String(value ?? '');
+    setError('');
+    setSavingCell(`${sheetKey}-${rowIndex}-${colIndex}`);
+    try {
+      await api(`/owner/cms-wos/${sheetKey}/cell`, {
+        method: 'PATCH',
+        body: {
+          row_index: rowIndex,
+          col_index: colIndex,
+          value: nextValue
+        }
+      });
+    } catch (err) {
+      setError(err.message);
+      await refreshSheets();
+    } finally {
+      setSavingCell('');
+    }
+  }
+
+  async function insertRow(insertAt) {
+    setError('');
+    try {
+      await api(`/owner/cms-wos/${activeSheetKey}/row`, {
+        method: 'POST',
+        body: { insert_at: insertAt }
+      });
+      await refreshSheets();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function archiveRow(rowIndex) {
-    setError('');
-    setSavingCell(`${activeSheetKey}-archive-${rowIndex}`);
-    try {
-      await api(`/owner/cms-wos/${activeSheetKey}/rows/${rowIndex}/archive`, { method: 'POST' });
-      await refreshSheets();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSavingCell('');
-    }
-  }
-
-  async function insertRow(rowIndex) {
-    setError('');
-    setSavingCell(`${activeSheetKey}-insert-${rowIndex}`);
-    try {
-      await api(`/owner/cms-wos/${activeSheetKey}/rows/${rowIndex}/insert`, { method: 'POST' });
-      await refreshSheets();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSavingCell('');
-    }
-  }
-
-  async function restoreRow(archiveIndex) {
-    setError('');
-    setSavingCell(`${activeSheetKey}-restore-${archiveIndex}`);
-    try {
-      await api(`/owner/cms-wos/${activeSheetKey}/archived/${archiveIndex}/restore`, { method: 'POST' });
-      await refreshSheets();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSavingCell('');
-    }
-  }
-
-  async function deleteArchivedRow(archiveIndex) {
-    const confirmed = window.confirm('Delete this archived row forever?');
+    const confirmed = window.confirm('Delete this row? It will move to the archived rows tab.');
     if (!confirmed) return;
     setError('');
-    setSavingCell(`${activeSheetKey}-delete-${archiveIndex}`);
     try {
-      await api(`/owner/cms-wos/${activeSheetKey}/archived/${archiveIndex}`, { method: 'DELETE' });
+      await api(`/owner/cms-wos/${activeSheetKey}/row/${rowIndex + 1}`, { method: 'DELETE' });
       await refreshSheets();
     } catch (err) {
       setError(err.message);
-    } finally {
-      setSavingCell('');
     }
   }
 
-  function updateFilter(columnKey, value) {
-    setFilters((current) => {
-      const next = { ...current };
-      const filterKey = `${activeSheetKey}:${activeView}`;
-      const currentFilters = { ...(next[filterKey] || {}) };
-      if (columnKey === '__clear__') {
-        next[filterKey] = {};
-        return next;
+  async function toggleFullscreen() {
+    if (!containerRef.current) return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await containerRef.current.requestFullscreen();
       }
-      currentFilters[columnKey] = value;
-      next[filterKey] = currentFilters;
-      return next;
-    });
+    } catch {
+      setIsFullscreen((current) => !current);
+    }
   }
 
   if (!canAccess) {
@@ -456,12 +345,12 @@ export default function OwnerCmsWosPanel({ user }) {
   }
 
   return (
-    <section className={`dashboard-stack owner-cms-panel ${isFullscreen ? 'fullscreen-panel owner-cms-fullscreen' : ''}`}>
-      <section className="panel owner-cms-sheet-panel">
+    <section className={`dashboard-stack owner-cms-panel${isFullscreen ? ' is-fullscreen' : ''}`} ref={containerRef}>
+      <section className="panel">
         <div className="panel-heading">
           <div>
             <h2>CMS WOs</h2>
-            <p>Owner-only work order spreadsheets. Use filters, archive rows, and restore them later if needed.</p>
+            <p>Owner-only work order spreadsheets. Use the dropdowns, date fields, and filters in the table below.</p>
           </div>
         </div>
 
@@ -478,17 +367,32 @@ export default function OwnerCmsWosPanel({ user }) {
           ))}
         </div>
 
-        <div className="cms-sheet-tabs secondary" role="tablist" aria-label="CMS work order row tabs">
-          {VIEW_TABS.map((tab) => (
-            <button
-              key={tab.id}
-              className={activeView === tab.id ? 'active' : ''}
-              onClick={() => setActiveView(tab.id)}
-              type="button"
-            >
-              {tab.label}
+        <div className="cms-sheet-toolbar">
+          <div className="cms-toolbar-left">
+            <button className="ghost-button compact" onClick={toggleFullscreen} type="button">
+              {isFullscreen ? 'Exit full screen' : 'Full screen'}
             </button>
-          ))}
+            <div className="cms-view-tabs">
+              <button
+                className={activeView === 'current' ? 'active' : ''}
+                onClick={() => setViewModeBySheet((current) => ({ ...current, [activeSheetKey]: 'current' }))}
+                type="button"
+              >
+                Current rows
+              </button>
+              <button
+                className={activeView === 'archived' ? 'active' : ''}
+                onClick={() => setViewModeBySheet((current) => ({ ...current, [activeSheetKey]: 'archived' }))}
+                type="button"
+              >
+                Archived rows ({activeSheet.archived_rows?.length || 0})
+              </button>
+            </div>
+          </div>
+          <div className="cms-toolbar-actions">
+            {activeView === 'current' && <button className="ghost-button compact" onClick={() => insertRow(activeSheet.cells.length)} type="button">Insert row</button>}
+            <button className="ghost-button compact" onClick={refreshSheets} type="button">Refresh sheet</button>
+          </div>
         </div>
 
         {error && <p className="error-box dashboard-error">{error}</p>}
@@ -498,42 +402,22 @@ export default function OwnerCmsWosPanel({ user }) {
           <div>
             <strong>{activeSheet.sheet_name}</strong>
             <p className="muted">
-              {activeRows.length} active rows, {ownerCmsColumnCount} columns. Deleted rows are archived in the second tab.
+              {ownerCmsRowCount}+ rows, {ownerCmsColumnCount} columns. Blank values stay blank until you choose something.
             </p>
-          </div>
-          <div className="cms-sheet-actions">
-            <button className="ghost-button compact" onClick={() => setIsFullscreen((current) => !current)} type="button">
-              {isFullscreen ? 'Exit full screen' : 'Full screen'}
-            </button>
-            <button className="ghost-button compact" onClick={refreshSheets} type="button">
-              Refresh sheet
-            </button>
           </div>
         </div>
 
-        {activeView === 'active' ? (
-          <ActiveSheetGrid
-            sheetKey={activeSheetKey}
-            rows={activeRows}
-            filters={currentFilters}
-            savingCell={savingCell}
-            onCellChange={updateCell}
-            onCellCommit={saveCell}
-            onArchiveRow={archiveRow}
-            onInsertRow={insertRow}
-            onFilterChange={updateFilter}
-          />
-        ) : (
-          <ArchivedSheetGrid
-            sheetKey={activeSheetKey}
-            archivedRows={archivedRows}
-            filters={currentFilters}
-            savingCell={savingCell}
-            onRestoreRow={restoreRow}
-            onDeleteArchivedRow={deleteArchivedRow}
-            onFilterChange={updateFilter}
-          />
-        )}
+        <SheetGrid
+          sheet={activeSheet}
+          viewMode={activeView}
+          filters={activeFilters}
+          savingCell={savingCell}
+          onCellChange={updateCell}
+          onCellCommit={saveCell}
+          onInsertRow={insertRow}
+          onArchiveRow={archiveRow}
+          onSetFilter={(columnKey, value) => updateFilter(activeSheetKey, columnKey, value)}
+        />
       </section>
     </section>
   );

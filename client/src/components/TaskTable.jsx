@@ -24,11 +24,12 @@ export default function TaskTable({ tasks, canEdit, onEdit, onDelete }) {
               <th>Task</th>
               <th>Trade</th>
               <th>Vendor</th>
-              <th>Security Systems 1</th>
-              <th>Security Systems 2</th>
-              <th>Lock Smiths</th>
-              <th>Other</th>
-              <th>Assignee</th>
+              <th>Vendor 2</th>
+              <th>Assignee 1</th>
+              <th>Assignee 2</th>
+              <th>Assignee 3</th>
+              <th>Assignee 4</th>
+              <th>Project member</th>
               <th>Status</th>
               <th>Dates</th>
               <th>Progress</th>
@@ -45,10 +46,11 @@ export default function TaskTable({ tasks, canEdit, onEdit, onDelete }) {
                 </td>
                 <td>{task.trade || '-'}</td>
                 <td>{task.vendor || '-'}</td>
-                <td>{task.security_team_member || '-'}</td>
-                <td>{task.security_systems_2 || '-'}</td>
-                <td>{task.locksmiths || '-'}</td>
-                <td>{task.other_assignment || '-'}</td>
+                <td>{task.vendor_2 || '-'}</td>
+                <td>{task.assignee_1 || '-'}</td>
+                <td>{task.assignee_2 || '-'}</td>
+                <td>{task.assignee_3 || '-'}</td>
+                <td>{task.assignee_4 || '-'}</td>
                 <td>{task.assigned_to_name || '-'}</td>
                 <td><span className={`status-pill status-${task.status}`}>{statusLabel[task.status] || task.status}</span></td>
                 <td>{formatDate(task.start_date)} - {formatDate(task.end_date)}</td>
@@ -67,7 +69,7 @@ export default function TaskTable({ tasks, canEdit, onEdit, onDelete }) {
             ))}
             {tasks.length === 0 && (
               <tr>
-                <td colSpan="13">
+                <td colSpan="14">
                   <div className="empty-state table-empty">
                     <h3>No tasks yet</h3>
                     <p>Add the first schedule item to start building the Gantt chart.</p>
