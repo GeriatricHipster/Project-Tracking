@@ -1,77 +1,85 @@
 import { useMemo, useState } from 'react';
 
-const DEFAULT_ROWS = [
-  { label: 'Material 1', value: 0 },
-  { label: 'Material 2', value: 0 },
-  { label: 'Material 3', value: 0 },
-  { label: 'Material 4', value: 0 },
-  { label: 'Material 5', value: 0 },
-  { label: 'Material 6', value: 0 }
-];
-
-function money(value) {
+function currency(value) {
   const number = Number(value || 0);
-  return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(number);
+}
+
+function blankRow(id) {
+  return { id, item: '', material: '' };
 }
 
 export default function MarkupCalculatorPanel() {
-  const [rows, setRows] = useState(DEFAULT_ROWS);
+  const [rows, setRows] = useState(() => [blankRow(1), blankRow(2), blankRow(3)]);
 
-  const totalMaterial = useMemo(
-    () => rows.reduce((sum, row) => sum + Number(row.value || 0), 0),
-    [rows]
-  );
-  const markup = totalMaterial * 0.05;
-  const grandTotal = totalMaterial + markup;
+  const totals = useMemo(() => {
+    const materialTotal = rows.reduce((sum, row) => sum + Number(row.material || 0), 0);
+    const markupTotal = materialTotal * 0.05;
+    return { materialTotal, markupTotal, grandTotal: materialTotal + markupTotal };
+  }, [rows]);
 
-  function updateRow(index, field, value) {
-    setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)));
+  function updateRow(id, field, value) {
+    setRows((current) => current.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
+  }
+
+  function addRow() {
+    setRows((current) => [...current, blankRow(current.length ? Math.max(...current.map((row) => row.id)) + 1 : 1)]);
+  }
+
+  function resetRows() {
+    setRows([blankRow(1), blankRow(2), blankRow(3)]);
   }
 
   return (
     <section className="dashboard-stack">
-      <section className="panel">
+      <section className="panel markup-panel">
         <div className="panel-heading">
           <div>
             <h2>Markup calculator</h2>
-            <p>5% markup only. Values update automatically as you type.</p>
+            <p>5% calculation only. Enter material amounts and the calculator will build the 5% markup totals.</p>
+          </div>
+          <div className="row-actions">
+            <button className="ghost-button compact" onClick={addRow} type="button">Add row</button>
+            <button className="ghost-button compact" onClick={resetRows} type="button">Reset</button>
           </div>
         </div>
 
-        <div className="markup-table-wrap">
+        <div className="table-scroll markup-table-wrap">
           <table className="markup-table">
             <thead>
               <tr>
-                <th>Description</th>
+                <th>Item</th>
                 <th>Material</th>
                 <th>5% Markup</th>
                 <th>Total</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, index) => {
-                const value = Number(row.value || 0);
-                const rowMarkup = value * 0.05;
+              {rows.map((row) => {
+                const material = Number(row.material || 0);
+                const markup = material * 0.05;
                 return (
-                  <tr key={index}>
+                  <tr key={row.id}>
                     <td>
-                      <input value={row.label} onChange={(event) => updateRow(index, 'label', event.target.value)} />
+                      <input value={row.item} onChange={(event) => updateRow(row.id, 'item', event.target.value)} placeholder="Description" />
                     </td>
                     <td>
-                      <input type="number" min="0" step="0.01" value={row.value} onChange={(event) => updateRow(index, 'value', event.target.value)} />
+                      <input type="number" min="0" step="0.01" value={row.material} onChange={(event) => updateRow(row.id, 'material', event.target.value)} placeholder="0.00" />
                     </td>
-                    <td>{money(rowMarkup)}</td>
-                    <td>{money(value + rowMarkup)}</td>
+                    <td>{currency(markup)}</td>
+                    <td>{currency(material + markup)}</td>
                   </tr>
                 );
               })}
-              <tr className="markup-total-row">
-                <td>Total</td>
-                <td>{money(totalMaterial)}</td>
-                <td>{money(markup)}</td>
-                <td>{money(grandTotal)}</td>
-              </tr>
             </tbody>
+            <tfoot>
+              <tr>
+                <th>Total</th>
+                <th>{currency(totals.materialTotal)}</th>
+                <th>{currency(totals.markupTotal)}</th>
+                <th>{currency(totals.grandTotal)}</th>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </section>

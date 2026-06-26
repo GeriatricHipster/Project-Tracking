@@ -1,4 +1,6 @@
-export const buildingOptions = [
+import { appendStoredListValue, readStoredList, writeStoredList } from './options';
+
+export const defaultBuildingOptions = [
   '0001 Park',
   '0002 Voice Box',
   '0003 Gardner Hall',
@@ -205,3 +207,21 @@ export const buildingOptions = [
   '5100 Acute Care Center [E]',
   '5150 Rehab'
 ];
+
+const BUILDING_STORAGE_KEY = 'psg-custom-buildings';
+
+export function getBuildingOptions() {
+  return readStoredList(BUILDING_STORAGE_KEY, defaultBuildingOptions);
+}
+
+export function addBuildingOption(building) {
+  const next = appendStoredListValue(BUILDING_STORAGE_KEY, defaultBuildingOptions, building);
+  writeStoredList(BUILDING_STORAGE_KEY, next);
+  return next;
+}
+
+export function resetBuildingOptions() {
+  if (typeof window === 'undefined') return defaultBuildingOptions;
+  window.localStorage.removeItem(BUILDING_STORAGE_KEY);
+  return defaultBuildingOptions;
+}

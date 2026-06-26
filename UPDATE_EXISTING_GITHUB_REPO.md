@@ -15,7 +15,7 @@ This version adds or updates:
 - PM dropdown with Kurt and Austin
 - Bigger Gantt chart with zoom, Start, Today, Prev/Next 30-day pan buttons, and larger rows
 - Header/banner image on login, dashboard, project, and loading pages
-- Gantt checklist
+- Project Check list
 - Drag-and-drop blueprint uploads
 - Site member management
 - Projects tab showing who is assigned to each project
@@ -47,7 +47,7 @@ Open the app and check:
 - Calendar overview tab
 - Site Members tab, visible only to site managers and owners
 - Editable Project Notes section inside a project
-- Gantt checklist inside a project
+- Project Check list inside a project
 - Blueprint drag-and-drop upload inside a project
 - Trade, Vendor, Security Team Member, and PM dropdowns when adding or editing a task
 - Bigger Gantt chart controls: Start, Today, Prev/Next 30 days, Zoom out, Reset zoom, Zoom in

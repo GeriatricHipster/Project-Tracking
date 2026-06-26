@@ -6,7 +6,6 @@ import ActivityPanel from './ActivityPanel';
 import BlueprintsPanel from './BlueprintsPanel';
 import DependencyPanel from './DependencyPanel';
 import GanttChart from './GanttChart';
-import GanttChecklist from './GanttChecklist';
 import MembersPanel from './MembersPanel';
 import ProjectNotesPanel from './ProjectNotesPanel';
 import SiteBanner from './SiteBanner';
@@ -140,14 +139,6 @@ export default function ProjectView({ projectId, user, onBack }) {
     await loadProject({ quiet: true });
   }
 
-  async function updateChecklistItem(item, isChecked) {
-    await api(`/projects/${projectId}/checklist/${item.item_key}`, {
-      method: 'PATCH',
-      body: { is_checked: isChecked }
-    });
-    await loadProject({ quiet: true });
-  }
-
   async function uploadBlueprint(file) {
     const formData = new FormData();
     formData.append('blueprint', file);
@@ -196,7 +187,7 @@ export default function ProjectView({ projectId, user, onBack }) {
     );
   }
 
-  const { project, members, dependencies, checklist, blueprints, audit } = data;
+  const { project, members, dependencies, blueprints, audit } = data;
 
   return (
     <main className="app-page project-view">
@@ -208,6 +199,7 @@ export default function ProjectView({ projectId, user, onBack }) {
             <h1>{project.name}</h1>
             <span className={`role-pill role-${project.role}`}>{titleCase(project.role)}</span>
             {project.project_status === 'completed' && <span className="status-pill status-completed">Completed</span>}
+            {project.project_status === 'archived' && <span className="status-pill status-archived">Archived</span>}
           </div>
           <p>{project.location || 'No location set'} · {formatDate(project.start_date)} to {formatDate(project.end_date)}</p>
           {project.description && <p className="project-description">{project.description}</p>}
@@ -219,7 +211,6 @@ export default function ProjectView({ projectId, user, onBack }) {
       {error && <div className="error-box">{error}</div>}
 
       <GanttChart project={project} tasks={orderedTasks} dependencies={dependencies} onEditTask={setEditingTask} />
-      <GanttChecklist checklist={checklist || []} canEdit={canEdit} onToggle={updateChecklistItem} />
 
       <section className="project-workspace">
         <div className="workspace-main">
