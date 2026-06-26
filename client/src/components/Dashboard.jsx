@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { addDays, formatDate, todayIso } from '../lib/dates';
+import { addDays, formatDate, parseDisplayDate, todayIso } from '../lib/dates';
 import { addBuildingOption, getBuildingOptions } from '../lib/buildings';
 import SiteMembersPanel from './SiteMembersPanel';
 import OwnerCmsWosPanel from './OwnerCmsWosPanel';
@@ -251,7 +251,11 @@ export default function Dashboard({
     setError('');
     setSaving(true);
     try {
-      await onCreateProject(form);
+      await onCreateProject({
+  ...form,
+  start_date: parseDisplayDate(form.start_date, 'start_date'),
+  end_date: parseDisplayDate(form.end_date, 'end_date')
+});
       setForm({ name: '', location: '', description: '', start_date: start, end_date: addDays(start, 90) });
       setActiveTab('projects');
     } catch (err) {
