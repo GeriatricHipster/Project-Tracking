@@ -6,7 +6,6 @@ import ActivityPanel from './ActivityPanel';
 import BlueprintsPanel from './BlueprintsPanel';
 import DependencyPanel from './DependencyPanel';
 import GanttChart from './GanttChart';
-import GanttChecklist from './GanttChecklist';
 import MembersPanel from './MembersPanel';
 import ProjectNotesPanel from './ProjectNotesPanel';
 import SiteBanner from './SiteBanner';
@@ -87,9 +86,11 @@ export default function ProjectView({ projectId, user, onBack }) {
 
   const orderedTasks = useMemo(() => {
     return [...(data?.tasks || [])].sort((a, b) => {
-      if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
-      if (a.start_date !== b.start_date) return a.start_date.localeCompare(b.start_date);
-      return a.id - b.id;
+      const sortA = Number(a.sort_order ?? 0);
+      const sortB = Number(b.sort_order ?? 0);
+      if (sortA !== sortB) return sortA - sortB;
+      if ((a.start_date || '') !== (b.start_date || '')) return String(a.start_date || '').localeCompare(String(b.start_date || ''));
+      return Number(a.id || 0) - Number(b.id || 0);
     });
   }, [data]);
 
@@ -196,7 +197,7 @@ export default function ProjectView({ projectId, user, onBack }) {
     );
   }
 
-  const { project, members, dependencies, checklist, blueprints, audit } = data;
+  const { project, members = [], dependencies = [], checklist = [], blueprints = [], audit = [] } = data || {};
 
   return (
     <main className="app-page project-view">
@@ -220,7 +221,6 @@ export default function ProjectView({ projectId, user, onBack }) {
       {error && <div className="error-box">{error}</div>}
 
       <GanttChart project={project} tasks={orderedTasks} dependencies={dependencies} onEditTask={setEditingTask} />
-      <GanttChecklist checklist={checklist || []} canEdit={canEdit} onToggle={updateChecklistItem} />
 
       <section className="project-workspace">
         <div className="workspace-main">

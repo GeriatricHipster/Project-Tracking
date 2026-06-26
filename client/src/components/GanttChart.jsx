@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { addDays, daysBetween, formatDate, maxIsoDate, minIsoDate, todayIso } from '../lib/dates';
 
 function getScale(totalDays) {
@@ -50,10 +50,11 @@ function statusLabel(value) {
 export default function GanttChart({ project, tasks, dependencies, onEditTask }) {
   const scrollRef = useRef(null);
   const [zoomIndex, setZoomIndex] = useState(2);
-  const allStartDates = [project.start_date, ...tasks.map((task) => task.start_date)];
-  const allEndDates = [project.end_date, ...tasks.map((task) => task.end_date)];
-  const rangeStart = minIsoDate(allStartDates) || project.start_date;
-  const rangeEnd = maxIsoDate(allEndDates) || project.end_date;
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const allStartDates = [project.start_date, ...tasks.map((task) => task.start_date)].filter(Boolean);
+  const allEndDates = [project.end_date, ...tasks.map((task) => task.end_date)].filter(Boolean);
+  const rangeStart = minIsoDate(allStartDates) || project.start_date || todayIso();
+  const rangeEnd = maxIsoDate(allEndDates) || project.end_date || rangeStart;
   const totalDays = Math.max(1, daysBetween(rangeStart, rangeEnd) + 1);
   const baseScale = getScale(totalDays);
   const zoom = zoomLevels[zoomIndex];
@@ -78,8 +79,10 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
   const taskById = new Map(tasks.map((task) => [task.id, task]));
 
   function getTaskPosition(task) {
-    const left = (daysBetween(rangeStart, task.start_date) / scale.stepDays) * scale.unitWidth;
-    const duration = Math.max(1, daysBetween(task.start_date, task.end_date) + 1);
+    const taskStart = task.start_date || rangeStart;
+    const taskEnd = task.end_date || taskStart;
+    const left = (daysBetween(rangeStart, taskStart) / scale.stepDays) * scale.unitWidth;
+    const duration = Math.max(1, daysBetween(taskStart, taskEnd) + 1);
     const width = Math.max(56, (duration / scale.stepDays) * scale.unitWidth);
     const rowIndex = taskIndex.get(task.id) || 0;
     const y = headerHeight + rowIndex * rowHeight + rowHeight / 2;
@@ -114,6 +117,28 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
     const pixels = (days / scale.stepDays) * scale.unitWidth;
     scrollRef.current.scrollBy({ left: pixels, behavior: 'smooth' });
   }
+
+  async function toggleFullscreen() {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen?.();
+        setIsFullscreen(true);
+      } else {
+        await document.exitFullscreen?.();
+        setIsFullscreen(false);
+      }
+    } catch {
+      setIsFullscreen((current) => !current);
+    }
+  }
+
+  useEffect(() => {
+    function handleChange() {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    }
+    document.addEventListener('fullscreenchange', handleChange);
+    return () => document.removeEventListener('fullscreenchange', handleChange);
+  }, []);
 
   function exportGanttPdf() {
     const printWindow = window.open('', '_blank', 'width=1200,height=850');
@@ -264,8 +289,9 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
   }
 
   return (
-    <section className="panel gantt-panel expanded-gantt-panel">
+    <section className={`panel gantt-panel expanded-gantt-panel ${isFullscreen ? 'gantt-fullscreen' : ''}`}>
       <div className="panel-heading gantt-heading">
+        <button className="ghost-button compact gantt-fullscreen-button" onClick={toggleFullscreen} type="button">{isFullscreen ? 'Exit full screen' : 'Full screen'}</button>
         <div>
           <h2>Gantt chart</h2>
           <p>{formatDate(rangeStart)} to {formatDate(rangeEnd)} · scale: {scale.label} · zoom: {Math.round(zoom * 100)}%</p>

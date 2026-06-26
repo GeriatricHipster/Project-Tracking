@@ -3,6 +3,7 @@ import { addDays, formatDate, todayIso } from '../lib/dates';
 import { buildingOptions } from '../lib/buildings';
 import SiteMembersPanel from './SiteMembersPanel';
 import OwnerCmsWosPanel from './OwnerCmsWosPanel';
+import MarkupCalculatorPanel from './MarkupCalculatorPanel';
 import SiteBanner from './SiteBanner';
 
 const dashboardTabs = [
@@ -12,7 +13,8 @@ const dashboardTabs = [
   { id: 'assignments', label: 'Projects' },
   { id: 'calendar', label: 'Calendar overview' },
   { id: 'site-members', label: 'Site members', managersOnly: true },
-  { id: 'owner-cms', label: 'CMS WOs', ownersOnly: true }
+  { id: 'owner-cms', label: 'CMS WOs', ownersOnly: true },
+  { id: 'markup-calculator', label: 'Markup calculator', ownersOnly: true }
 ];
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -153,6 +155,16 @@ export default function Dashboard({
     start_date: start,
     end_date: addDays(start, 90)
   });
+  const [customBuildings, setCustomBuildings] = useState(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = window.localStorage.getItem('psg-custom-buildings');
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionProjectId, setActionProjectId] = useState(null);
@@ -164,11 +176,21 @@ export default function Dashboard({
     [canManageSite, canAccessOwnerCms]
   );
 
+  const availableBuildings = useMemo(
+    () => [...new Set([...buildingOptions, ...customBuildings])].sort((a, b) => a.localeCompare(b)),
+    [customBuildings]
+  );
+
   useEffect(() => {
     if (!visibleTabs.some((tab) => tab.id === activeTab)) {
       setActiveTab(visibleTabs[0]?.id || 'projects');
     }
   }, [activeTab, visibleTabs]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('psg-custom-buildings', JSON.stringify(customBuildings));
+  }, [customBuildings]);
 
   const visibleProjects = useMemo(
     () => projects.filter((project) => matchesProjectSearch(project, searchTerm)),
@@ -227,6 +249,14 @@ export default function Dashboard({
     setForm((current) => ({ ...current, [field]: value }));
   }
 
+  function addBuildingOption() {
+    const next = window.prompt('Enter a new building value (example: 0999 New Building)');
+    const trimmed = String(next || '').trim();
+    if (!trimmed) return;
+    setCustomBuildings((current) => [...new Set([...current, trimmed])].sort((a, b) => a.localeCompare(b)));
+    setForm((current) => ({ ...current, location: trimmed }));
+  }
+
   async function submit(event) {
     event.preventDefault();
     setError('');
@@ -279,7 +309,7 @@ export default function Dashboard({
   function renderProjectActions(project) {
     const lifecycle = getLifecycleStatus(project);
     const canManage = managerRoles.has(project.role);
-    const canDelete = project.role === 'owner';
+    const canDelete = user?.site_role === 'owner' && !user?.access_revoked;
     const busy = actionProjectId === project.id;
 
     return (
@@ -370,15 +400,18 @@ export default function Dashboard({
               Work Order #
               <input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="WO-12345" />
             </label>
-            <label>
-              Building
-              <select value={form.location} onChange={(event) => updateField('location', event.target.value)}>
-                <option value=""> </option>
-                {buildingOptions.map((building) => (
-                  <option key={building} value={building}>{building}</option>
-                ))}
-              </select>
-            </label>
+            <div className="label-row split">
+              <label>
+                Building
+                <select value={form.location} onChange={(event) => updateField('location', event.target.value)}>
+                  <option value="">Unassigned</option>
+                  {availableBuildings.map((building) => (
+                    <option key={building} value={building}>{building}</option>
+                  ))}
+                </select>
+              </label>
+              <button className="ghost-button compact add-building-button" onClick={addBuildingOption} type="button">Add building</button>
+            </div>
             <label>
               Description
               <textarea value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Scope, client, phase, or notes" />
@@ -712,6 +745,7 @@ export default function Dashboard({
       {activeTab === 'calendar' && renderCalendarTab()}
       {activeTab === 'site-members' && canManageSite && <SiteMembersPanel currentUser={user} onOpenProject={onOpenProject} />}
       {activeTab === 'owner-cms' && canAccessOwnerCms && <OwnerCmsWosPanel user={user} />}
+      {activeTab === 'markup-calculator' && canAccessOwnerCms && <MarkupCalculatorPanel />}
     </main>
   );
 }

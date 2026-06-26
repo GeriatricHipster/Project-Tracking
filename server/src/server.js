@@ -46,10 +46,11 @@ const projectLifecycleStatuses = new Set(['active', 'completed', 'archived']);
 const priorities = new Set(['low', 'normal', 'high', 'critical']);
 const roles = new Set(['owner', 'manager', 'editor', 'viewer']);
 const inviteRoles = new Set(['manager', 'editor', 'viewer']);
-const vendors = new Set(['Accent Automatic', 'Accent Auto', 'Beacon', 'Convergint', 'DSI', 'EverBase', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'S101', 'SMT', 'Stone', 'Stone Security', 'USHOP', 'Utah Yamas', 'Yamas']);
+const vendors = new Set(['Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'PTI (Bosch)', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas']);
 const trades = new Set(['CCure', 'Cameras', 'CCure & Cameras']);
 const securityTeamMembers = new Set(['Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam']);
 const projectManagers = new Set(['Kurt', 'Austin']);
+const userTrades = new Set(['CCure Team', 'Camera Team', 'Lock Smith', 'Vendor', 'PM', 'Manger', 'Supervisor']);
 const siteRoles = new Set(['owner', 'manager', 'member']);
 const dependencyTypes = new Set(['FS', 'SS', 'FF', 'SF']);
 const managerSiteRoles = new Set(['owner', 'manager']);
@@ -390,22 +391,24 @@ function normalizeBoolean(value, defaultValue = false) {
   throw httpError(400, 'Boolean value expected.');
 }
 
-function currentIsoDate() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function normalizeDate(value, label, defaultValue = null) {
+function normalizeDate(value, label) {
   const text = String(value || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    if (defaultValue) return defaultValue;
     throw httpError(400, `${label} must be a YYYY-MM-DD date.`);
   }
   const timestamp = Date.parse(`${text}T00:00:00.000Z`);
   if (Number.isNaN(timestamp)) {
-    if (defaultValue) return defaultValue;
     throw httpError(400, `${label} is not a valid date.`);
   }
   return text;
+}
+
+function addDaysIso(value, days) {
+  const dateText = normalizeDate(value, 'date');
+  const [year, month, day] = dateText.split('-').map(Number);
+  const next = new Date(Date.UTC(year, month - 1, day));
+  next.setUTCDate(next.getUTCDate() + days);
+  return next.toISOString().slice(0, 10);
 }
 
 function ensureDateOrder(startDate, endDate) {
@@ -478,6 +481,14 @@ function normalizeOptionalId(value, label) {
   return parseId(value, label);
 }
 
+function normalizeAssignedTo(value, partial = false) {
+  if (partial && value === undefined) return undefined;
+  if (value === undefined || value === null || value === '') return null;
+  const text = String(value).trim();
+  if (/^\d+$/.test(text)) return parseId(text, 'assigned_to');
+  return null;
+}
+
 function signToken(user) {
   return jwt.sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
 }
@@ -488,6 +499,7 @@ function publicUser(user) {
     id: user.id,
     name: user.name,
     email: user.email,
+    trade: user.trade || '',
     site_role: siteRole,
     access_revoked: Boolean(user.access_revoked),
     can_manage_site: managerSiteRoles.has(siteRole)
@@ -501,7 +513,7 @@ async function requireAuth(req, res, next) {
     if (!token) throw httpError(401, 'Authentication token required.');
 
     const payload = jwt.verify(token, JWT_SECRET);
-    const result = await query('SELECT id, name, email, site_role, access_revoked FROM users WHERE id = $1', [payload.sub]);
+    const result = await query('SELECT id, name, email, trade, site_role, access_revoked FROM users WHERE id = $1', [payload.sub]);
     if (!result.rowCount) throw httpError(401, 'User no longer exists.');
     if (result.rows[0].access_revoked) throw httpError(403, 'Your site access has been revoked. Contact a manager or owner.');
 
@@ -575,7 +587,7 @@ function requireSiteOwner(user) {
   return siteRole;
 }
 
-const OWNER_CMS_ROW_COUNT = 150;
+const OWNER_CMS_ROW_COUNT = 300;
 const OWNER_CMS_COLUMN_COUNT = 20;
 
 function buildBlankOwnerCmsGrid() {
@@ -793,14 +805,35 @@ async function loadProjectChecklist(projectId) {
   return result.rows;
 }
 
+let blueprintColumnInfoPromise = null;
+async function getBlueprintColumnInfo(db = { query }) {
+  if (!blueprintColumnInfoPromise) {
+    blueprintColumnInfoPromise = db.query(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = 'project_blueprints'`
+    ).then((result) => {
+      const columns = new Set(result.rows.map((row) => row.column_name));
+      return {
+        hasOriginalName: columns.has('original_name'),
+        hasFileName: columns.has('file_name'),
+        hasSizeBytes: columns.has('size_bytes'),
+        hasFileSize: columns.has('file_size')
+      };
+    }).catch(() => ({ hasOriginalName: true, hasFileName: false, hasSizeBytes: true, hasFileSize: false }));
+  }
+  return blueprintColumnInfoPromise;
+}
+
 async function loadProjectBlueprints(projectId) {
   const result = await query(
     `SELECT
        pb.id,
        pb.project_id,
-       pb.original_name,
+       COALESCE(pb.original_name, pb.file_name, concat('blueprint-', pb.id)) AS original_name,
        pb.mime_type,
-       pb.size_bytes,
+       COALESCE(pb.size_bytes, pb.file_size, 1) AS size_bytes,
        pb.uploaded_by,
        uploader.name AS uploaded_by_name,
        pb.created_at
@@ -1000,12 +1033,15 @@ function buildTaskInput(body, partial = false) {
 
   if (!partial || body.name !== undefined) input.name = requireText(body.name, 'Task name');
   if (!partial || body.description !== undefined) input.description = cleanText(body.description);
-  if (!partial || body.trade !== undefined) input.trade = normalizeTaskChoice(body.trade, trades, 'trade', partial);
+  if (!partial || body.trade !== undefined) {
+    const tradeText = cleanText(body.trade);
+    input.trade = tradeText || null;
+  }
   if (!partial || body.vendor !== undefined) input.vendor = normalizeVendor(body.vendor, partial);
   if (!partial || body.vendor_secondary !== undefined) input.vendor_secondary = normalizeVendor(body.vendor_secondary, partial);
   if (!partial || body.security_team_member !== undefined) input.security_team_member = normalizeTaskChoice(body.security_team_member, securityTeamMembers, 'security_team_member', partial);
   if (!partial || body.pm !== undefined) input.pm = normalizeTaskChoice(body.pm, projectManagers, 'pm', partial);
-  if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeOptionalId(body.assigned_to, 'assigned_to');
+  if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeAssignedTo(body.assigned_to, partial);
   if (!partial || body.assignee_secondary !== undefined) input.assignee_secondary = cleanText(body.assignee_secondary);
   if (!partial || body.assignee_tertiary !== undefined) input.assignee_tertiary = cleanText(body.assignee_tertiary);
   if (!partial || body.assignee_quaternary !== undefined) input.assignee_quaternary = cleanText(body.assignee_quaternary);
@@ -1019,9 +1055,14 @@ function buildTaskInput(body, partial = false) {
     input.priority = partial ? normalizeOptionalEnum(body.priority, priorities, 'priority') : requireEnum(body.priority || 'normal', priorities, 'priority');
   }
 
-  const fallbackStartDate = currentIsoDate();
-  if (!partial || body.start_date !== undefined) input.start_date = normalizeDate(body.start_date, 'start_date', fallbackStartDate);
-  if (!partial || body.end_date !== undefined) input.end_date = normalizeDate(body.end_date, 'end_date', input.start_date || fallbackStartDate);
+  if (!partial || body.start_date !== undefined) {
+    const rawStart = cleanText(body.start_date);
+    input.start_date = rawStart && /^\d{4}-\d{2}-\d{2}$/.test(rawStart) ? normalizeDate(rawStart, 'start_date') : todayIso();
+  }
+  if (!partial || body.end_date !== undefined) {
+    const rawEnd = cleanText(body.end_date);
+    input.end_date = rawEnd && /^\d{4}-\d{2}-\d{2}$/.test(rawEnd) ? normalizeDate(rawEnd, 'end_date') : (input.start_date || todayIso());
+  }
 
   if (!partial || body.percent_complete !== undefined) {
     input.percent_complete = body.percent_complete === undefined ? 0 : normalizeProgress(body.percent_complete);
@@ -1080,6 +1121,7 @@ app.post('/api/auth/register', asyncHandler(async (req, res) => {
   const name = requireText(req.body.name, 'Name');
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || '');
+  const trade = normalizeOptionalEnum(req.body.trade, userTrades, 'trade');
 
   if (!/^\S+@\S+\.\S+$/.test(email)) throw httpError(400, 'A valid email is required.');
   if (password.length < 8) throw httpError(400, 'Password must be at least 8 characters.');
@@ -1090,8 +1132,8 @@ app.post('/api/auth/register', asyncHandler(async (req, res) => {
 
   try {
     const result = await query(
-      'INSERT INTO users (name, email, password_hash, site_role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, site_role, access_revoked',
-      [name, email, passwordHash, siteRole]
+      'INSERT INTO users (name, email, password_hash, site_role, trade) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, site_role, access_revoked, trade',
+      [name, email, passwordHash, siteRole, trade]
     );
     const user = result.rows[0];
     res.status(201).json({ user: publicUser(user), token: signToken(user) });
@@ -1105,7 +1147,7 @@ app.post('/api/auth/login', asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || '');
 
-  const result = await query('SELECT id, name, email, password_hash, site_role, access_revoked FROM users WHERE email = $1', [email]);
+  const result = await query('SELECT id, name, email, password_hash, site_role, access_revoked, trade FROM users WHERE email = $1', [email]);
   if (!result.rowCount) throw httpError(401, 'Invalid email or password.');
 
   const user = result.rows[0];
@@ -1238,6 +1280,49 @@ app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/archive', requireAuth, asy
        WHERE sheet_key = $3
        RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
       [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
+    );
+
+    return {
+      ...saveResult.rows[0],
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
+      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
+    };
+  });
+
+  res.json({ sheet: updated });
+}));
+
+app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/insert', requireAuth, asyncHandler(async (req, res) => {
+  requireSiteOwner(req.user);
+  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
+  const rowIndex = clampInteger(req.params.rowIndex, {
+    label: 'rowIndex',
+    defaultValue: 0,
+    min: 0,
+    max: OWNER_CMS_ROW_COUNT - 1
+  });
+  const direction = String(req.body.direction || 'below').toLowerCase() === 'above' ? 'above' : 'below';
+
+  const updated = await tx(async (client) => {
+    const current = await client.query(
+      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      [sheet.sheet_key]
+    );
+    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
+
+    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
+    const insertAt = direction === 'above' ? rowIndex : rowIndex + 1;
+    if (insertAt < 0 || insertAt > activeRows.length) throw httpError(400, 'Unable to insert row at that position.');
+
+    activeRows.splice(insertAt, 0, Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+    while (activeRows.length > OWNER_CMS_ROW_COUNT) activeRows.pop();
+
+    const saveResult = await client.query(
+      `UPDATE owner_cms_work_orders
+       SET cells = $1
+       WHERE sheet_key = $2
+       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
+      [JSON.stringify(activeRows), sheet.sheet_key]
     );
 
     return {
@@ -1485,6 +1570,7 @@ app.get('/api/site/users', requireAuth, asyncHandler(async (req, res) => {
        u.id,
        u.name,
        u.email,
+       u.trade,
        u.site_role,
        u.access_revoked,
        u.created_at,
@@ -1507,7 +1593,7 @@ app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) 
 
   const updatedUser = await tx(async (client) => {
     const targetResult = await client.query(
-      'SELECT id, name, email, site_role, access_revoked FROM users WHERE id = $1',
+      'SELECT id, name, email, trade, site_role, access_revoked FROM users WHERE id = $1',
       [targetUserId]
     );
     if (!targetResult.rowCount) throw httpError(404, 'User not found.');
@@ -1530,6 +1616,13 @@ app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) 
       throw httpError(400, 'Ask another site owner to change your own site role.');
     }
 
+    let passwordHash = null;
+    if (req.body.password !== undefined || req.body.new_password !== undefined) {
+      const password = String(req.body.password ?? req.body.new_password ?? '');
+      if (password.length < 8) throw httpError(400, 'Password must be at least 8 characters.');
+      passwordHash = await bcrypt.hash(password, 12);
+    }
+
     await ensureLastSiteOwnerSafe(client, targetUserId, {
       nextRole: nextRole === undefined ? targetUser.site_role : nextRole,
       nextRevoked: nextRevoked === undefined ? targetUser.access_revoked : nextRevoked
@@ -1548,6 +1641,10 @@ app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) 
       values.push(nextRevoked);
       sets.push(`access_revoked = $${values.length}`);
     }
+    if (passwordHash) {
+      values.push(passwordHash);
+      sets.push(`password_hash = $${values.length}`);
+    }
     if (!sets.length) return targetUser;
 
     values.push(targetUserId);
@@ -1555,7 +1652,7 @@ app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) 
       `UPDATE users
        SET ${sets.join(', ')}
        WHERE id = $${values.length}
-       RETURNING id, name, email, site_role, access_revoked, created_at, updated_at`,
+       RETURNING id, name, email, trade, site_role, access_revoked, created_at, updated_at`,
       values
     );
 
@@ -1580,7 +1677,7 @@ app.delete('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res)
 
   await tx(async (client) => {
     const targetResult = await client.query(
-      'SELECT id, name, email, site_role, access_revoked FROM users WHERE id = $1',
+      'SELECT id, name, email, trade, site_role, access_revoked FROM users WHERE id = $1',
       [targetUserId]
     );
     if (!targetResult.rowCount) throw httpError(404, 'User not found.');
@@ -1835,9 +1932,9 @@ app.delete('/api/projects/:projectId/notes/:noteId', requireAuth, asyncHandler(a
 
 app.delete('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res) => {
   const projectId = parseId(req.params.projectId, 'projectId');
+  requireSiteOwner(req.user);
 
   await tx(async (client) => {
-    await requireProjectMembership(projectId, req.user.id, 'owner', client);
     const beforeResult = await client.query('SELECT * FROM projects WHERE id = $1', [projectId]);
     if (!beforeResult.rowCount) throw httpError(404, 'Project not found.');
     await writeAudit(client, {
@@ -1910,7 +2007,7 @@ app.patch('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler(
   const role = requireEnum(req.body.role, roles, 'role');
 
   const updated = await tx(async (client) => {
-    await requireProjectMembership(projectId, req.user.id, 'owner', client);
+    await requireProjectMembership(projectId, req.user.id, 'manager', client);
 
     const before = await client.query('SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2', [
       projectId,
@@ -1960,7 +2057,7 @@ app.delete('/api/projects/:projectId/members/:userId', requireAuth, asyncHandler
   const targetUserId = parseId(req.params.userId, 'userId');
 
   await tx(async (client) => {
-    await requireProjectMembership(projectId, req.user.id, 'owner', client);
+    await requireProjectMembership(projectId, req.user.id, 'manager', client);
     const before = await client.query('SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2', [
       projectId,
       targetUserId
@@ -2050,24 +2147,50 @@ app.post('/api/projects/:projectId/blueprints', requireAuth, asyncHandler(async 
 
   const blueprint = await tx(async (client) => {
     await requireProjectMembership(projectId, req.user.id, 'editor', client);
+    const columns = await getBlueprintColumnInfo(client);
+    const insertColumns = ['project_id'];
+    const values = [projectId];
+    const placeholders = ['$1'];
+
+    function pushColumn(columnName, value) {
+      insertColumns.push(columnName);
+      values.push(value);
+      placeholders.push(`$${values.length}`);
+    }
+
+    if (columns.hasOriginalName) pushColumn('original_name', originalName);
+    if (columns.hasFileName) pushColumn('file_name', originalName);
+    pushColumn('mime_type', mimeType);
+    if (columns.hasSizeBytes) pushColumn('size_bytes', req.file.size);
+    if (columns.hasFileSize) pushColumn('file_size', req.file.size);
+    pushColumn('file_data', req.file.buffer);
+    pushColumn('uploaded_by', req.user.id);
+
     const result = await client.query(
-      `INSERT INTO project_blueprints
-        (project_id, original_name, mime_type, size_bytes, file_data, uploaded_by)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, project_id, original_name, mime_type, size_bytes, uploaded_by, created_at`,
-      [projectId, originalName, mimeType, req.file.size, req.file.buffer, req.user.id]
+      `INSERT INTO project_blueprints (${insertColumns.join(', ')})
+       VALUES (${placeholders.join(', ')})
+       RETURNING *`,
+      values
     );
+
+    const row = result.rows[0];
+    const normalized = {
+      ...row,
+      original_name: row.original_name || row.file_name || originalName,
+      size_bytes: row.size_bytes || row.file_size || req.file.size,
+      uploaded_by_name: req.user.name
+    };
 
     await writeAudit(client, {
       projectId,
       userId: req.user.id,
       action: 'blueprint_uploaded',
       entityType: 'project_blueprint',
-      entityId: result.rows[0].id,
-      after: { ...result.rows[0], file_data: undefined }
+      entityId: row.id,
+      after: { ...normalized, file_data: undefined }
     });
 
-    return { ...result.rows[0], uploaded_by_name: req.user.name };
+    return normalized;
   });
 
   emitProjectChange(projectId, { actorId: req.user.id, message: `Blueprint uploaded: ${blueprint.original_name}` });
@@ -2391,7 +2514,7 @@ io.use(async (socket, next) => {
     const token = socket.handshake.auth && socket.handshake.auth.token;
     if (!token) throw httpError(401, 'Socket authentication token required.');
     const payload = jwt.verify(token, JWT_SECRET);
-    const result = await query('SELECT id, name, email, site_role, access_revoked FROM users WHERE id = $1', [payload.sub]);
+    const result = await query('SELECT id, name, email, trade, site_role, access_revoked FROM users WHERE id = $1', [payload.sub]);
     if (!result.rowCount) throw httpError(401, 'Socket user not found.');
     if (result.rows[0].access_revoked) throw httpError(403, 'Socket user access has been revoked.');
     socket.user = result.rows[0];

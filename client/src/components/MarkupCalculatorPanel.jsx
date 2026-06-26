@@ -1,33 +1,27 @@
 import { useMemo, useState } from 'react';
 
-function currency(value) {
-  const number = Number(value || 0);
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(number);
-}
+const DEFAULT_ROWS = ['16.32', '2317', '', '', '', ''];
 
-function blankRow(id) {
-  return { id, item: '', material: '' };
+function toNumber(value) {
+  const next = Number(value);
+  return Number.isFinite(next) ? next : 0;
 }
 
 export default function MarkupCalculatorPanel() {
-  const [rows, setRows] = useState(() => [blankRow(1), blankRow(2), blankRow(3)]);
+  const [rows, setRows] = useState(DEFAULT_ROWS);
 
   const totals = useMemo(() => {
-    const materialTotal = rows.reduce((sum, row) => sum + Number(row.material || 0), 0);
+    const materialTotal = rows.reduce((sum, value) => sum + toNumber(value), 0);
     const markupTotal = materialTotal * 0.05;
-    return { materialTotal, markupTotal, grandTotal: materialTotal + markupTotal };
+    return {
+      materialTotal,
+      markupTotal,
+      grandTotal: materialTotal + markupTotal
+    };
   }, [rows]);
 
-  function updateRow(id, field, value) {
-    setRows((current) => current.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
-  }
-
-  function addRow() {
-    setRows((current) => [...current, blankRow(current.length ? Math.max(...current.map((row) => row.id)) + 1 : 1)]);
-  }
-
-  function resetRows() {
-    setRows([blankRow(1), blankRow(2), blankRow(3)]);
+  function updateRow(index, value) {
+    setRows((current) => current.map((entry, rowIndex) => (rowIndex === index ? value : entry)));
   }
 
   return (
@@ -36,50 +30,45 @@ export default function MarkupCalculatorPanel() {
         <div className="panel-heading">
           <div>
             <h2>Markup calculator</h2>
-            <p>5% calculation only. Enter material amounts and the calculator will build the 5% markup totals.</p>
-          </div>
-          <div className="row-actions">
-            <button className="ghost-button compact" onClick={addRow} type="button">Add row</button>
-            <button className="ghost-button compact" onClick={resetRows} type="button">Reset</button>
+            <p>5% markup only.</p>
           </div>
         </div>
 
-        <div className="table-scroll markup-table-wrap">
+        <div className="markup-table-wrap">
           <table className="markup-table">
             <thead>
               <tr>
-                <th>Item</th>
                 <th>Material</th>
-                <th>5% Markup</th>
-                <th>Total</th>
+                <th>5% markup</th>
+                <th>Total with markup</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
-                const material = Number(row.material || 0);
+              {rows.map((value, index) => {
+                const material = toNumber(value);
                 const markup = material * 0.05;
                 return (
-                  <tr key={row.id}>
+                  <tr key={`markup-${index}`}>
                     <td>
-                      <input value={row.item} onChange={(event) => updateRow(row.id, 'item', event.target.value)} placeholder="Description" />
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={value}
+                        onChange={(event) => updateRow(index, event.target.value)}
+                      />
                     </td>
-                    <td>
-                      <input type="number" min="0" step="0.01" value={row.material} onChange={(event) => updateRow(row.id, 'material', event.target.value)} placeholder="0.00" />
-                    </td>
-                    <td>{currency(markup)}</td>
-                    <td>{currency(material + markup)}</td>
+                    <td>{markup ? markup.toFixed(2) : '—'}</td>
+                    <td>{material ? (material + markup).toFixed(2) : '—'}</td>
                   </tr>
                 );
               })}
-            </tbody>
-            <tfoot>
-              <tr>
+              <tr className="markup-total-row">
                 <th>Total</th>
-                <th>{currency(totals.materialTotal)}</th>
-                <th>{currency(totals.markupTotal)}</th>
-                <th>{currency(totals.grandTotal)}</th>
+                <th>{totals.markupTotal.toFixed(2)}</th>
+                <th>{totals.grandTotal.toFixed(2)}</th>
               </tr>
-            </tfoot>
+            </tbody>
           </table>
         </div>
       </section>

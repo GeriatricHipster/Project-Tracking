@@ -6,10 +6,12 @@ import SiteBanner from './components/SiteBanner';
 import { api, getToken, setToken } from './lib/api';
 
 const backgroundOptions = [
-  { value: 'midnight', label: 'Midnight' },
-  { value: 'ember', label: 'Sunset' },
-  { value: 'slate', label: 'Slate' },
-  { value: 'steel', label: 'Ocean' }
+  { value: 'midnight', label: 'Midnight Violet' },
+  { value: 'ember', label: 'Sunset Flame' },
+  { value: 'ocean', label: 'Electric Ocean' },
+  { value: 'aurora', label: 'Aurora' },
+  { value: 'citrus', label: 'Citrus' },
+  { value: 'candy', label: 'Candy' }
 ];
 
 function backgroundStorageKey(userId) {

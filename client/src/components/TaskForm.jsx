@@ -17,14 +17,36 @@ const priorityOptions = [
   ['critical', 'Critical']
 ];
 
-const tradeOptions = ['CCure', 'Cameras', 'CCure & Cameras'];
-const vendorOptions = [...new Set([
+const taskNameOptions = [
+  'Parts Procurement',
+  'Preprogramming (Vendor)',
+  'Preprogramming (Ccure Team) clearances/schedules etc.',
+  'CCure Operator Established',
+  'UIT (IP Addresses, Firewall)',
+  'Conduit Install',
+  'Cable Install',
+  'ADA Install',
+  'Ccure Hardware Install',
+  'Camera Hardware Install',
+  'Panel Install',
+  'Fire Integration',
+  'Alarm Panel Install/Integration',
+  'Elevator Integration',
+  'Final Programming',
+  'Vendor Testing',
+  'CCure Member Testing',
+  'Camera Member Testing',
+  'Key Shop Hardware Change',
+  'Punchlist',
+  'Closeout'
+].sort((a, b) => a.localeCompare(b));
+
+const tradeBaseOptions = ['CCure', 'Cameras', 'CCure & Cameras', 'Lock smiths'];
+const vendorBaseOptions = [
   'Accent Automatic',
-  'Accent Auto',
   'Beacon',
   'Convergint',
   'DSI',
-  'EverBase',
   'Everbase',
   'G4S',
   'IC&E',
@@ -34,83 +56,125 @@ const vendorOptions = [...new Set([
   'OTIS',
   'Pavion',
   'Pye Barker',
+  'PTI (Bosch)',
   'S101',
+  'Schindler',
   'SMT',
-  'Stone',
   'Stone Security',
-  'USHOP',
-  'Utah Yamas',
-  'Yamas'
-])].sort((a, b) => a.localeCompare(b));
+  'Thyssenkrupp',
+  'Utah Yamas'
+].sort((a, b) => a.localeCompare(b));
 const pmOptions = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));
-const presetAssigneeNames = [
-  'Bennett',
-  'Bill',
-  'Chris',
-  'Derick',
-  'Derick & James',
-  'Derick & Justin',
-  'Derick & Justin, Suvam',
-  'Derick & Kenna',
-  'Derick & Kyra',
-  'Derick & Locksmiths',
-  'Derick & Ryan',
-  'Derick & Suvam',
-  'James',
-  'James & Derick',
-  'James & Justin',
-  'James & Justin, Suvam',
-  'James & Kenna',
-  'James & Kyra',
-  'James & Locksmiths',
-  'James & Ryan',
-  'James & Suvam',
-  'Jim',
-  'Justin',
-  'Justin & Derick',
-  'Justin & James',
-  'Justin & Kenna',
-  'Justin & Kyra',
-  'Justin & Locksmiths',
-  'Justin & Ryan',
-  'Justin & Suvam',
-  'Kenna',
-  'Kenna & Derick',
-  'Kenna & Justin',
-  'Kenna & Justin, Suvam',
-  'Kenna & Kyra',
-  'Kenna & Locksmiths',
-  'Kenna & Ryan',
-  'Kenna & Suvam',
-  'Kyra',
-  'Ryan',
-  'Suvam',
-  'Suvam & Derick',
-  'Suvam & James',
-  'Suvam & Justin',
-  'Suvam & Kenna',
-  'Suvam & Kyra',
-  'Suvam & Locksmiths',
-  'Suvam & Ryan'
-];
 
-function sortUnique(values) {
-  return [...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
+const assigneeSystemSeed = [
+  'James',
+  'James & Kyra',
+  'James & Ryan',
+  'James & Locksmiths',
+  'James & Suvam',
+  'James & Justin',
+  'James & Derick',
+  'James & Kenna',
+  'James & Justin, Suvam',
+  'Kenna',
+  'Kenna & Kyra',
+  'Kenna & Ryan',
+  'Kenna & Locksmiths',
+  'Kenna & Justin',
+  'Kenna & Suvam',
+  'Kenna & Derick',
+  'Kenna & Justin, Suvam',
+  'Derick',
+  'Derick & Kyra',
+  'Derick & Ryan',
+  'Derick & Locksmiths',
+  'Derick & Justin',
+  'Derick & Suvam',
+  'Derick & James',
+  'Derick & Kenna',
+  'Derick & Justin, Suvam',
+  'Justin',
+  'Justin & Kyra',
+  'Justin & Ryan',
+  'Justin & Locksmiths',
+  'Justin & Derick',
+  'Justin & Suvam',
+  'Justin & Kenna',
+  'Justin & James',
+  'Suvam',
+  'Suvam & Kyra',
+  'Suvam & Ryan',
+  'Suvam & Locksmiths',
+  'Suvam & Derick',
+  'Suvam & Kenna',
+  'Suvam & Justin',
+  'Suvam & James',
+  'Ryan',
+  'Kyra',
+  'Bill',
+  'Bennett',
+  'Jim',
+  'Chris'
+].sort((a, b) => a.localeCompare(b));
+
+const locksmithSeed = ['Bill', 'Bennett', 'Chris', 'Jim'].sort((a, b) => a.localeCompare(b));
+
+function readStoredList(key, fallback) {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return fallback;
+    return [...new Set(parsed.map((value) => String(value).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStoredList(key, values) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(key, JSON.stringify(values));
+}
+
+function usePersistentList(storageKey, seed) {
+  const [items, setItems] = useState(() => readStoredList(storageKey, seed));
+
+  useEffect(() => {
+    writeStoredList(storageKey, items);
+  }, [items, storageKey]);
+
+  function addItem(value) {
+    const next = String(value || '').trim();
+    if (!next) return;
+    setItems((current) => {
+      const merged = [...new Set([...current, next])].sort((a, b) => a.localeCompare(b));
+      return merged;
+    });
+  }
+
+  return [items, addItem, setItems];
 }
 
 function blankTask(project) {
   const start = project?.start_date || todayIso();
   return {
-    name: '',
+    task_name_choice: '',
+    task_name_custom: '',
     description: '',
     trade: '',
+    trade_custom: '',
     vendor: '',
     vendor_secondary: '',
-    pm: '',
     assigned_to: '',
+    assignee_system_custom: '',
     assignee_secondary: '',
+    assignee_secondary_custom: '',
     assignee_tertiary: '',
+    assignee_tertiary_custom: '',
     assignee_quaternary: '',
+    assignee_quaternary_custom: '',
+    pm: '',
     parent_task_id: '',
     status: '',
     priority: '',
@@ -122,24 +186,74 @@ function blankTask(project) {
   };
 }
 
+function CustomizableSelect({
+  label,
+  value,
+  options,
+  customValue,
+  disabled,
+  onChange,
+  onCustomChange,
+  onAddCustom,
+  placeholder = 'Unassigned'
+}) {
+  const isCustom = value === '__custom__';
+
+  return (
+    <label>
+      {label}
+      <select disabled={disabled} value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">{placeholder}</option>
+        {options.map((option) => (
+          <option key={option} value={option}>{option}</option>
+        ))}
+        <option value="__custom__">Custom</option>
+      </select>
+      {isCustom && (
+        <div className="inline-custom-entry">
+          <input
+            disabled={disabled}
+            value={customValue}
+            onChange={(event) => onCustomChange(event.target.value)}
+            placeholder={`Add custom ${label.toLowerCase()}`}
+          />
+          <button className="ghost-button compact" disabled={disabled || !String(customValue || '').trim()} onClick={onAddCustom} type="button">
+            Add
+          </button>
+        </div>
+      )}
+    </label>
+  );
+}
+
 export default function TaskForm({ project, members, tasks, editingTask, canEdit, onSave, onCancel }) {
   const [form, setForm] = useState(blankTask(project));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [assigneeSystemOptions, addAssigneeSystemOption] = usePersistentList('psg-assignee-systems', assigneeSystemSeed);
+  const [locksmithOptions, addLocksmithOption] = usePersistentList('psg-locksmiths', locksmithSeed);
+  const [tradeOptions, addTradeOption] = usePersistentList('psg-trades', tradeBaseOptions);
+  const [otherAssigneeOptions, addOtherAssigneeOption] = usePersistentList('psg-other-assignees', []);
 
   useEffect(() => {
     if (editingTask) {
-      setForm({
-        name: editingTask.name || '',
-        description: editingTask.description || '',
-        trade: editingTask.trade || '',
+      setForm((current) => ({
+        ...current,
+        task_name_choice: taskNameOptions.includes(editingTask.name || '') ? editingTask.name : 'Other',
+        task_name_custom: taskNameOptions.includes(editingTask.name || '') ? '' : (editingTask.name || ''),
+        trade: tradeOptions.includes(editingTask.trade || '') ? editingTask.trade : (editingTask.trade ? '__custom__' : ''),
+        trade_custom: tradeOptions.includes(editingTask.trade || '') ? '' : (editingTask.trade || ''),
         vendor: editingTask.vendor || '',
         vendor_secondary: editingTask.vendor_secondary || '',
-        pm: editingTask.pm || '',
         assigned_to: editingTask.assigned_to || '',
+        assignee_system_custom: '',
         assignee_secondary: editingTask.assignee_secondary || '',
+        assignee_secondary_custom: '',
         assignee_tertiary: editingTask.assignee_tertiary || '',
-        assignee_quaternary: editingTask.assignee_quaternary || '',
+        assignee_tertiary_custom: '',
+        assignee_quaternary: otherAssigneeOptions.includes(editingTask.assignee_quaternary || '') ? editingTask.assignee_quaternary : (editingTask.assignee_quaternary ? '__custom__' : ''),
+        assignee_quaternary_custom: otherAssigneeOptions.includes(editingTask.assignee_quaternary || '') ? '' : (editingTask.assignee_quaternary || ''),
+        pm: editingTask.pm || '',
         parent_task_id: editingTask.parent_task_id || '',
         status: editingTask.status || '',
         priority: editingTask.priority || '',
@@ -148,28 +262,40 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         percent_complete: editingTask.percent_complete || 0,
         color: editingTask.color || '#2563eb',
         sort_order: editingTask.sort_order || ''
-      });
+      }));
     } else {
       setForm(blankTask(project));
     }
     setError('');
-  }, [editingTask, project]);
+  }, [editingTask, project, tradeOptions, otherAssigneeOptions]);
 
   const parentTaskOptions = useMemo(
     () => tasks.filter((task) => !editingTask || task.id !== editingTask.id),
     [tasks, editingTask]
   );
 
-  const assigneeOptions = useMemo(
-    () => sortUnique([
-      ...members.map((member) => member.name).filter(Boolean),
-      ...presetAssigneeNames
-    ]),
-    [members]
-  );
-
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function addCustomTrade() {
+    const next = String(form.trade_custom || '').trim();
+    if (!next) return;
+    addTradeOption(next);
+    setForm((current) => ({ ...current, trade: next, trade_custom: '' }));
+  }
+
+  function addCustomOtherAssignee() {
+    const next = String(form.assignee_quaternary_custom || '').trim();
+    if (!next) return;
+    addOtherAssigneeOption(next);
+    setForm((current) => ({ ...current, assignee_quaternary: next, assignee_quaternary_custom: '' }));
+  }
+
+  function addCustomTaskName() {
+    const next = String(form.task_name_custom || '').trim();
+    if (!next) return;
+    setForm((current) => ({ ...current, task_name_choice: 'Other', task_name_custom: next }));
   }
 
   async function submit(event) {
@@ -177,20 +303,24 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     setError('');
     setSaving(true);
     try {
+      const taskName = form.task_name_choice === 'Other' ? form.task_name_custom : form.task_name_choice;
       await onSave({
-        ...form,
-        trade: form.trade || null,
+        name: taskName || '',
+        description: '',
+        trade: form.trade === '__custom__' ? form.trade_custom : form.trade || null,
         vendor: form.vendor || null,
         vendor_secondary: form.vendor_secondary || null,
-        pm: form.pm || null,
         assigned_to: form.assigned_to || null,
         assignee_secondary: form.assignee_secondary || null,
         assignee_tertiary: form.assignee_tertiary || null,
-        assignee_quaternary: form.assignee_quaternary || null,
+        assignee_quaternary: form.assignee_quaternary === '__custom__' ? form.assignee_quaternary_custom : form.assignee_quaternary || null,
         parent_task_id: form.parent_task_id || null,
         status: form.status || 'not_started',
         priority: form.priority || 'normal',
+        start_date: form.start_date || project?.start_date || todayIso(),
+        end_date: form.end_date || form.start_date || project?.start_date || todayIso(),
         percent_complete: Number(form.percent_complete),
+        color: form.color,
         sort_order: form.sort_order === '' ? undefined : Number(form.sort_order)
       });
       if (!editingTask) setForm(blankTask(project));
@@ -214,17 +344,34 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       <form className="stack" onSubmit={submit}>
         <label>
           Task name
-          <input disabled={!canEdit} value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Panel installation" />
+          <select disabled={!canEdit} value={form.task_name_choice} onChange={(event) => updateField('task_name_choice', event.target.value)}>
+            <option value="">Unassigned</option>
+            {taskNameOptions.map((taskName) => <option key={taskName} value={taskName}>{taskName}</option>)}
+            <option value="Other">Other</option>
+          </select>
         </label>
 
-        <div className="two-col">
+        {form.task_name_choice === 'Other' && (
           <label>
-            Trade
-            <select disabled={!canEdit} value={form.trade} onChange={(event) => updateField('trade', event.target.value)}>
-              <option value="">Unassigned</option>
-              {tradeOptions.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
-            </select>
+            Custom task name
+            <textarea disabled={!canEdit} value={form.task_name_custom} onChange={(event) => updateField('task_name_custom', event.target.value)} placeholder="Enter a custom task name" />
+            <button className="ghost-button compact" disabled={!canEdit || !String(form.task_name_custom || '').trim()} onClick={addCustomTaskName} type="button">
+              Use custom task name
+            </button>
           </label>
+        )}
+
+        <div className="two-col">
+          <CustomizableSelect
+            label="Trade"
+            value={form.trade}
+            options={tradeOptions}
+            customValue={form.trade_custom}
+            disabled={!canEdit}
+            onChange={(value) => updateField('trade', value)}
+            onCustomChange={(value) => updateField('trade_custom', value)}
+            onAddCustom={addCustomTrade}
+          />
           <label>
             Parent task
             <select disabled={!canEdit} value={form.parent_task_id} onChange={(event) => updateField('parent_task_id', event.target.value)}>
@@ -239,49 +386,74 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             Vendor
             <select disabled={!canEdit} value={form.vendor} onChange={(event) => updateField('vendor', event.target.value)}>
               <option value="">Unassigned</option>
-              {vendorOptions.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
+              {vendorBaseOptions.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
             </select>
           </label>
           <label>
             Vendor 2
             <select disabled={!canEdit} value={form.vendor_secondary} onChange={(event) => updateField('vendor_secondary', event.target.value)}>
               <option value="">Unassigned</option>
-              {vendorOptions.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
+              {vendorBaseOptions.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
             </select>
           </label>
         </div>
 
-        <div className="four-col">
-          <label>
-            Assignee
-            <select disabled={!canEdit} value={form.assigned_to} onChange={(event) => updateField('assigned_to', event.target.value)}>
-              <option value="">Unassigned</option>
-              {assigneeOptions.map((member) => (
-                <option key={member} value={member}>{member}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Assignee 2
-            <select disabled={!canEdit} value={form.assignee_secondary} onChange={(event) => updateField('assignee_secondary', event.target.value)}>
-              <option value="">Unassigned</option>
-              {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
-            </select>
-          </label>
-          <label>
-            Assignee 3
-            <select disabled={!canEdit} value={form.assignee_tertiary} onChange={(event) => updateField('assignee_tertiary', event.target.value)}>
-              <option value="">Unassigned</option>
-              {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
-            </select>
-          </label>
-          <label>
-            Assignee 4
-            <select disabled={!canEdit} value={form.assignee_quaternary} onChange={(event) => updateField('assignee_quaternary', event.target.value)}>
-              <option value="">Unassigned</option>
-              {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
-            </select>
-          </label>
+        <div className="four-col assignee-grid">
+          <CustomizableSelect
+            label="CCure Team and Camera Team"
+            value={form.assigned_to}
+            options={assigneeSystemOptions}
+            customValue={form.assignee_system_custom || ''}
+            disabled={!canEdit}
+            onChange={(value) => updateField('assigned_to', value)}
+            onCustomChange={(value) => updateField('assignee_system_custom', value)}
+            onAddCustom={() => {
+              const next = String(form.assignee_system_custom || '').trim();
+              if (!next) return;
+              addAssigneeSystemOption(next);
+              setForm((current) => ({ ...current, assigned_to: next, assignee_system_custom: '' }));
+            }}
+          />
+          <CustomizableSelect
+            label="CCure Team and Camera Team"
+            value={form.assignee_secondary}
+            options={assigneeSystemOptions}
+            customValue={form.assignee_secondary_custom || ''}
+            disabled={!canEdit}
+            onChange={(value) => updateField('assignee_secondary', value)}
+            onCustomChange={(value) => updateField('assignee_secondary_custom', value)}
+            onAddCustom={() => {
+              const next = String(form.assignee_secondary_custom || '').trim();
+              if (!next) return;
+              addAssigneeSystemOption(next);
+              setForm((current) => ({ ...current, assignee_secondary: next, assignee_secondary_custom: '' }));
+            }}
+          />
+          <CustomizableSelect
+            label="Lock Smiths"
+            value={form.assignee_tertiary}
+            options={locksmithOptions}
+            customValue={form.assignee_tertiary_custom || ''}
+            disabled={!canEdit}
+            onChange={(value) => updateField('assignee_tertiary', value)}
+            onCustomChange={(value) => updateField('assignee_tertiary_custom', value)}
+            onAddCustom={() => {
+              const next = String(form.assignee_tertiary_custom || '').trim();
+              if (!next) return;
+              addLocksmithOption(next);
+              setForm((current) => ({ ...current, assignee_tertiary: next, assignee_tertiary_custom: '' }));
+            }}
+          />
+          <CustomizableSelect
+            label="Other"
+            value={form.assignee_quaternary}
+            options={otherAssigneeOptions}
+            customValue={form.assignee_quaternary_custom}
+            disabled={!canEdit}
+            onChange={(value) => updateField('assignee_quaternary', value)}
+            onCustomChange={(value) => updateField('assignee_quaternary_custom', value)}
+            onAddCustom={addCustomOtherAssignee}
+          />
         </div>
 
         <label>
