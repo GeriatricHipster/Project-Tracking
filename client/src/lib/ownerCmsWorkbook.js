@@ -1,4 +1,4 @@
-const OWNER_CMS_ROW_COUNT = 250;
+const OWNER_CMS_ROW_COUNT = 150;
 const OWNER_CMS_COLUMN_COUNT = 20;
 
 function linesToOptions(block) {
@@ -294,7 +294,7 @@ Utility Sytems
   { key: 'walk_scheduled', label: 'Walk Scheduled', type: 'date', width: 140 },
   { key: 'install_date', label: 'Install Date', type: 'date', width: 140 },
   { key: 'deadline', label: 'Deadline', type: 'date', width: 140 },
-  { key: 'bill_by_year_end', label: 'Bill by year end', type: 'select', width: 150, options: ['Yes', 'No', 'NA'] },
+  { key: 'bill_by_year_end', label: 'Bill by year end', type: 'date', width: 150 },
   { key: 'category', label: 'Category', type: 'select', width: 180, options: linesToOptions(`
 COST ESTIAMTE
 CCURE
@@ -313,26 +313,24 @@ CCURE & CCTV
   { key: 'security', label: 'Security', type: 'select', width: 290, options: securityOptions },
   { key: 'child_wo', label: 'Child WO', type: 'select', width: 110, options: ['Yes', 'No', 'NA'] },
   { key: 'vendor', label: 'Vendor', type: 'select', width: 160, options: linesToOptions(`
-Accent Automatic
+AVTEC
 Beacon
 Convergint
 DSI
-Everbase
+EverBase
 G4S
-IC&E
 Ideacom
 IES
-Nelson Fire
-OTIS
-Pavion
-PTI (Bosch)
-Pye Barker
+PTI
 S101
-Schindler
+Stone
+Pavion
+Yamas
+USHOP
+Misc
 SMT
-Stone Security
-Thyssenkrupp
-Utah Yamas
+Accent Auto
+Bid Walk
 `) },
   { key: 'status', label: 'Status', type: 'select', width: 220, options: linesToOptions(`
 Cost Estimate

@@ -3,7 +3,6 @@ CREATE TABLE IF NOT EXISTS users (
   name text NOT NULL,
   email text NOT NULL UNIQUE,
   password_hash text NOT NULL,
-  trade text,
   site_role text NOT NULL DEFAULT 'member',
   access_revoked boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -11,7 +10,6 @@ CREATE TABLE IF NOT EXISTS users (
   CONSTRAINT users_site_role_check CHECK (site_role IN ('owner', 'manager', 'member'))
 );
 
-ALTER TABLE users ADD COLUMN IF NOT EXISTS trade text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS site_role text NOT NULL DEFAULT 'member';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS access_revoked boolean NOT NULL DEFAULT false;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
@@ -36,18 +34,12 @@ ALTER TABLE users DROP CONSTRAINT IF EXISTS users_site_role_check;
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_access_status_check;
 
 UPDATE users
-SET trade = NULLIF(trim(trade), '')
-WHERE trade IS NOT NULL;
-
-UPDATE users
 SET site_role = CASE
   WHEN site_role IN ('owner', 'manager') THEN site_role
   ELSE 'member'
 END;
 
 ALTER TABLE users ADD CONSTRAINT users_site_role_check CHECK (site_role IN ('owner', 'manager', 'member'));
-ALTER TABLE users DROP CONSTRAINT IF EXISTS users_trade_check;
-ALTER TABLE users ADD CONSTRAINT users_trade_check CHECK (trade IS NULL OR trade IN ('CCure Team', 'Camera Team', 'Lock Smith', 'Vendor'));
 
 UPDATE users
 SET site_role = 'owner', access_revoked = false
@@ -128,8 +120,10 @@ CREATE TABLE IF NOT EXISTS tasks (
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT tasks_status_check CHECK (status IN ('not_started', 'in_progress', 'blocked', 'complete')),
   CONSTRAINT tasks_priority_check CHECK (priority IN ('low', 'normal', 'high', 'critical')),
+  CONSTRAINT tasks_trade_check CHECK (trade IS NULL OR trade IN ('CCure', 'Cameras', 'CCure & Cameras')),
+  CONSTRAINT tasks_security_team_member_check CHECK (security_team_member IS NULL OR security_team_member IN ('Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam')),
   CONSTRAINT tasks_pm_check CHECK (pm IS NULL OR pm IN ('Kurt', 'Austin')),
-  CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas')),
+  CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('Accent Automatic', 'Accent Auto', 'Beacon', 'Convergint', 'DSI', 'EverBase', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'S101', 'SMT', 'Stone', 'Stone Security', 'USHOP', 'Utah Yamas', 'Yamas')),
   CONSTRAINT tasks_progress_check CHECK (percent_complete >= 0 AND percent_complete <= 100),
   CONSTRAINT tasks_date_order CHECK (end_date >= start_date)
 );
@@ -143,13 +137,18 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_secondary text;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_tertiary text;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_quaternary text;
 
-UPDATE tasks SET vendor = NULL WHERE vendor IS NOT NULL AND vendor NOT IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas');
+UPDATE tasks SET trade = NULL WHERE trade IS NOT NULL AND trade NOT IN ('CCure', 'Cameras', 'CCure & Cameras');
+UPDATE tasks SET vendor = NULL WHERE vendor IS NOT NULL AND vendor NOT IN ('Accent Automatic', 'Accent Auto', 'Beacon', 'Convergint', 'DSI', 'EverBase', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'S101', 'SMT', 'Stone', 'Stone Security', 'USHOP', 'Utah Yamas', 'Yamas');
+UPDATE tasks SET security_team_member = NULL WHERE security_team_member IS NOT NULL AND security_team_member NOT IN ('Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam');
 UPDATE tasks SET pm = NULL WHERE pm IS NOT NULL AND pm NOT IN ('Kurt', 'Austin');
 
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_trade_check;
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_vendor_check;
+ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_security_team_member_check;
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_pm_check;
-ALTER TABLE tasks ADD CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas'));
+ALTER TABLE tasks ADD CONSTRAINT tasks_trade_check CHECK (trade IS NULL OR trade IN ('CCure', 'Cameras', 'CCure & Cameras'));
+ALTER TABLE tasks ADD CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('Accent Automatic', 'Accent Auto', 'Beacon', 'Convergint', 'DSI', 'EverBase', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'S101', 'SMT', 'Stone', 'Stone Security', 'USHOP', 'Utah Yamas', 'Yamas'));
+ALTER TABLE tasks ADD CONSTRAINT tasks_security_team_member_check CHECK (security_team_member IS NULL OR security_team_member IN ('Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam'));
 ALTER TABLE tasks ADD CONSTRAINT tasks_pm_check CHECK (pm IS NULL OR pm IN ('Kurt', 'Austin'));
 
 CREATE TABLE IF NOT EXISTS task_dependencies (
@@ -293,7 +292,6 @@ CREATE TABLE IF NOT EXISTS project_blueprints (
   id integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
   project_id integer NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   original_name text NOT NULL,
-  file_name text NOT NULL,
   mime_type text NOT NULL DEFAULT 'application/octet-stream',
   size_bytes integer NOT NULL CHECK (size_bytes > 0),
   file_data bytea NOT NULL,
@@ -303,7 +301,6 @@ CREATE TABLE IF NOT EXISTS project_blueprints (
 
 -- Upgrade older blueprint tables that used file_name/file_size column names.
 ALTER TABLE project_blueprints ADD COLUMN IF NOT EXISTS original_name text;
-ALTER TABLE project_blueprints ADD COLUMN IF NOT EXISTS file_name text;
 DO $$
 BEGIN
   IF EXISTS (
@@ -316,15 +313,10 @@ BEGIN
     UPDATE project_blueprints
     SET original_name = file_name
     WHERE original_name IS NULL AND file_name IS NOT NULL;
-    UPDATE project_blueprints
-    SET file_name = COALESCE(file_name, original_name)
-    WHERE file_name IS NULL AND original_name IS NOT NULL;
   END IF;
 END $$;
 UPDATE project_blueprints SET original_name = concat('blueprint-', id) WHERE original_name IS NULL;
-UPDATE project_blueprints SET file_name = COALESCE(file_name, original_name, concat('blueprint-', id)) WHERE file_name IS NULL;
 ALTER TABLE project_blueprints ALTER COLUMN original_name SET NOT NULL;
-ALTER TABLE project_blueprints ALTER COLUMN file_name SET NOT NULL;
 
 ALTER TABLE project_blueprints ADD COLUMN IF NOT EXISTS size_bytes integer;
 DO $$

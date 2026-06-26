@@ -14,10 +14,8 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingUserId, setSavingUserId] = useState(null);
-  const [passwordDrafts, setPasswordDrafts] = useState({});
 
   const currentSiteRole = currentUser?.site_role || 'member';
-  const canManageRoles = currentSiteRole === 'owner' || currentSiteRole === 'manager';
   const currentIsOwner = currentSiteRole === 'owner';
 
   async function loadUsers() {
@@ -54,11 +52,6 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
     setError('');
     try {
       await api(`/site/users/${user.id}`, { method: 'PATCH', body: payload });
-      setPasswordDrafts((current) => {
-        const next = { ...current };
-        delete next[user.id];
-        return next;
-      });
       await loadUsers();
     } catch (err) {
       setError(err.message);
@@ -88,7 +81,7 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
         <div className="panel-heading">
           <div>
             <h2>Site member management</h2>
-            <p>Managers and owners can review users, revoke access, delete accounts, change site role, and reset passwords.</p>
+            <p>Managers and owners can review users, revoke access, delete accounts, and change site role.</p>
           </div>
           <button className="ghost-button compact" onClick={loadUsers} type="button">Refresh users</button>
         </div>
@@ -102,7 +95,6 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
               const canChange = canChangeUser(siteUser);
               const busy = savingUserId === siteUser.id;
               const projects = Array.isArray(siteUser.projects) ? siteUser.projects : [];
-              const password = passwordDrafts[siteUser.id] || '';
               return (
                 <article className={`site-user-card ${siteUser.access_revoked ? 'revoked' : ''}`} key={siteUser.id}>
                   <div className="site-user-main">
@@ -121,31 +113,13 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
                       <label>
                         Site role
                         <select
-                          disabled={!canManageRoles || !canChange || busy}
+                          disabled={!canChange || busy}
                           value={siteUser.site_role}
                           onChange={(event) => updateUser(siteUser, { site_role: event.target.value })}
                         >
                           {allowedRoleOptions(siteUser).map((role) => <option key={role} value={role}>{titleCase(role)}</option>)}
                         </select>
                       </label>
-                      <label>
-                        New password
-                        <input
-                          disabled={!canManageRoles || !canChange || busy}
-                          type="password"
-                          value={password}
-                          onChange={(event) => setPasswordDrafts((current) => ({ ...current, [siteUser.id]: event.target.value }))}
-                          placeholder="Set a new password"
-                        />
-                      </label>
-                      <button
-                        className="ghost-button compact"
-                        disabled={!canManageRoles || !canChange || busy || password.trim().length < 8}
-                        onClick={() => updateUser(siteUser, { password })}
-                        type="button"
-                      >
-                        Update password
-                      </button>
                       <button
                         className={siteUser.access_revoked ? 'ghost-button compact' : 'danger-button compact'}
                         disabled={!canChange || busy}

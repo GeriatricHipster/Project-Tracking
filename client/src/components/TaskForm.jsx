@@ -1,13 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  appendStoredListValue,
-  locksmithOptions as defaultLocksmithOptions,
-  securitySystemOptions as defaultSecuritySystemOptions,
-  sortUnique,
-  taskNameOptions,
-  tradeOptions as defaultTradeOptions,
-  vendorOptions
-} from '../lib/options';
 import { addDays, todayIso } from '../lib/dates';
 
 const statusOptions = [
@@ -26,42 +17,97 @@ const priorityOptions = [
   ['critical', 'Critical']
 ];
 
-const STORAGE_KEYS = {
-  trade: 'psg-task-trade-options',
-  security1: 'psg-task-security-1-options',
-  security2: 'psg-task-security-2-options',
-  locksmiths: 'psg-task-locksmith-options',
-  other: 'psg-task-other-options'
-};
+const tradeOptions = ['CCure', 'Cameras', 'CCure & Cameras'];
+const vendorOptions = [...new Set([
+  'Accent Automatic',
+  'Accent Auto',
+  'Beacon',
+  'Convergint',
+  'DSI',
+  'EverBase',
+  'Everbase',
+  'G4S',
+  'IC&E',
+  'Ideacom',
+  'IES',
+  'Nelson Fire',
+  'OTIS',
+  'Pavion',
+  'Pye Barker',
+  'S101',
+  'SMT',
+  'Stone',
+  'Stone Security',
+  'USHOP',
+  'Utah Yamas',
+  'Yamas'
+])].sort((a, b) => a.localeCompare(b));
+const pmOptions = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));
+const presetAssigneeNames = [
+  'Bennett',
+  'Bill',
+  'Chris',
+  'Derick',
+  'Derick & James',
+  'Derick & Justin',
+  'Derick & Justin, Suvam',
+  'Derick & Kenna',
+  'Derick & Kyra',
+  'Derick & Locksmiths',
+  'Derick & Ryan',
+  'Derick & Suvam',
+  'James',
+  'James & Derick',
+  'James & Justin',
+  'James & Justin, Suvam',
+  'James & Kenna',
+  'James & Kyra',
+  'James & Locksmiths',
+  'James & Ryan',
+  'James & Suvam',
+  'Jim',
+  'Justin',
+  'Justin & Derick',
+  'Justin & James',
+  'Justin & Kenna',
+  'Justin & Kyra',
+  'Justin & Locksmiths',
+  'Justin & Ryan',
+  'Justin & Suvam',
+  'Kenna',
+  'Kenna & Derick',
+  'Kenna & Justin',
+  'Kenna & Justin, Suvam',
+  'Kenna & Kyra',
+  'Kenna & Locksmiths',
+  'Kenna & Ryan',
+  'Kenna & Suvam',
+  'Kyra',
+  'Ryan',
+  'Suvam',
+  'Suvam & Derick',
+  'Suvam & James',
+  'Suvam & Justin',
+  'Suvam & Kenna',
+  'Suvam & Kyra',
+  'Suvam & Locksmiths',
+  'Suvam & Ryan'
+];
 
-function readCustomList(storageKey) {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.map((value) => String(value || '').trim()).filter(Boolean) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeCustomList(storageKey, values) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(storageKey, JSON.stringify(sortUnique(values)));
+function sortUnique(values) {
+  return [...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
 }
 
 function blankTask(project) {
   const start = project?.start_date || todayIso();
   return {
-    task_name_choice: '',
-    custom_task_name: '',
+    name: '',
     description: '',
     trade: '',
     vendor: '',
     vendor_secondary: '',
+    pm: '',
     assigned_to: '',
-    security_team_member: '',
     assignee_secondary: '',
     assignee_tertiary: '',
     assignee_quaternary: '',
@@ -76,69 +122,21 @@ function blankTask(project) {
   };
 }
 
-function taskNameChoiceFromValue(value) {
-  const text = String(value || '').trim();
-  if (!text) return '';
-  return taskNameOptions.includes(text) ? text : 'Other';
-}
-
-function promptForCustomOption(promptLabel, storageKey, fallbackList, currentList, setCurrentList) {
-  const nextValue = window.prompt(`Add a custom ${promptLabel}:`);
-  if (nextValue === null) return null;
-  const text = String(nextValue || '').trim();
-  if (!text) return null;
-  const next = appendStoredListValue(storageKey, fallbackList, text);
-  setCurrentList(next.filter((value) => !fallbackList.includes(value)));
-  return text;
-}
-
-function SelectWithCustom({ label, value, onChange, options, storageKey, fallbackList, customList, setCustomList, canEdit }) {
-  const allOptions = sortUnique([...fallbackList, ...customList]);
-
-  function handleChange(event) {
-    const nextValue = event.target.value;
-    if (nextValue !== 'Custom') {
-      onChange(nextValue);
-      return;
-    }
-    const customValue = promptForCustomOption(label.toLowerCase(), storageKey, fallbackList, customList, setCustomList);
-    if (customValue) onChange(customValue);
-    else onChange(value || '');
-  }
-
-  return (
-    <label>
-      {label}
-      <select disabled={!canEdit} value={value} onChange={handleChange}>
-        <option value="">Unassigned</option>
-        {allOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-        <option value="Custom">Custom</option>
-      </select>
-    </label>
-  );
-}
-
 export default function TaskForm({ project, members, tasks, editingTask, canEdit, onSave, onCancel }) {
   const [form, setForm] = useState(blankTask(project));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [customTrades, setCustomTrades] = useState(() => readCustomList(STORAGE_KEYS.trade));
-  const [customSecurity1, setCustomSecurity1] = useState(() => readCustomList(STORAGE_KEYS.security1));
-  const [customSecurity2, setCustomSecurity2] = useState(() => readCustomList(STORAGE_KEYS.security2));
-  const [customLocksmiths, setCustomLocksmiths] = useState(() => readCustomList(STORAGE_KEYS.locksmiths));
-  const [customOther, setCustomOther] = useState(() => readCustomList(STORAGE_KEYS.other));
 
   useEffect(() => {
     if (editingTask) {
       setForm({
-        task_name_choice: taskNameChoiceFromValue(editingTask.name),
-        custom_task_name: taskNameOptions.includes(editingTask.name || '') ? '' : (editingTask.name || ''),
+        name: editingTask.name || '',
         description: editingTask.description || '',
         trade: editingTask.trade || '',
         vendor: editingTask.vendor || '',
         vendor_secondary: editingTask.vendor_secondary || '',
-        assigned_to: editingTask.assigned_to ? String(editingTask.assigned_to) : '',
-        security_team_member: editingTask.security_team_member || '',
+        pm: editingTask.pm || '',
+        assigned_to: editingTask.assigned_to || '',
         assignee_secondary: editingTask.assignee_secondary || '',
         assignee_tertiary: editingTask.assignee_tertiary || '',
         assignee_quaternary: editingTask.assignee_quaternary || '',
@@ -162,24 +160,16 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     [tasks, editingTask]
   );
 
-  const memberOptions = useMemo(() => {
-    return [...members].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
-  }, [members]);
+  const assigneeOptions = useMemo(
+    () => sortUnique([
+      ...members.map((member) => member.name).filter(Boolean),
+      ...presetAssigneeNames
+    ]),
+    [members]
+  );
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
-  }
-
-  function handleTaskNameChange(nextValue) {
-    if (nextValue === 'Other') {
-      setForm((current) => ({ ...current, task_name_choice: 'Other', custom_task_name: current.custom_task_name || '' }));
-      return;
-    }
-    setForm((current) => ({
-      ...current,
-      task_name_choice: nextValue,
-      custom_task_name: ''
-    }));
   }
 
   async function submit(event) {
@@ -187,15 +177,13 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     setError('');
     setSaving(true);
     try {
-      const taskName = form.task_name_choice === 'Other' ? form.custom_task_name.trim() : form.task_name_choice;
       await onSave({
-        name: taskName,
-        description: form.description,
+        ...form,
         trade: form.trade || null,
         vendor: form.vendor || null,
         vendor_secondary: form.vendor_secondary || null,
-        assigned_to: form.assigned_to ? Number(form.assigned_to) : null,
-        security_team_member: form.security_team_member || null,
+        pm: form.pm || null,
+        assigned_to: form.assigned_to || null,
         assignee_secondary: form.assignee_secondary || null,
         assignee_tertiary: form.assignee_tertiary || null,
         assignee_quaternary: form.assignee_quaternary || null,
@@ -203,7 +191,6 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         status: form.status || 'not_started',
         priority: form.priority || 'normal',
         percent_complete: Number(form.percent_complete),
-        color: form.color,
         sort_order: form.sort_order === '' ? undefined : Number(form.sort_order)
       });
       if (!editingTask) setForm(blankTask(project));
@@ -214,24 +201,12 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     }
   }
 
-  function addCustomAndUpdate(storageKey, fallbackList, currentCustom, setter, value) {
-    const next = appendStoredListValue(storageKey, fallbackList, value);
-    setter(next.filter((entry) => !fallbackList.includes(entry)));
-    return next;
-  }
-
-  const combinedSecurity1 = sortUnique([...defaultSecuritySystemOptions, ...customSecurity1]);
-  const combinedSecurity2 = sortUnique([...defaultSecuritySystemOptions, ...customSecurity2]);
-  const combinedLocksmiths = sortUnique([...defaultLocksmithOptions, ...customLocksmiths]);
-  const combinedTrades = sortUnique([...defaultTradeOptions, ...customTrades]);
-  const combinedOther = sortUnique([...customOther]);
-
   return (
     <section className="panel task-form-panel">
       <div className="panel-heading">
         <div>
           <h2>{editingTask ? 'Edit task' : 'Add task'}</h2>
-          <p>{canEdit ? 'Update task names, dates, vendors, status, and assignment details.' : 'Viewer access is read-only except for project notes.'}</p>
+          <p>{canEdit ? 'Update dates, vendor, status, responsibility, and progress.' : 'Viewer access is read-only except for project notes.'}</p>
         </div>
         {editingTask && <button className="ghost-button" onClick={onCancel} type="button">Cancel edit</button>}
       </div>
@@ -239,45 +214,15 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       <form className="stack" onSubmit={submit}>
         <label>
           Task name
-          <select disabled={!canEdit} value={form.task_name_choice} onChange={(event) => handleTaskNameChange(event.target.value)}>
-            <option value="">Unassigned</option>
-            {taskNameOptions.filter((option) => option !== 'Other').map((option) => <option key={option} value={option}>{option}</option>)}
-            <option value="Other">Other</option>
-          </select>
+          <input disabled={!canEdit} value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Panel installation" />
         </label>
-
-        {form.task_name_choice === 'Other' && (
-          <label>
-            Custom task name
-            <textarea
-              disabled={!canEdit}
-              value={form.custom_task_name}
-              onChange={(event) => updateField('custom_task_name', event.target.value)}
-              placeholder="Enter a custom task name"
-            />
-          </label>
-        )}
 
         <div className="two-col">
           <label>
             Trade
-            <select
-              disabled={!canEdit}
-              value={form.trade}
-              onChange={(event) => {
-                const next = event.target.value;
-                if (next === 'Custom') {
-                  const added = promptForCustomOption('trade', STORAGE_KEYS.trade, defaultTradeOptions, customTrades, setCustomTrades);
-                  if (added) updateField('trade', added);
-                  else updateField('trade', form.trade || '');
-                  return;
-                }
-                updateField('trade', next);
-              }}
-            >
+            <select disabled={!canEdit} value={form.trade} onChange={(event) => updateField('trade', event.target.value)}>
               <option value="">Unassigned</option>
-              {combinedTrades.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
-              <option value="Custom">Custom</option>
+              {tradeOptions.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
             </select>
           </label>
           <label>
@@ -309,103 +254,41 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         <div className="four-col">
           <label>
             Assignee
-            <select disabled={!canEdit} value={form.assigned_to || ''} onChange={(event) => updateField('assigned_to', event.target.value)}>
+            <select disabled={!canEdit} value={form.assigned_to} onChange={(event) => updateField('assigned_to', event.target.value)}>
               <option value="">Unassigned</option>
-              {memberOptions.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
+              {assigneeOptions.map((member) => (
+                <option key={member} value={member}>{member}</option>
+              ))}
             </select>
           </label>
           <label>
-            Security Systems 1
-            <select
-              disabled={!canEdit}
-              value={form.security_team_member}
-              onChange={(event) => {
-                const next = event.target.value;
-                if (next === 'Custom') {
-                  const added = promptForCustomOption('security systems 1 value', STORAGE_KEYS.security1, defaultSecuritySystemOptions, customSecurity1, setCustomSecurity1);
-                  if (added) updateField('security_team_member', added);
-                  else updateField('security_team_member', form.security_team_member || '');
-                  return;
-                }
-                updateField('security_team_member', next);
-              }}
-            >
+            Assignee 2
+            <select disabled={!canEdit} value={form.assignee_secondary} onChange={(event) => updateField('assignee_secondary', event.target.value)}>
               <option value="">Unassigned</option>
-              {combinedSecurity1.map((member) => <option key={member} value={member}>{member}</option>)}
-              <option value="Custom">Custom</option>
+              {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
             </select>
           </label>
           <label>
-            Security Systems 2
-            <select
-              disabled={!canEdit}
-              value={form.assignee_secondary}
-              onChange={(event) => {
-                const next = event.target.value;
-                if (next === 'Custom') {
-                  const added = promptForCustomOption('security systems 2 value', STORAGE_KEYS.security2, defaultSecuritySystemOptions, customSecurity2, setCustomSecurity2);
-                  if (added) updateField('assignee_secondary', added);
-                  else updateField('assignee_secondary', form.assignee_secondary || '');
-                  return;
-                }
-                updateField('assignee_secondary', next);
-              }}
-            >
+            Assignee 3
+            <select disabled={!canEdit} value={form.assignee_tertiary} onChange={(event) => updateField('assignee_tertiary', event.target.value)}>
               <option value="">Unassigned</option>
-              {combinedSecurity2.map((member) => <option key={member} value={member}>{member}</option>)}
-              <option value="Custom">Custom</option>
+              {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
             </select>
           </label>
           <label>
-            Lock Smiths
-            <select
-              disabled={!canEdit}
-              value={form.assignee_tertiary}
-              onChange={(event) => {
-                const next = event.target.value;
-                if (next === 'Custom') {
-                  const added = promptForCustomOption('lock smiths value', STORAGE_KEYS.locksmiths, defaultLocksmithOptions, customLocksmiths, setCustomLocksmiths);
-                  if (added) updateField('assignee_tertiary', added);
-                  else updateField('assignee_tertiary', form.assignee_tertiary || '');
-                  return;
-                }
-                updateField('assignee_tertiary', next);
-              }}
-            >
+            Assignee 4
+            <select disabled={!canEdit} value={form.assignee_quaternary} onChange={(event) => updateField('assignee_quaternary', event.target.value)}>
               <option value="">Unassigned</option>
-              {combinedLocksmiths.map((member) => <option key={member} value={member}>{member}</option>)}
-              <option value="Custom">Custom</option>
+              {assigneeOptions.map((member) => <option key={member} value={member}>{member}</option>)}
             </select>
           </label>
         </div>
 
         <label>
-          Other
-          <select
-            disabled={!canEdit}
-            value={form.assignee_quaternary}
-            onChange={(event) => {
-              const next = event.target.value;
-              if (next === 'Custom') {
-                const added = promptForCustomOption('other entry', STORAGE_KEYS.other, [], customOther, setCustomOther);
-                if (added) updateField('assignee_quaternary', added);
-                else updateField('assignee_quaternary', form.assignee_quaternary || '');
-                return;
-              }
-              updateField('assignee_quaternary', next);
-            }}
-          >
-            <option value="">Unassigned</option>
-            {combinedOther.map((member) => <option key={member} value={member}>{member}</option>)}
-            <option value="Custom">Custom</option>
-          </select>
-        </label>
-
-        <label>
           PM
           <select disabled={!canEdit} value={form.pm} onChange={(event) => updateField('pm', event.target.value)}>
             <option value="">Unassigned</option>
-            {['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b)).map((pm) => <option key={pm} value={pm}>{pm}</option>)}
+            {pmOptions.map((pm) => <option key={pm} value={pm}>{pm}</option>)}
           </select>
         </label>
 

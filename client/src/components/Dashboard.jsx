@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { addDays, formatDate, parseDisplayDate, todayIso } from '../lib/dates';
-import { addBuildingOption, getBuildingOptions } from '../lib/buildings';
+import { addDays, formatDate, todayIso } from '../lib/dates';
+import { buildingOptions } from '../lib/buildings';
 import SiteMembersPanel from './SiteMembersPanel';
 import OwnerCmsWosPanel from './OwnerCmsWosPanel';
-import MarkupCalculatorPanel from './MarkupCalculatorPanel';
 import SiteBanner from './SiteBanner';
 
 const dashboardTabs = [
@@ -13,8 +12,7 @@ const dashboardTabs = [
   { id: 'assignments', label: 'Projects' },
   { id: 'calendar', label: 'Calendar overview' },
   { id: 'site-members', label: 'Site members', managersOnly: true },
-  { id: 'owner-cms', label: 'CMS WOs', ownersOnly: true },
-  { id: 'markup-calculator', label: 'Markup calculator', ownersOnly: true }
+  { id: 'owner-cms', label: 'CMS WOs', ownersOnly: true }
 ];
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -158,7 +156,6 @@ export default function Dashboard({
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionProjectId, setActionProjectId] = useState(null);
-  const [availableBuildings, setAvailableBuildings] = useState(() => getBuildingOptions());
 
   const canManageSite = Boolean(user?.can_manage_site || ['owner', 'manager'].includes(user?.site_role));
   const canAccessOwnerCms = user?.site_role === 'owner' && !user?.access_revoked;
@@ -172,10 +169,6 @@ export default function Dashboard({
       setActiveTab(visibleTabs[0]?.id || 'projects');
     }
   }, [activeTab, visibleTabs]);
-
-  useEffect(() => {
-    setAvailableBuildings(getBuildingOptions());
-  }, []);
 
   const visibleProjects = useMemo(
     () => projects.filter((project) => matchesProjectSearch(project, searchTerm)),
@@ -234,28 +227,12 @@ export default function Dashboard({
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  function handleBuildingChange(value) {
-    if (value === '__add_new__') {
-      const nextValue = window.prompt('Add a new building name:');
-      if (!nextValue) return;
-      const updated = addBuildingOption(nextValue);
-      setAvailableBuildings(updated);
-      updateField('location', String(nextValue).trim());
-      return;
-    }
-    updateField('location', value);
-  }
-
   async function submit(event) {
     event.preventDefault();
     setError('');
     setSaving(true);
     try {
-      await onCreateProject({
-  ...form,
-  start_date: parseDisplayDate(form.start_date, 'start_date'),
-  end_date: parseDisplayDate(form.end_date, 'end_date')
-});
+      await onCreateProject(form);
       setForm({ name: '', location: '', description: '', start_date: start, end_date: addDays(start, 90) });
       setActiveTab('projects');
     } catch (err) {
@@ -395,12 +372,11 @@ export default function Dashboard({
             </label>
             <label>
               Building
-              <select value={form.location} onChange={(event) => handleBuildingChange(event.target.value)}>
-                <option value="">Unassigned</option>
-                {availableBuildings.map((building) => (
+              <select value={form.location} onChange={(event) => updateField('location', event.target.value)}>
+                <option value=""> </option>
+                {buildingOptions.map((building) => (
                   <option key={building} value={building}>{building}</option>
                 ))}
-                <option value="__add_new__">+ Add new building</option>
               </select>
             </label>
             <label>
@@ -736,7 +712,6 @@ export default function Dashboard({
       {activeTab === 'calendar' && renderCalendarTab()}
       {activeTab === 'site-members' && canManageSite && <SiteMembersPanel currentUser={user} onOpenProject={onOpenProject} />}
       {activeTab === 'owner-cms' && canAccessOwnerCms && <OwnerCmsWosPanel user={user} />}
-      {activeTab === 'markup-calculator' && canAccessOwnerCms && <MarkupCalculatorPanel />}
     </main>
   );
 }

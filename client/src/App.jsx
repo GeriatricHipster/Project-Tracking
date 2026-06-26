@@ -4,20 +4,24 @@ import Dashboard from './components/Dashboard';
 import ProjectView from './components/ProjectView';
 import SiteBanner from './components/SiteBanner';
 import { api, getToken, setToken } from './lib/api';
-import { backgroundOptions } from './lib/options';
+
+const backgroundOptions = [
+  { value: 'midnight', label: 'Midnight' },
+  { value: 'ember', label: 'Sunset' },
+  { value: 'slate', label: 'Slate' },
+  { value: 'steel', label: 'Ocean' }
+];
 
 function backgroundStorageKey(userId) {
   return userId ? `psg-background:${userId}` : 'psg-background:guest';
 }
 
 function readBackgroundPreference(userId) {
-  if (typeof window === 'undefined') return backgroundOptions[0].value;
+  if (typeof window === 'undefined') return 'midnight';
   const userKey = backgroundStorageKey(userId);
-  const stored = window.localStorage.getItem(userKey) || window.localStorage.getItem('psg-background:guest');
-  if (stored && backgroundOptions.some((option) => option.value === stored)) return stored;
-  if (stored === 'slate') return 'forest';
-  if (stored === 'steel') return 'ocean';
-  return backgroundOptions[0].value;
+  return window.localStorage.getItem(userKey)
+    || window.localStorage.getItem('psg-background:guest')
+    || backgroundOptions[0].value;
 }
 
 export default function App() {

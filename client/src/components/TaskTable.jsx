@@ -25,7 +25,7 @@ export default function TaskTable({ tasks, canEdit, onEdit, onDelete }) {
               <th>Trade</th>
               <th>Vendor</th>
               <th>More</th>
-              <th>Security Systems 1</th>
+              <th>Security team</th>
               <th>PM</th>
               <th>Assignee</th>
               <th>Status</th>

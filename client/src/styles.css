@@ -2021,7 +2021,7 @@ th {
 .gantt-toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: flex-end;
   gap: 0.5rem;
   flex-wrap: wrap;
 }
@@ -2611,36 +2611,6 @@ html[data-theme='dark'] .theme-toggle-button {
   margin: 0.2rem 0 1rem;
 }
 
-.cms-sheet-meta .row-actions {
-  flex-wrap: wrap;
-}
-
-.markup-panel .table-scroll {
-  overflow: auto;
-}
-
-.markup-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.markup-table th,
-.markup-table td {
-  border: 1px solid #e5e7eb;
-  padding: 0.7rem 0.75rem;
-  text-align: left;
-}
-
-.markup-table thead th,
-.markup-table tfoot th {
-  background: #f8fafc;
-}
-
-.markup-table input {
-  width: 100%;
-}
-
-
 .cms-sheet-meta strong,
 .cms-sheet-meta p {
   margin: 0;
@@ -2810,86 +2780,58 @@ html[data-theme='dark'] .cms-grid-table td {
 
 html[data-theme='light'][data-background='midnight'] body {
   background:
-    radial-gradient(circle at top left, rgba(79, 70, 229, 0.18), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.16), transparent 18rem),
-    linear-gradient(180deg, #eef2ff 0%, #e0e7ff 55%, #f8fafc 100%);
-}
-
-html[data-theme='light'][data-background='sunrise'] body {
-  background:
-    radial-gradient(circle at top left, rgba(251, 146, 60, 0.22), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(244, 114, 182, 0.18), transparent 18rem),
-    linear-gradient(180deg, #fff7ed 0%, #fde68a 48%, #fff1f2 100%);
+    radial-gradient(circle at top left, rgba(79, 70, 229, 0.16), transparent 24rem),
+    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.12), transparent 18rem),
+    linear-gradient(180deg, #eef2ff 0%, #f8fafc 52%, #e2e8f0 100%);
 }
 
 html[data-theme='light'][data-background='ember'] body {
   background:
-    radial-gradient(circle at top left, rgba(239, 68, 68, 0.22), transparent 22rem),
+    radial-gradient(circle at top left, rgba(239, 68, 68, 0.2), transparent 22rem),
     radial-gradient(circle at bottom right, rgba(251, 146, 60, 0.18), transparent 18rem),
-    linear-gradient(180deg, #fff1f2 0%, #fed7aa 55%, #fef2f2 100%);
+    linear-gradient(180deg, #fff7ed 0%, #ffedd5 52%, #fef2f2 100%);
 }
 
-html[data-theme='light'][data-background='forest'] body {
+html[data-theme='light'][data-background='slate'] body {
   background:
-    radial-gradient(circle at top left, rgba(34, 197, 94, 0.18), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(20, 184, 166, 0.16), transparent 18rem),
-    linear-gradient(180deg, #f0fdf4 0%, #dcfce7 50%, #ecfeff 100%);
+    radial-gradient(circle at top left, rgba(15, 23, 42, 0.12), transparent 24rem),
+    radial-gradient(circle at bottom right, rgba(100, 116, 139, 0.14), transparent 18rem),
+    linear-gradient(180deg, #f8fafc 0%, #e5e7eb 52%, #f8fafc 100%);
 }
 
-html[data-theme='light'][data-background='ocean'] body {
+html[data-theme='light'][data-background='steel'] body {
   background:
-    radial-gradient(circle at top left, rgba(14, 165, 233, 0.18), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.16), transparent 18rem),
-    linear-gradient(180deg, #eff6ff 0%, #dbeafe 55%, #ecfeff 100%);
-}
-
-html[data-theme='light'][data-background='violet'] body {
-  background:
-    radial-gradient(circle at top left, rgba(168, 85, 247, 0.2), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.16), transparent 18rem),
-    linear-gradient(180deg, #f5f3ff 0%, #ede9fe 55%, #fdf4ff 100%);
+    radial-gradient(circle at top left, rgba(20, 184, 166, 0.16), transparent 24rem),
+    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.14), transparent 18rem),
+    linear-gradient(180deg, #ecfeff 0%, #eff6ff 52%, #f8fafc 100%);
 }
 
 html[data-theme='dark'][data-background='midnight'] body {
   background:
-    radial-gradient(circle at top left, rgba(99, 102, 241, 0.22), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.18), transparent 18rem),
-    linear-gradient(180deg, #020617 0%, #0f172a 55%, #111827 100%);
-}
-
-html[data-theme='dark'][data-background='sunrise'] body {
-  background:
-    radial-gradient(circle at top left, rgba(251, 146, 60, 0.26), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(244, 114, 182, 0.18), transparent 18rem),
-    linear-gradient(180deg, #120c06 0%, #1f2937 55%, #2b1f3a 100%);
+    radial-gradient(circle at top left, rgba(79, 70, 229, 0.2), transparent 24rem),
+    radial-gradient(circle at bottom right, rgba(37, 99, 235, 0.14), transparent 18rem),
+    linear-gradient(180deg, #030712 0%, #0f172a 52%, #111827 100%);
 }
 
 html[data-theme='dark'][data-background='ember'] body {
   background:
     radial-gradient(circle at top left, rgba(239, 68, 68, 0.24), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(251, 146, 60, 0.18), transparent 18rem),
+    radial-gradient(circle at bottom right, rgba(251, 146, 60, 0.16), transparent 18rem),
     linear-gradient(180deg, #09090b 0%, #111827 52%, #1f2937 100%);
 }
 
-html[data-theme='dark'][data-background='forest'] body {
+html[data-theme='dark'][data-background='slate'] body {
   background:
-    radial-gradient(circle at top left, rgba(34, 197, 94, 0.2), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(20, 184, 166, 0.18), transparent 18rem),
-    linear-gradient(180deg, #04110b 0%, #052e1a 55%, #0f172a 100%);
+    radial-gradient(circle at top left, rgba(148, 163, 184, 0.16), transparent 24rem),
+    radial-gradient(circle at bottom right, rgba(71, 85, 105, 0.18), transparent 18rem),
+    linear-gradient(180deg, #0f172a 0%, #111827 52%, #1e293b 100%);
 }
 
-html[data-theme='dark'][data-background='ocean'] body {
+html[data-theme='dark'][data-background='steel'] body {
   background:
-    radial-gradient(circle at top left, rgba(14, 165, 233, 0.22), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.18), transparent 18rem),
-    linear-gradient(180deg, #020617 0%, #0b1220 55%, #111827 100%);
-}
-
-html[data-theme='dark'][data-background='violet'] body {
-  background:
-    radial-gradient(circle at top left, rgba(168, 85, 247, 0.22), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.18), transparent 18rem),
-    linear-gradient(180deg, #090014 0%, #1f1147 55%, #111827 100%);
+    radial-gradient(circle at top left, rgba(20, 184, 166, 0.18), transparent 24rem),
+    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.16), transparent 18rem),
+    linear-gradient(180deg, #020617 0%, #0b1220 52%, #111827 100%);
 }
 
 html[data-background] .app-page,
