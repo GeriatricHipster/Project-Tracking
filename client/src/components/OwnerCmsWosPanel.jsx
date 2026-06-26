@@ -19,11 +19,6 @@ function titleize(value) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function matchesFilter(value, filterValue) {
-  if (!filterValue) return true;
-  return String(value || '').toLowerCase().includes(String(filterValue).toLowerCase());
-}
-
 const SpreadsheetCell = memo(function SpreadsheetCell({ sheetKey, rowIndex, column, value, onCellChange, onCellCommit, disabled }) {
   const commonProps = {
     'aria-label': `${column.label} row ${rowIndex + 1}`,
@@ -43,7 +38,7 @@ const SpreadsheetCell = memo(function SpreadsheetCell({ sheetKey, rowIndex, colu
             onCellCommit(sheetKey, rowIndex, column.index, nextValue);
           }}
         >
-          <option value="">Unassigned</option>
+          <option value=""> </option>
           {column.options.map((option) => (
             <option key={option} value={option}>{option}</option>
           ))}
@@ -98,117 +93,59 @@ const SpreadsheetCell = memo(function SpreadsheetCell({ sheetKey, rowIndex, colu
   );
 });
 
-function FilterCell({ column, value, onChange }) {
-  if (column.type === 'select') {
-    return (
-      <th className="cms-grid-filter-cell" style={{ minWidth: column.width, width: column.width }}>
-        <select value={value || ''} onChange={(event) => onChange(event.target.value)}>
-          <option value="">All</option>
-          {column.options.map((option) => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </select>
-      </th>
-    );
-  }
-
-  return (
-    <th className="cms-grid-filter-cell" style={{ minWidth: column.width, width: column.width }}>
-      <input value={value || ''} onChange={(event) => onChange(event.target.value)} placeholder="Filter" />
-    </th>
-  );
-}
-
-function SheetGrid({
-  sheet,
-  savingCell,
-  filters,
-  fullscreen,
-  onToggleFullscreen,
-  onCellChange,
-  onCellCommit,
-  onFilterChange,
-  onClearFilters,
-  onAddRow
-}) {
+function SheetGrid({ sheet, savingCell, onCellChange, onCellCommit, searchTerm }) {
   const rows = sheet?.cells || buildBlankOwnerCmsGrid();
-  const visibleRows = useMemo(
-    () => rows
-      .map((row, index) => ({ row, index }))
-      .filter(({ row }) => ownerCmsColumns.every((column, columnIndex) => matchesFilter(row[columnIndex], filters[column.key]))),
-    [rows, filters]
-  );
+  const filteredRows = useMemo(() => {
+    const query = String(searchTerm || '').trim().toLowerCase();
+    if (!query) return rows;
+    return rows.filter((row) => row.some((cell) => String(cell || '').toLowerCase().includes(query)));
+  }, [rows, searchTerm]);
 
   return (
-    <div className={`cms-grid-shell${fullscreen ? ' fullscreen' : ''}`}>
-      <div className="cms-grid-toolbar">
-        <button className="ghost-button compact" onClick={onToggleFullscreen} type="button">
-          {fullscreen ? 'Exit full screen' : 'Full screen'}
-        </button>
-        <div className="cms-grid-toolbar-meta">
-          <span>{visibleRows.length} of {rows.length} rows shown</span>
-          <button className="ghost-button compact" onClick={onAddRow} type="button">Insert row</button>
-          <button className="ghost-button compact" onClick={onClearFilters} type="button">Clear filters</button>
-        </div>
-      </div>
-
-      <div className="cms-grid-wrap">
-        <table className="cms-grid-table">
-          <thead>
-            <tr>
-              <th className="cms-grid-corner">#</th>
-              {ownerCmsColumns.map((column) => (
-                <th key={column.key} className="cms-grid-col-header" style={{ minWidth: column.width, width: column.width }}>
-                  {column.label}
-                </th>
-              ))}
-            </tr>
-            <tr>
-              <th className="cms-grid-corner cms-grid-filter-label">Filter</th>
-              {ownerCmsColumns.map((column) => (
-                <FilterCell
-                  key={`filter-${column.key}`}
-                  column={column}
-                  value={filters[column.key] || ''}
-                  onChange={(nextValue) => onFilterChange(column.key, nextValue)}
+    <div className="cms-grid-wrap">
+      <table className="cms-grid-table">
+        <thead>
+          <tr>
+            <th className="cms-grid-corner">#</th>
+            {ownerCmsColumns.map((column) => (
+              <th key={column.key} className="cms-grid-col-header" style={{ minWidth: column.width, width: column.width }}>
+                {column.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {filteredRows.map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              <th className="cms-grid-row-header">{rowIndex + 1}</th>
+              {ownerCmsColumns.map((column, colIndex) => (
+                <SpreadsheetCell
+                  key={`${rowIndex}-${column.key}`}
+                  sheetKey={sheet.sheet_key}
+                  rowIndex={rowIndex}
+                  column={{ ...column, index: colIndex }}
+                  value={row[colIndex] ?? ''}
+                  onCellChange={onCellChange}
+                  onCellCommit={onCellCommit}
+                  disabled={savingCell === `${sheet.sheet_key}-${rowIndex}-${colIndex}`}
                 />
               ))}
             </tr>
-          </thead>
-          <tbody>
-            {visibleRows.map(({ row, index }) => (
-              <tr key={index}>
-                <th className="cms-grid-row-header">{index + 1}</th>
-                {ownerCmsColumns.map((column, colIndex) => (
-                  <SpreadsheetCell
-                    key={`${index}-${column.key}`}
-                    sheetKey={sheet.sheet_key}
-                    rowIndex={index}
-                    column={{ ...column, index: colIndex }}
-                    value={row[colIndex] ?? ''}
-                    onCellChange={onCellChange}
-                    onCellCommit={onCellCommit}
-                    disabled={savingCell === `${sheet.sheet_key}-${index}-${colIndex}`}
-                  />
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
 export default function OwnerCmsWosPanel({ user }) {
+  const panelRef = useRef(null);
   const [activeSheetKey, setActiveSheetKey] = useState(SHEETS[0].sheet_key);
   const [sheets, setSheets] = useState({});
   const [loading, setLoading] = useState(true);
   const [savingCell, setSavingCell] = useState('');
   const [error, setError] = useState('');
-  const [filtersBySheet, setFiltersBySheet] = useState({});
-  const [fullscreen, setFullscreen] = useState(false);
-  const shellRef = useRef(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const canAccess = user?.site_role === 'owner' && !user?.access_revoked;
 
@@ -217,8 +154,6 @@ export default function OwnerCmsWosPanel({ user }) {
     sheet_name: SHEETS.find((sheet) => sheet.sheet_key === activeSheetKey)?.sheet_name || titleize(activeSheetKey),
     cells: buildBlankOwnerCmsGrid()
   };
-
-  const activeFilters = filtersBySheet[activeSheetKey] || {};
 
   const refreshSheets = useCallback(async () => {
     setLoading(true);
@@ -244,21 +179,6 @@ export default function OwnerCmsWosPanel({ user }) {
     if (!canAccess) return;
     refreshSheets();
   }, [canAccess, refreshSheets]);
-
-  useEffect(() => {
-    const handler = () => setFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener('fullscreenchange', handler);
-    return () => document.removeEventListener('fullscreenchange', handler);
-  }, []);
-
-  async function toggleFullscreen() {
-    if (!shellRef.current) return;
-    if (document.fullscreenElement) {
-      await document.exitFullscreen();
-      return;
-    }
-    await shellRef.current.requestFullscreen?.();
-  }
 
   async function saveCell(sheetKey, rowIndex, colIndex, value) {
     const nextValue = String(value ?? '');
@@ -290,51 +210,11 @@ export default function OwnerCmsWosPanel({ user }) {
         cells: buildBlankOwnerCmsGrid()
       };
       const nextCells = normalizeOwnerCmsGrid(currentSheet.cells);
-      while (nextCells.length <= rowIndex) {
-        nextCells.push(Array.from({ length: ownerCmsColumnCount }, () => ''));
-      }
-      while (nextCells[rowIndex].length < ownerCmsColumnCount) {
-        nextCells[rowIndex].push('');
-      }
       nextCells[rowIndex][colIndex] = value;
       next[sheetKey] = { ...currentSheet, cells: nextCells };
       return next;
     });
   }, []);
-
-  const addRow = useCallback(async () => {
-    const nextRowIndex = (activeSheet.cells || []).length;
-    setSheets((current) => {
-      const next = { ...current };
-      const currentSheet = next[activeSheetKey] || {
-        sheet_key: activeSheetKey,
-        sheet_name: activeSheet.sheet_name,
-        cells: buildBlankOwnerCmsGrid()
-      };
-      const nextCells = normalizeOwnerCmsGrid(currentSheet.cells);
-      nextCells.push(Array.from({ length: ownerCmsColumnCount }, () => ''));
-      next[activeSheetKey] = { ...currentSheet, cells: nextCells };
-      return next;
-    });
-    await saveCell(activeSheetKey, nextRowIndex, 0, '');
-  }, [activeSheet.cells, activeSheet.sheet_name, activeSheetKey]);
-
-  const updateFilter = useCallback((key, value) => {
-    setFiltersBySheet((current) => ({
-      ...current,
-      [activeSheetKey]: {
-        ...(current[activeSheetKey] || {}),
-        [key]: value
-      }
-    }));
-  }, [activeSheetKey]);
-
-  const clearFilters = useCallback(() => {
-    setFiltersBySheet((current) => ({
-      ...current,
-      [activeSheetKey]: {}
-    }));
-  }, [activeSheetKey]);
 
   if (!canAccess) {
     return (
@@ -353,10 +233,20 @@ export default function OwnerCmsWosPanel({ user }) {
     );
   }
 
+  function toggleFullscreen() {
+    if (!panelRef.current) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+      return;
+    }
+    panelRef.current.requestFullscreen?.();
+  }
+
   return (
-    <section className="dashboard-stack owner-cms-panel" ref={shellRef}>
-      <section className="panel">
+    <section className="dashboard-stack owner-cms-panel">
+      <section className="panel" ref={panelRef}>
         <div className="panel-heading">
+          <button className="ghost-button compact" onClick={toggleFullscreen} type="button">Full screen</button>
           <div>
             <h2>CMS WOs</h2>
             <p>Owner-only work order spreadsheets. Use the dropdowns and date fields in the table below.</p>
@@ -386,26 +276,24 @@ export default function OwnerCmsWosPanel({ user }) {
               {ownerCmsRowCount} rows, {ownerCmsColumnCount} columns. Blank values stay blank until you choose something.
             </p>
           </div>
-        </div>
-
-        <SheetGrid
-          sheet={activeSheet}
-          savingCell={savingCell}
-          filters={activeFilters}
-          fullscreen={fullscreen}
-          onToggleFullscreen={toggleFullscreen}
-          onCellChange={updateCell}
-          onCellCommit={saveCell}
-          onFilterChange={updateFilter}
-          onClearFilters={clearFilters}
-          onAddRow={addRow}
-        />
-
-        <div className="cms-grid-footer">
           <button className="ghost-button compact" onClick={refreshSheets} type="button">
             Refresh sheet
           </button>
         </div>
+
+        <div className="cms-search-row">
+          <label>
+            Search rows
+            <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search by dropdown content" />
+          </label>
+        </div>
+        <SheetGrid
+          sheet={activeSheet}
+          savingCell={savingCell}
+          onCellChange={updateCell}
+          onCellCommit={saveCell}
+          searchTerm={searchTerm}
+        />
       </section>
     </section>
   );

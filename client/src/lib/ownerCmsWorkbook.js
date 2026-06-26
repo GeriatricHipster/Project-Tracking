@@ -381,21 +381,18 @@ Uploaded
 export const ownerCmsColumnCount = COLUMN_COUNT;
 export const ownerCmsRowCount = ROW_COUNT;
 
-export function buildBlankOwnerCmsGrid(rowCount = ROW_COUNT, columnCount = COLUMN_COUNT) {
-  return Array.from({ length: Math.max(0, rowCount) }, () => Array.from({ length: Math.max(0, columnCount) }, () => ''));
+export function buildBlankOwnerCmsGrid() {
+  return Array.from({ length: ROW_COUNT }, () => Array.from({ length: COLUMN_COUNT }, () => ''));
 }
 
 export function normalizeOwnerCmsGrid(cells) {
-  const rowCount = Math.max(ROW_COUNT, Array.isArray(cells) ? cells.length : ROW_COUNT);
-  const grid = buildBlankOwnerCmsGrid(rowCount, COLUMN_COUNT);
+  const grid = buildBlankOwnerCmsGrid();
   if (!Array.isArray(cells)) return grid;
 
-  for (let rowIndex = 0; rowIndex < cells.length; rowIndex += 1) {
+  for (let rowIndex = 0; rowIndex < Math.min(cells.length, ROW_COUNT); rowIndex += 1) {
     const row = cells[rowIndex];
     if (!Array.isArray(row)) continue;
-    if (!grid[rowIndex]) grid[rowIndex] = Array.from({ length: COLUMN_COUNT }, () => '');
-    for (let colIndex = 0; colIndex < Math.max(row.length, COLUMN_COUNT); colIndex += 1) {
-      if (colIndex >= COLUMN_COUNT) break;
+    for (let colIndex = 0; colIndex < Math.min(row.length, COLUMN_COUNT); colIndex += 1) {
       const value = row[colIndex];
       grid[rowIndex][colIndex] = value === null || value === undefined ? '' : String(value);
     }

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { addDays, formatDate, formatDisplayDate, parseDisplayDate, todayIso } from '../lib/dates';
+import { addDays, formatDate, todayIso } from '../lib/dates';
 import { buildingOptions } from '../lib/buildings';
 import SiteMembersPanel from './SiteMembersPanel';
-import MarkupCalculatorPanel from './MarkupCalculatorPanel';
 import OwnerCmsWosPanel from './OwnerCmsWosPanel';
+import MarkupCalculatorPanel from './MarkupCalculatorPanel';
 import SiteBanner from './SiteBanner';
 
 const dashboardTabs = [
@@ -98,10 +98,6 @@ function matchesProjectSearch(project, term) {
   return getProjectSearchText(project).includes(query);
 }
 
-function uniqueValues(values) {
-  return Array.from(new Set(values.filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b)));
-}
-
 function buildUserAssignments(projects) {
   const users = new Map();
 
@@ -148,20 +144,12 @@ export default function Dashboard({
   const [activeTab, setActiveTab] = useState('projects');
   const [calendarMonth, setCalendarMonth] = useState(start.slice(0, 7));
   const [searchTerm, setSearchTerm] = useState('');
-  const [customBuildings, setCustomBuildings] = useState(() => {
-    if (typeof window === 'undefined') return [];
-    try {
-      return JSON.parse(window.localStorage.getItem('psg-custom-buildings') || '[]');
-    } catch {
-      return [];
-    }
-  });
   const [form, setForm] = useState({
     name: '',
     location: '',
     description: '',
-    start_date: formatDisplayDate(start),
-    end_date: formatDisplayDate(addDays(start, 90))
+    start_date: start,
+    end_date: addDays(start, 90)
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -183,11 +171,6 @@ export default function Dashboard({
   const visibleProjects = useMemo(
     () => projects.filter((project) => matchesProjectSearch(project, searchTerm)),
     [projects, searchTerm]
-  );
-
-  const buildingChoices = useMemo(
-    () => uniqueValues([...buildingOptions, ...projects.map((project) => project.location), ...customBuildings]),
-    [projects, customBuildings]
   );
 
   const activeProjects = useMemo(
@@ -235,29 +218,13 @@ export default function Dashboard({
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  function chooseCustomBuilding() {
-    const entered = window.prompt('Enter a new building name');
-    if (!entered || !entered.trim()) return '';
-    const next = entered.trim();
-    setCustomBuildings((current) => {
-      const nextList = uniqueValues([...current, next]);
-      window.localStorage.setItem('psg-custom-buildings', JSON.stringify(nextList));
-      return nextList;
-    });
-    return next;
-  }
-
   async function submit(event) {
     event.preventDefault();
     setError('');
     setSaving(true);
     try {
-      await onCreateProject({
-        ...form,
-        start_date: parseDisplayDate(form.start_date),
-        end_date: parseDisplayDate(form.end_date)
-      });
-      setForm({ name: '', location: '', description: '', start_date: formatDisplayDate(start), end_date: formatDisplayDate(addDays(start, 90)) });
+      await onCreateProject(form);
+      setForm({ name: '', location: '', description: '', start_date: start, end_date: addDays(start, 90) });
       setActiveTab('projects');
     } catch (err) {
       setError(err.message);
@@ -303,7 +270,7 @@ export default function Dashboard({
   function renderProjectActions(project) {
     const lifecycle = getLifecycleStatus(project);
     const canManage = managerRoles.has(project.role);
-    const canDelete = user?.site_role === 'owner' && !user?.access_revoked;
+    const canDelete = project.role === 'owner';
     const busy = actionProjectId === project.id;
 
     return (
@@ -390,20 +357,11 @@ export default function Dashboard({
             </label>
             <label>
               Building
-              <select value={form.location} onChange={(event) => {
-                const next = event.target.value;
-                if (next === '__custom__') {
-                  const custom = chooseCustomBuilding();
-                  if (custom) updateField('location', custom);
-                  return;
-                }
-                updateField('location', next);
-              }}>
-                <option value="">Unassigned</option>
-                {buildingChoices.map((building) => (
+              <select value={form.location} onChange={(event) => updateField('location', event.target.value)}>
+                <option value=""> </option>
+                {buildingOptions.map((building) => (
                   <option key={building} value={building}>{building}</option>
                 ))}
-                <option value="__custom__">Add new building...</option>
               </select>
             </label>
             <label>
@@ -413,11 +371,11 @@ export default function Dashboard({
             <div className="two-col">
               <label>
                 Start
-                <input type="text" inputMode="numeric" placeholder="MM-DD-YYYY" value={form.start_date} onChange={(event) => updateField('start_date', event.target.value)} />
+                <input type="date" value={form.start_date} onChange={(event) => updateField('start_date', event.target.value)} />
               </label>
               <label>
                 Finish
-                <input type="text" inputMode="numeric" placeholder="MM-DD-YYYY" value={form.end_date} onChange={(event) => updateField('end_date', event.target.value)} />
+                <input type="date" value={form.end_date} onChange={(event) => updateField('end_date', event.target.value)} />
               </label>
             </div>
             {error && <p className="error-box">{error}</p>}

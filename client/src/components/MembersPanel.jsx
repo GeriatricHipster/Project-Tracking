@@ -1,3 +1,7 @@
+import { useState } from 'react';
+
+const allRoles = ['owner', 'manager', 'editor', 'viewer'];
+
 function describeNotification(_result, baseMessage) {
   return baseMessage;
 }
@@ -76,14 +80,14 @@ export default function MembersPanel({ currentUser, projectRole, members, canMan
               <span>{member.email}</span>
             </div>
             <div className="member-actions">
-              {canOwner ? (
+              {canManage ? (
                 <select disabled={updatingUserId === member.user_id} value={member.role} onChange={(event) => changeMemberRole(member, event.target.value)}>
-                  {allRoles.map((role) => <option key={role} value={role}>{role}</option>)}
+                  {roleOptions.map((role) => <option key={role} value={role}>{role}</option>)}
                 </select>
               ) : (
                 <span className={`role-pill role-${member.role}`}>{member.role}</span>
               )}
-              {canOwner && member.user_id !== currentUser?.id && (
+              {canManage && member.user_id !== currentUser?.id && (
                 <button className="danger-button compact" onClick={() => onRemoveMember(member)} type="button">Remove</button>
               )}
             </div>

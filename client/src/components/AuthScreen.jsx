@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 
-const userTradeOptions = ['CCure Team', 'Camera Team', 'Lock Smith', 'Vendor', 'PM', 'Manger', 'Supervisor'];
+const tradeOptions = ['CCure Team', 'Camera Team', 'Lock Smith', 'Vendor'];
 
 export default function AuthScreen({ onAuth }) {
   const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({ name: '', email: 'admin@demo.com', password: 'Construction123!', rememberMe: true, trade: '' });
+  const [form, setForm] = useState({ name: '', email: 'admin@demo.com', password: 'Construction123!', trade: '', rememberMe: true });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -27,7 +27,7 @@ export default function AuthScreen({ onAuth }) {
     setLoading(true);
     try {
       const payload = mode === 'register'
-        ? { name: form.name, email: form.email, password: form.password, trade: form.trade || null }
+        ? { name: form.name, email: form.email, password: form.password, trade: form.trade }
         : { email: form.email, password: form.password };
       const data = await api(`/auth/${mode}`, { method: 'POST', body: payload, token: null });
       if (typeof window !== 'undefined') {
@@ -68,7 +68,7 @@ export default function AuthScreen({ onAuth }) {
                 Trade
                 <select value={form.trade} onChange={(event) => updateField('trade', event.target.value)}>
                   <option value="">Unassigned</option>
-                  {userTradeOptions.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
+                  {tradeOptions.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
                 </select>
               </label>
             </>

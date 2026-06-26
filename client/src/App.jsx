@@ -5,23 +5,14 @@ import ProjectView from './components/ProjectView';
 import SiteBanner from './components/SiteBanner';
 import { api, getToken, setToken } from './lib/api';
 
-const backgroundChoices = [
-  { id: 'redwood', label: 'Redwood' },
-  { id: 'sunset', label: 'Sunset' },
-  { id: 'ocean', label: 'Ocean' },
-  { id: 'forest', label: 'Forest' },
-  { id: 'violet', label: 'Violet' },
-  { id: 'slate', label: 'Slate' }
-];
-
 export default function App() {
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') return 'light';
     return window.localStorage.getItem('psg-theme') || 'light';
   });
   const [background, setBackground] = useState(() => {
-    if (typeof window === 'undefined') return 'redwood';
-    return window.localStorage.getItem('psg-background') || 'redwood';
+    if (typeof window === 'undefined') return 'aurora';
+    return window.localStorage.getItem('psg-background') || 'aurora';
   });
   const [token, setTokenState] = useState(getToken());
   const [user, setUser] = useState(null);
@@ -39,7 +30,7 @@ export default function App() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.documentElement.dataset.theme = theme;
-    document.documentElement.dataset.background = background;
+    document.documentElement.dataset.bg = background;
     document.documentElement.style.colorScheme = theme;
     window.localStorage.setItem('psg-theme', theme);
     window.localStorage.setItem('psg-background', background);
@@ -64,7 +55,6 @@ export default function App() {
       setLoadingProjects(false);
     }
   }
-
   function routeAfterAuth(nextProjects) {
     openProjectFromUrl(nextProjects);
   }
@@ -119,6 +109,10 @@ export default function App() {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
   }
 
+  function changeBackground(event) {
+    setBackground(event.target.value);
+  }
+
   function logout() {
     setToken(null);
     setTokenState(null);
@@ -127,39 +121,37 @@ export default function App() {
     setSelectedProjectId(null);
   }
 
-  const controls = (
-    <div className="site-controls">
+  const themeToggle = (
+    <div className="theme-controls">
+      <select className="background-select" value={background} onChange={changeBackground} aria-label="Background theme">
+        <option value="aurora">Aurora</option>
+        <option value="sunset">Sunset</option>
+        <option value="ocean">Ocean</option>
+        <option value="forest">Forest</option>
+        <option value="violet">Violet</option>
+        <option value="ember">Ember</option>
+      </select>
       <button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
         {theme === 'dark' ? 'Light mode' : 'Dark mode'}
       </button>
-      <details className="background-menu">
-        <summary className="theme-toggle-button">Background</summary>
-        <div className="background-menu-panel">
-          {backgroundChoices.map((choice) => (
-            <button key={choice.id} className={background === choice.id ? 'active' : ''} onClick={() => setBackground(choice.id)} type="button">
-              {choice.label}
-            </button>
-          ))}
-        </div>
-      </details>
     </div>
   );
 
   if (booting) {
-    return <><div className="top-right-controls">{controls}</div><main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main></>;
+    return <>{themeToggle}<main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main></>;
   }
 
   if (!token || !user) {
-    return <><div className="top-right-controls">{controls}</div><AuthScreen onAuth={handleAuth} /></>;
+    return <>{themeToggle}<AuthScreen onAuth={handleAuth} /></>;
   }
 
   if (selectedProjectId) {
-    return <><div className="top-right-controls">{controls}</div><ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></>;
+    return <>{themeToggle}<ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></>;
   }
 
   return (
     <>
-      <div className="top-right-controls">{controls}</div>
+      {themeToggle}
       <Dashboard
         user={user}
         projects={projects}
