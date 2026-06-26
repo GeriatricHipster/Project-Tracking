@@ -111,10 +111,6 @@ const assigneeSystemSeed = [
   'Suvam & James',
   'Ryan',
   'Kyra',
-  'Bill',
-  'Bennett',
-  'Jim',
-  'Chris'
 ].sort((a, b) => a.localeCompare(b));
 
 const locksmithSeed = ['Bill', 'Bennett', 'Chris', 'Jim'].sort((a, b) => a.localeCompare(b));
