@@ -400,7 +400,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
 
         <div className="four-col assignee-grid">
           <CustomizableSelect
-            label="CCure Team and Camera Team"
+            label="Security Systems Team Member"
             value={form.assigned_to}
             options={assigneeSystemOptions}
             customValue={form.assignee_system_custom || ''}
@@ -415,7 +415,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             }}
           />
           <CustomizableSelect
-            label="CCure Team and Camera Team"
+            label="Security Systems Team Member"
             value={form.assignee_secondary}
             options={assigneeSystemOptions}
             customValue={form.assignee_secondary_custom || ''}
