@@ -67,6 +67,10 @@ const assigneeSource = [
   'Suvam & James',
   'Ryan',
   'Kyra',
+  'Bill',
+  'Bennett',
+  'Jim',
+  'Chris'
 ];
 
 export const assigneeOptions = [...new Set(assigneeSource)].sort((a, b) => a.localeCompare(b));
