@@ -1,0 +1,23 @@
+### Health check
+GET https://YOUR-RENDER-URL.onrender.com/health
+
+### Example task data
+GET https://YOUR-RENDER-URL.onrender.com/example
+
+### Send a Slack task notification
+POST https://YOUR-RENDER-URL.onrender.com/api/tasks/assign
+Content-Type: application/json
+Authorization: Bearer YOUR_NOTIFY_API_KEY
+
+{
+  "taskId": "1043",
+  "taskTitle": "Frame inspection checklist",
+  "assigneeName": "John Smith",
+  "projectName": "Lot 12 - North Ridge",
+  "dueDate": "Friday 3:00 PM",
+  "priority": "High",
+  "assignedBy": "Mike",
+  "taskUrl": "https://example.com/tasks/1043",
+  "notes": "Meet the superintendent at the job trailer.",
+  "slackUserId": "U012AB3CD"
+}

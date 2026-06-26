@@ -1,0 +1,1 @@
+Fix project screen date handling and restore theme controls
