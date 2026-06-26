@@ -61,7 +61,7 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
     }
   }
 
-  async function updatePassword(user) {
+  async function changePassword(user) {
     const password = String(passwordDrafts[user.id] || '').trim();
     if (password.length < 8) {
       setError('Password must be at least 8 characters.');
@@ -126,8 +126,8 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
                         {siteUser.id === currentUser?.id && <span className="archive-pill">You</span>}
                       </div>
                       <p className="muted">{siteUser.email}</p>
+                      {siteUser.trade && <p className="muted">Trade: {siteUser.trade}</p>}
                       <p>{siteUser.project_count} assigned project{siteUser.project_count === 1 ? '' : 's'}</p>
-                      <p className="muted">Trade: {siteUser.trade_role || 'Unassigned'}</p>
                     </div>
 
                     <div className="site-user-actions">
@@ -144,17 +144,15 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
                       <label>
                         New password
                         <input
-                          disabled={!canChange || busy}
                           type="password"
-                          placeholder="Enter new password"
+                          disabled={!canChange || busy}
                           value={passwordDrafts[siteUser.id] || ''}
                           onChange={(event) => setPasswordDrafts((current) => ({ ...current, [siteUser.id]: event.target.value }))}
+                          placeholder="At least 8 characters"
                         />
                       </label>
                       <div className="row-actions">
-                        <button className="primary-button compact" disabled={!canChange || busy} onClick={() => updatePassword(siteUser)} type="button">
-                          {busy ? 'Saving...' : 'Change password'}
-                        </button>
+                        <button className="primary-button compact" disabled={!canChange || busy} onClick={() => changePassword(siteUser)} type="button">Change password</button>
                         <button
                           className={siteUser.access_revoked ? 'ghost-button compact' : 'danger-button compact'}
                           disabled={!canChange || busy}

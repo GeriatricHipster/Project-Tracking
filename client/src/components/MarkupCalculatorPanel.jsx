@@ -1,68 +1,77 @@
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
-const lineLabels = [
-  'Material 1',
-  'Material 2',
-  'Material 3',
-  'Material 4',
-  'Material 5',
-  'Material 6'
-];
+function money(value) {
+  const num = Number(value || 0);
+  return num.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+}
 
-export default function MarkupCalculatorPanel({ canAccess }) {
-  const [values, setValues] = useState(['', '', '', '', '', '']);
+export default function MarkupCalculatorPanel() {
+  const [rows, setRows] = useState(Array.from({ length: 6 }, () => ({ material: '', labor: '' })));
 
-  const results = useMemo(() => {
-    const numbers = values.map((value) => Number(value || 0));
-    const markupRate = 0.05;
-    const lines = numbers.map((amount) => Number((amount * markupRate).toFixed(2)));
-    const baseTotal = numbers.reduce((sum, amount) => sum + amount, 0);
-    const markupTotal = lines.reduce((sum, amount) => sum + amount, 0);
-    return { numbers, lines, baseTotal, markupTotal };
-  }, [values]);
+  const totals = useMemo(() => {
+    const materialTotal = rows.reduce((sum, row) => sum + Number(row.material || 0), 0);
+    const laborTotal = rows.reduce((sum, row) => sum + Number(row.labor || 0), 0);
+    const subtotal = materialTotal + laborTotal;
+    const markup = subtotal * 0.05;
+    return { materialTotal, laborTotal, subtotal, markup, grandTotal: subtotal + markup };
+  }, [rows]);
 
-  if (!canAccess) {
-    return (
-      <section className="panel">
-        <div className="empty-state">
-          <h3>Owner access only</h3>
-          <p>You do not have permission to view this area.</p>
-        </div>
-      </section>
-    );
+  function updateRow(index, field, value) {
+    setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)));
   }
 
   return (
-    <section className="panel markup-panel">
-      <div className="panel-heading">
-        <div>
-          <h2>Markup calculator</h2>
-          <p>5% markup only, using the workbook formula you provided.</p>
+    <section className="dashboard-stack">
+      <section className="panel">
+        <div className="panel-heading">
+          <div>
+            <h2>Markup calculator</h2>
+            <p>5% markup only.</p>
+          </div>
         </div>
-      </div>
 
-      <div className="markup-grid">
-        <div className="markup-grid-head">Item</div>
-        <div className="markup-grid-head">Material</div>
-        <div className="markup-grid-head">5% Markup</div>
-        {lineLabels.map((label, index) => (
-          <Fragment key={label}>
-            <div className="markup-grid-cell label">{label}</div>
-            <input
-              className="markup-grid-cell input"
-              type="number"
-              min="0"
-              step="0.01"
-              value={values[index]}
-              onChange={(event) => setValues((current) => current.map((item, idx) => (idx === index ? event.target.value : item)))}
-            />
-            <div className="markup-grid-cell output">${results.lines[index].toFixed(2)}</div>
-          </Fragment>
-        ))}
-        <div className="markup-grid-cell total label">Totals</div>
-        <div className="markup-grid-cell total">${results.baseTotal.toFixed(2)}</div>
-        <div className="markup-grid-cell total">${results.markupTotal.toFixed(2)}</div>
-      </div>
+        <div className="markup-table-wrap">
+          <table className="markup-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Material</th>
+                <th>Labor</th>
+                <th>Row total</th>
+                <th>5% markup</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => {
+                const rowTotal = Number(row.material || 0) + Number(row.labor || 0);
+                return (
+                  <tr key={index}>
+                    <td>{index + 1}</td>
+                    <td><input type="number" min="0" step="0.01" value={row.material} onChange={(event) => updateRow(index, 'material', event.target.value)} /></td>
+                    <td><input type="number" min="0" step="0.01" value={row.labor} onChange={(event) => updateRow(index, 'labor', event.target.value)} /></td>
+                    <td>{money(rowTotal)}</td>
+                    <td>{money(rowTotal * 0.05)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th colSpan="3">Totals</th>
+                <th>{money(totals.subtotal)}</th>
+                <th>{money(totals.markup)}</th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <section className="summary-strip markup-summary">
+          <article className="metric-card panel"><span>Material total</span><strong>{money(totals.materialTotal)}</strong></article>
+          <article className="metric-card panel"><span>Labor total</span><strong>{money(totals.laborTotal)}</strong></article>
+          <article className="metric-card panel"><span>5% markup</span><strong>{money(totals.markup)}</strong></article>
+          <article className="metric-card panel"><span>Grand total</span><strong>{money(totals.grandTotal)}</strong></article>
+        </section>
+      </section>
     </section>
   );
 }

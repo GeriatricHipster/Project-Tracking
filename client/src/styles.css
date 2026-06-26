@@ -2617,7 +2617,7 @@ html[data-theme='dark'] .theme-toggle-button {
 .cms-grid-table {
   border-collapse: separate;
   border-spacing: 0;
-  min-width: 3500px;
+  min-width: 3300px;
   width: max-content;
 }
 
@@ -2728,7 +2728,7 @@ html[data-theme='dark'] .cms-grid-table td {
   }
 
   .cms-grid-table {
-    min-width: 3500px;
+    min-width: 3300px;
   }
 }
 
@@ -2737,282 +2737,242 @@ html[data-theme='dark'] .cms-grid-table td {
   position: fixed;
   top: 1rem;
   right: 1rem;
-  z-index: 1000;
+  z-index: 60;
+}
+
+.site-controls {
   display: flex;
-  gap: 0.55rem;
   align-items: center;
+  gap: 0.75rem;
 }
 
-.top-right-controls .theme-toggle-button {
-  position: static;
+.background-menu {
+  position: relative;
 }
 
-html[data-background='aurora'] body {
+.background-menu summary {
+  list-style: none;
+}
+
+.background-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.background-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 180px;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.75rem;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+}
+
+.background-menu-panel button {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+html[data-theme='dark'] .background-menu-panel {
+  background: rgba(15, 23, 42, 0.98);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+html[data-theme='light'][data-background='redwood'] body {
   background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.26), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.18), transparent 22rem),
-    #f3f4f6;
+    radial-gradient(circle at top left, rgba(185, 28, 28, 0.22), transparent 26rem),
+    radial-gradient(circle at bottom right, rgba(239, 68, 68, 0.12), transparent 24rem),
+    #f8fafc;
 }
 
-html[data-background='sunset'] body {
+html[data-theme='light'][data-background='sunset'] body {
   background:
-    radial-gradient(circle at top left, rgba(249, 115, 22, 0.24), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(239, 68, 68, 0.18), transparent 22rem),
+    radial-gradient(circle at top left, rgba(249, 115, 22, 0.24), transparent 26rem),
+    radial-gradient(circle at bottom right, rgba(244, 63, 94, 0.12), transparent 24rem),
     #fff7ed;
 }
 
-html[data-background='mint'] body {
+html[data-theme='light'][data-background='ocean'] body {
   background:
-    radial-gradient(circle at top left, rgba(16, 185, 129, 0.20), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(6, 182, 212, 0.16), transparent 22rem),
-    #f0fdf4;
-}
-
-html[data-background='indigo'] body {
-  background:
-    radial-gradient(circle at top left, rgba(99, 102, 241, 0.24), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.18), transparent 22rem),
-    #eef2ff;
-}
-
-html[data-background='ember'] body {
-  background:
-    radial-gradient(circle at top left, rgba(220, 38, 38, 0.24), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.18), transparent 22rem),
-    #fff1f2;
-}
-
-html[data-background='ocean'] body {
-  background:
-    radial-gradient(circle at top left, rgba(14, 165, 233, 0.22), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(20, 184, 166, 0.18), transparent 22rem),
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.2), transparent 26rem),
+    radial-gradient(circle at bottom right, rgba(37, 99, 235, 0.12), transparent 24rem),
     #eff6ff;
 }
 
-html[data-theme='dark'][data-background='aurora'] body {
+html[data-theme='light'][data-background='forest'] body {
   background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.20), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.16), transparent 22rem),
-    #070b14;
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.18), transparent 26rem),
+    radial-gradient(circle at bottom right, rgba(22, 163, 74, 0.1), transparent 24rem),
+    #f0fdf4;
+}
+
+html[data-theme='light'][data-background='violet'] body {
+  background:
+    radial-gradient(circle at top left, rgba(139, 92, 246, 0.2), transparent 26rem),
+    radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.1), transparent 24rem),
+    #faf5ff;
+}
+
+html[data-theme='light'][data-background='slate'] body {
+  background:
+    radial-gradient(circle at top left, rgba(71, 85, 105, 0.16), transparent 26rem),
+    radial-gradient(circle at bottom right, rgba(100, 116, 139, 0.08), transparent 24rem),
+    #f8fafc;
+}
+
+html[data-theme='dark'][data-background='redwood'] body {
+  background:
+    radial-gradient(circle at top left, rgba(127, 29, 29, 0.42), transparent 26rem),
+    radial-gradient(circle at bottom right, rgba(220, 38, 38, 0.16), transparent 24rem),
+    #020617;
 }
 
 html[data-theme='dark'][data-background='sunset'] body {
   background:
-    radial-gradient(circle at top left, rgba(249, 115, 22, 0.18), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(239, 68, 68, 0.16), transparent 22rem),
-    #111827;
-}
-
-html[data-theme='dark'][data-background='mint'] body {
-  background:
-    radial-gradient(circle at top left, rgba(16, 185, 129, 0.18), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(6, 182, 212, 0.14), transparent 22rem),
-    #070b14;
-}
-
-html[data-theme='dark'][data-background='indigo'] body {
-  background:
-    radial-gradient(circle at top left, rgba(99, 102, 241, 0.18), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.16), transparent 22rem),
-    #0b1020;
-}
-
-html[data-theme='dark'][data-background='ember'] body {
-  background:
-    radial-gradient(circle at top left, rgba(220, 38, 38, 0.18), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.14), transparent 22rem),
-    #111827;
+    radial-gradient(circle at top left, rgba(194, 65, 12, 0.36), transparent 26rem),
+    radial-gradient(circle at bottom right, rgba(244, 63, 94, 0.14), transparent 24rem),
+    #0f172a;
 }
 
 html[data-theme='dark'][data-background='ocean'] body {
   background:
-    radial-gradient(circle at top left, rgba(14, 165, 233, 0.18), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(20, 184, 166, 0.16), transparent 22rem),
-    #07111f;
+    radial-gradient(circle at top left, rgba(14, 116, 144, 0.34), transparent 26rem),
+    radial-gradient(circle at bottom right, rgba(37, 99, 235, 0.16), transparent 24rem),
+    #06121f;
 }
 
-.cms-sheet-toolbar {
+html[data-theme='dark'][data-background='forest'] body {
+  background:
+    radial-gradient(circle at top left, rgba(21, 128, 61, 0.34), transparent 26rem),
+    radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.12), transparent 24rem),
+    #07130c;
+}
+
+html[data-theme='dark'][data-background='violet'] body {
+  background:
+    radial-gradient(circle at top left, rgba(109, 40, 217, 0.34), transparent 26rem),
+    radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.16), transparent 24rem),
+    #0b1020;
+}
+
+html[data-theme='dark'][data-background='slate'] body {
+  background:
+    radial-gradient(circle at top left, rgba(51, 65, 85, 0.38), transparent 26rem),
+    radial-gradient(circle at bottom right, rgba(100, 116, 139, 0.14), transparent 24rem),
+    #020617;
+}
+
+.four-col {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.cms-grid-shell {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.cms-grid-shell.fullscreen {
+  position: fixed;
+  inset: 1rem;
+  z-index: 120;
+  padding: 1rem;
+  background: rgba(248, 250, 252, 0.98);
+  border-radius: 26px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+  overflow: auto;
+}
+
+html[data-theme='dark'] .cms-grid-shell.fullscreen {
+  background: rgba(2, 6, 23, 0.98);
+}
+
+.cms-grid-toolbar {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  align-items: center;
+  gap: 0.75rem;
   flex-wrap: wrap;
-  margin: 0.4rem 0 0.8rem;
 }
 
-.cms-view-tabs,
-.cms-toolbar-actions,
-.cms-row-actions {
+.cms-grid-toolbar-meta {
   display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
   align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
 }
 
-.cms-view-tabs button {
-  border: 1px solid #e5e7eb;
-  border-radius: 999px;
-  background: #ffffff;
-  padding: 0.55rem 0.9rem;
-  font-weight: 800;
-}
-
-.cms-view-tabs button.active {
-  background: linear-gradient(135deg, #ef4444, #991b1b);
-  color: #ffffff;
-  border-color: transparent;
-}
-
-.cms-grid-filter-row th {
-  background: #f1f5f9;
-  padding: 0.3rem;
-}
-
-.cms-grid-filter-row input,
-.cms-grid-filter-row select {
+.cms-grid-wrap {
   width: 100%;
-  min-width: 100%;
-  padding: 0.35rem 0.4rem;
-  border-radius: 10px;
-  border: 1px solid #cbd5e1;
+  overflow: auto;
+  border: 1px solid #dbe3ee;
+  border-radius: 18px;
   background: #ffffff;
+  max-height: 72vh;
 }
 
-.cms-grid-actions-col {
-  min-width: 170px;
-  width: 170px;
-  text-align: center;
-  padding: 0.45rem;
-  position: sticky;
-  right: 0;
-  background: inherit;
-}
-
-.cms-grid-filter-header {
-  position: sticky;
-  left: 0;
-  background: #f1f5f9;
-  z-index: 6;
-  font-size: 0.72rem;
-  font-weight: 900;
-  text-align: center;
+.cms-grid-table {
+  min-width: 3200px;
 }
 
 .cms-grid-filter-cell {
-  padding: 0.25rem;
+  padding: 0.35rem;
+  background: #f8fafc;
+  border-bottom: 1px solid #dbe3ee;
 }
 
 .cms-grid-filter-cell input,
 .cms-grid-filter-cell select {
-  font-size: 0.76rem;
-}
-
-.cms-sheet-meta,
-.cms-sheet-toolbar {
-  max-width: 100%;
-}
-
-.cms-empty-note {
-  padding: 0.75rem 0 0.25rem;
-  margin: 0;
-}
-
-.owner-cms-panel.is-fullscreen {
-  position: fixed;
-  inset: 0;
-  z-index: 999;
-  background: rgba(255, 255, 255, 0.94);
-  padding: 1rem;
-  overflow: auto;
-}
-
-html[data-theme='dark'] .owner-cms-panel.is-fullscreen {
-  background: rgba(2, 6, 23, 0.96);
-}
-
-html[data-theme='dark'] .cms-view-tabs button {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.1);
-  color: #e5e7eb;
-}
-
-html[data-theme='dark'] .cms-grid-filter-row th,
-html[data-theme='dark'] .cms-grid-filter-row input,
-html[data-theme='dark'] .cms-grid-filter-row select,
-html[data-theme='dark'] .cms-grid-filter-header {
-  background: #111827;
-  color: #e5e7eb;
-  border-color: #334155;
-}
-
-html[data-theme='dark'] .cms-grid-actions-col {
-  background: #111827;
-}
-
-
-
-.markup-panel {
-  display: grid;
-  gap: 1rem;
-}
-
-.markup-grid {
-  display: grid;
-  grid-template-columns: 1.25fr 1fr 1fr;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.markup-grid-head {
-  font-size: 0.72rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #6b7280;
-  padding: 0.25rem 0.35rem;
-}
-
-.markup-grid-cell {
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  padding: 0.45rem 0.6rem;
+  width: 100%;
+  min-width: 100%;
+  height: 32px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0.35rem 0.45rem;
   background: #ffffff;
 }
 
-.markup-grid-cell.input {
-  width: 100%;
-}
-
-.markup-grid-cell.total {
-  font-weight: 900;
+.cms-grid-filter-label {
   background: #f8fafc;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
 }
 
-.markup-grid-cell.label {
-  font-weight: 800;
-}
-
-html[data-theme='dark'] .markup-grid-head {
-  color: #94a3b8;
-}
-
-html[data-theme='dark'] .markup-grid-cell {
-  background: #0b1220;
-  border-color: #334155;
+html[data-theme='dark'] .cms-grid-filter-cell,
+html[data-theme='dark'] .cms-grid-filter-label {
+  background: #0f172a;
   color: #e5e7eb;
 }
 
-html[data-theme='dark'] .markup-grid-cell.total {
+html[data-theme='dark'] .cms-grid-filter-cell input,
+html[data-theme='dark'] .cms-grid-filter-cell select {
   background: #111827;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e5e7eb;
 }
 
+html[data-theme='dark'] .cms-grid-wrap {
+  background: #0b1220;
+  border-color: rgba(255, 255, 255, 0.08);
+}
 
-.cms-toolbar-left {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  flex-wrap: wrap;
+html[data-theme='dark'] .cms-grid-shell.fullscreen .cms-grid-wrap {
+  background: #0b1220;
+}
+
+@media (max-width: 980px) {
+  .four-col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cms-grid-shell.fullscreen {
+    inset: 0.5rem;
+  }
 }

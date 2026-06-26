@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { addDays, daysBetween, formatDate, maxIsoDate, minIsoDate, todayIso } from '../lib/dates';
 
 function getScale(totalDays) {
@@ -19,10 +19,10 @@ function taskMeta(task) {
   if (task.trade) parts.push(task.trade);
   if (task.vendor) parts.push(task.vendor);
   if (task.vendor_2) parts.push(task.vendor_2);
-  if (task.assignee_1) parts.push(task.assignee_1);
-  if (task.assignee_2) parts.push(task.assignee_2);
-  if (task.assignee_3) parts.push(task.assignee_3);
-  if (task.assignee_4) parts.push(task.assignee_4);
+  if (task.security_systems_1) parts.push(task.security_systems_1);
+  if (task.security_systems_2) parts.push(task.security_systems_2);
+  if (task.locksmiths) parts.push(task.locksmiths);
+  if (task.other_assignee) parts.push(task.other_assignee);
   if (task.pm) parts.push(`PM: ${task.pm}`);
   if (task.assigned_to_name) parts.push(`Assignee: ${task.assigned_to_name}`);
   return parts.join(' · ');
@@ -49,9 +49,9 @@ function statusLabel(value) {
 
 export default function GanttChart({ project, tasks, dependencies, onEditTask }) {
   const scrollRef = useRef(null);
-  const containerRef = useRef(null);
+  const shellRef = useRef(null);
   const [zoomIndex, setZoomIndex] = useState(2);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const allStartDates = [project.start_date, ...tasks.map((task) => task.start_date)];
   const allEndDates = [project.end_date, ...tasks.map((task) => task.end_date)];
   const rangeStart = minIsoDate(allStartDates) || project.start_date;
@@ -61,14 +61,20 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
   const zoom = zoomLevels[zoomIndex];
   const scale = { ...baseScale, unitWidth: Math.round(baseScale.unitWidth * zoom) };
   const totalUnits = Math.ceil(totalDays / scale.stepDays);
-  const chartWidth = Math.max(1600, totalUnits * scale.unitWidth + 220);
-  const rowHeight = 66;
+  const chartWidth = Math.max(1800, totalUnits * scale.unitWidth + 220);
+  const rowHeight = 72;
   const headerHeight = 104;
   const chartHeight = headerHeight + Math.max(tasks.length, 1) * rowHeight + 18;
   const today = todayIso();
   const todayOffset = today >= rangeStart && today <= rangeEnd
     ? (daysBetween(rangeStart, today) / scale.stepDays) * scale.unitWidth
     : null;
+
+  useEffect(() => {
+    const handler = () => setFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', handler);
+    return () => document.removeEventListener('fullscreenchange', handler);
+  }, []);
 
   const units = [];
   for (let offset = 0; offset <= totalDays; offset += scale.stepDays) {
@@ -88,50 +94,29 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
     return { left, width, right: left + width, y };
   }
 
-  function zoomOut() {
-    setZoomIndex((current) => Math.max(0, current - 1));
-  }
-
-  function zoomIn() {
-    setZoomIndex((current) => Math.min(zoomLevels.length - 1, current + 1));
-  }
-
-  function resetZoom() {
-    setZoomIndex(2);
-  }
-
-  async function toggleFullscreen() {
-    if (!containerRef.current) return;
-    if (isFullscreen) {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-      }
-      setIsFullscreen(false);
-      return;
-    }
-    try {
-      await containerRef.current.requestFullscreen?.();
-      setIsFullscreen(true);
-    } catch {
-      setIsFullscreen((current) => !current);
-    }
-  }
-
+  function zoomOut() { setZoomIndex((current) => Math.max(0, current - 1)); }
+  function zoomIn() { setZoomIndex((current) => Math.min(zoomLevels.length - 1, current + 1)); }
+  function resetZoom() { setZoomIndex(2); }
   function scrollToToday() {
     if (!scrollRef.current || todayOffset === null) return;
     const maxLeft = Math.max(0, chartWidth - scrollRef.current.clientWidth);
     const target = clamp(todayOffset - scrollRef.current.clientWidth / 2, 0, maxLeft);
     scrollRef.current.scrollTo({ left: target, behavior: 'smooth' });
   }
-
-  function scrollToStart() {
-    scrollRef.current?.scrollTo({ left: 0, behavior: 'smooth' });
-  }
-
+  function scrollToStart() { scrollRef.current?.scrollTo({ left: 0, behavior: 'smooth' }); }
   function scrollByDays(days) {
     if (!scrollRef.current) return;
     const pixels = (days / scale.stepDays) * scale.unitWidth;
     scrollRef.current.scrollBy({ left: pixels, behavior: 'smooth' });
+  }
+
+  async function toggleFullscreen() {
+    if (!shellRef.current) return;
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+      return;
+    }
+    await shellRef.current.requestFullscreen?.();
   }
 
   function exportGanttPdf() {
@@ -283,14 +268,14 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
   }
 
   return (
-    <section ref={containerRef} className="panel gantt-panel expanded-gantt-panel">
+    <section className={`panel gantt-panel expanded-gantt-panel${fullscreen ? ' fullscreen' : ''}`} ref={shellRef}>
       <div className="panel-heading gantt-heading">
         <div>
           <h2>Gantt chart</h2>
           <p>{formatDate(rangeStart)} to {formatDate(rangeEnd)} · scale: {scale.label} · zoom: {Math.round(zoom * 100)}%</p>
         </div>
         <div className="gantt-toolbar" aria-label="Gantt navigation controls">
-          <button className="ghost-button compact" onClick={toggleFullscreen} type="button">{isFullscreen ? 'Exit full screen' : 'Full screen'}</button>
+          <button className="ghost-button compact" onClick={toggleFullscreen} type="button">{fullscreen ? 'Exit full screen' : 'Full screen'}</button>
           <button className="ghost-button compact" onClick={scrollToStart} type="button">Start</button>
           <button className="ghost-button compact" onClick={() => scrollByDays(-30)} type="button">Prev 30 days</button>
           <button className="ghost-button compact" onClick={scrollToToday} disabled={todayOffset === null} type="button">Today</button>

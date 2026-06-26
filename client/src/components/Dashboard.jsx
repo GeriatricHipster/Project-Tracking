@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { addDays, formatDate, formatDateInput, parseDateInput, todayIso } from '../lib/dates';
-import { buildingOptions as baseBuildingOptions } from '../lib/buildings';
+import { addDays, formatDate, formatDisplayDate, parseDisplayDate, todayIso } from '../lib/dates';
+import { buildingOptions } from '../lib/buildings';
 import SiteMembersPanel from './SiteMembersPanel';
-import OwnerCmsWosPanel from './OwnerCmsWosPanel';
 import MarkupCalculatorPanel from './MarkupCalculatorPanel';
+import OwnerCmsWosPanel from './OwnerCmsWosPanel';
 import SiteBanner from './SiteBanner';
 
 const dashboardTabs = [
@@ -13,7 +13,7 @@ const dashboardTabs = [
   { id: 'calendar', label: 'Calendar overview' },
   { id: 'site-members', label: 'Site members', managersOnly: true },
   { id: 'owner-cms', label: 'CMS WOs', ownersOnly: true },
-  { id: 'markup', label: 'Markup calculator', ownersOnly: true }
+  { id: 'markup-calculator', label: 'Markup calculator', ownersOnly: true }
 ];
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -98,6 +98,10 @@ function matchesProjectSearch(project, term) {
   return getProjectSearchText(project).includes(query);
 }
 
+function uniqueValues(values) {
+  return Array.from(new Set(values.filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b)));
+}
+
 function buildUserAssignments(projects) {
   const users = new Map();
 
@@ -144,37 +148,27 @@ export default function Dashboard({
   const [activeTab, setActiveTab] = useState('projects');
   const [calendarMonth, setCalendarMonth] = useState(start.slice(0, 7));
   const [searchTerm, setSearchTerm] = useState('');
+  const [customBuildings, setCustomBuildings] = useState(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      return JSON.parse(window.localStorage.getItem('psg-custom-buildings') || '[]');
+    } catch {
+      return [];
+    }
+  });
   const [form, setForm] = useState({
     name: '',
     location: '',
-    location_custom: '',
     description: '',
-    start_date_input: formatDateInput(start),
-    end_date_input: formatDateInput(addDays(start, 90))
-  });
-  const [buildingChoices, setBuildingChoices] = useState(() => {
-    if (typeof window === 'undefined') return baseBuildingOptions;
-    try {
-      const saved = window.localStorage.getItem('psg-building-options');
-      const parsed = saved ? JSON.parse(saved) : [];
-      const merged = [...new Set([...(Array.isArray(parsed) ? parsed : []), ...baseBuildingOptions])];
-      return merged.sort((a, b) => String(a).localeCompare(String(b)));
-    } catch {
-      return baseBuildingOptions;
-    }
+    start_date: formatDisplayDate(start),
+    end_date: formatDisplayDate(addDays(start, 90))
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionProjectId, setActionProjectId] = useState(null);
 
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('psg-building-options', JSON.stringify(buildingChoices));
-  }, [buildingChoices]);
   const canManageSite = Boolean(user?.can_manage_site || ['owner', 'manager'].includes(user?.site_role));
   const canAccessOwnerCms = user?.site_role === 'owner' && !user?.access_revoked;
-  const canAccessMarkup = canAccessOwnerCms;
   const visibleTabs = useMemo(
     () => dashboardTabs.filter((tab) => (!tab.managersOnly || canManageSite) && (!tab.ownersOnly || canAccessOwnerCms)),
     [canManageSite, canAccessOwnerCms]
@@ -189,6 +183,11 @@ export default function Dashboard({
   const visibleProjects = useMemo(
     () => projects.filter((project) => matchesProjectSearch(project, searchTerm)),
     [projects, searchTerm]
+  );
+
+  const buildingChoices = useMemo(
+    () => uniqueValues([...buildingOptions, ...projects.map((project) => project.location), ...customBuildings]),
+    [projects, customBuildings]
   );
 
   const activeProjects = useMemo(
@@ -236,25 +235,29 @@ export default function Dashboard({
     setForm((current) => ({ ...current, [field]: value }));
   }
 
+  function chooseCustomBuilding() {
+    const entered = window.prompt('Enter a new building name');
+    if (!entered || !entered.trim()) return '';
+    const next = entered.trim();
+    setCustomBuildings((current) => {
+      const nextList = uniqueValues([...current, next]);
+      window.localStorage.setItem('psg-custom-buildings', JSON.stringify(nextList));
+      return nextList;
+    });
+    return next;
+  }
+
   async function submit(event) {
     event.preventDefault();
     setError('');
     setSaving(true);
     try {
-      const location = form.location === '__custom__' ? form.location_custom : form.location;
-      const startDate = parseDateInput(form.start_date_input);
-      const endDate = parseDateInput(form.end_date_input);
-      if (!startDate || !endDate) {
-        throw new Error('Start and Finish must be in MM-DD-YYYY format.');
-      }
-      if (form.location === '__custom__' && location) {
-        setBuildingChoices((current) => {
-          if (current.includes(location)) return current;
-          return [...current, location].sort((a, b) => String(a).localeCompare(String(b)));
-        });
-      }
-      await onCreateProject({ ...form, location, start_date: startDate, end_date: endDate });
-      setForm({ name: '', location: '', location_custom: '', description: '', start_date_input: formatDateInput(start), end_date_input: formatDateInput(addDays(start, 90)) });
+      await onCreateProject({
+        ...form,
+        start_date: parseDisplayDate(form.start_date),
+        end_date: parseDisplayDate(form.end_date)
+      });
+      setForm({ name: '', location: '', description: '', start_date: formatDisplayDate(start), end_date: formatDisplayDate(addDays(start, 90)) });
       setActiveTab('projects');
     } catch (err) {
       setError(err.message);
@@ -387,24 +390,22 @@ export default function Dashboard({
             </label>
             <label>
               Building
-              <select value={form.location} onChange={(event) => updateField('location', event.target.value)}>
+              <select value={form.location} onChange={(event) => {
+                const next = event.target.value;
+                if (next === '__custom__') {
+                  const custom = chooseCustomBuilding();
+                  if (custom) updateField('location', custom);
+                  return;
+                }
+                updateField('location', next);
+              }}>
                 <option value="">Unassigned</option>
                 {buildingChoices.map((building) => (
                   <option key={building} value={building}>{building}</option>
                 ))}
-                <option value="__custom__">Add new building</option>
+                <option value="__custom__">Add new building...</option>
               </select>
             </label>
-            {form.location === '__custom__' && (
-              <label>
-                New building name
-                <input
-                  value={form.location_custom}
-                  onChange={(event) => updateField('location_custom', event.target.value)}
-                  placeholder="Enter a new building name"
-                />
-              </label>
-            )}
             <label>
               Description
               <textarea value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Scope, client, phase, or notes" />
@@ -412,11 +413,11 @@ export default function Dashboard({
             <div className="two-col">
               <label>
                 Start
-                <input type="text" value={form.start_date_input} onChange={(event) => updateField('start_date_input', event.target.value)} placeholder="MM-DD-YYYY" />
+                <input type="text" inputMode="numeric" placeholder="MM-DD-YYYY" value={form.start_date} onChange={(event) => updateField('start_date', event.target.value)} />
               </label>
               <label>
                 Finish
-                <input type="text" value={form.end_date_input} onChange={(event) => updateField('end_date_input', event.target.value)} placeholder="MM-DD-YYYY" />
+                <input type="text" inputMode="numeric" placeholder="MM-DD-YYYY" value={form.end_date} onChange={(event) => updateField('end_date', event.target.value)} />
               </label>
             </div>
             {error && <p className="error-box">{error}</p>}
@@ -574,15 +575,6 @@ export default function Dashboard({
     );
   }
 
-
-  function renderMarkupTab() {
-    return (
-      <section className="dashboard-stack">
-        <MarkupCalculatorPanel canAccess={canAccessMarkup} />
-      </section>
-    );
-  }
-
   function renderCalendarTab() {
     const firstOffset = firstDayOfMonth(calendarMonth);
     const dayCount = daysInMonth(calendarMonth);
@@ -721,7 +713,7 @@ export default function Dashboard({
       {activeTab === 'calendar' && renderCalendarTab()}
       {activeTab === 'site-members' && canManageSite && <SiteMembersPanel currentUser={user} onOpenProject={onOpenProject} />}
       {activeTab === 'owner-cms' && canAccessOwnerCms && <OwnerCmsWosPanel user={user} />}
-      {activeTab === 'markup' && canAccessMarkup && <MarkupCalculatorPanel canAccess={canAccessMarkup} />}
+      {activeTab === 'markup-calculator' && canAccessOwnerCms && <MarkupCalculatorPanel />}
     </main>
   );
 }
