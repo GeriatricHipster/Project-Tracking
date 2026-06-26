@@ -34,6 +34,21 @@ export function formatDate(value) {
   return `${month}/${day}/${year}`;
 }
 
+export function formatDisplayDate(value) {
+  const text = dateOnly(value);
+  if (!text) return '';
+  const [year, month, day] = text.split('-');
+  return `${month}-${day}-${year}`;
+}
+
+export function parseDisplayDate(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const [month, day, year] = text.split('-').map((part) => part.trim());
+  if (!month || !day || !year) return '';
+  return `${year.padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
 export function minIsoDate(values) {
   return values.filter(Boolean).sort()[0];
 }

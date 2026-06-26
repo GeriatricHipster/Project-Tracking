@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { addDays, formatDate, todayIso } from '../lib/dates';
-import { addBuildingOption, getBuildingOptions } from '../lib/buildings';
+import { addDays, formatDate, formatDisplayDate, parseDisplayDate, todayIso } from '../lib/dates';
+import { buildingOptions } from '../lib/buildings';
 import SiteMembersPanel from './SiteMembersPanel';
-import OwnerCmsWosPanel from './OwnerCmsWosPanel';
 import MarkupCalculatorPanel from './MarkupCalculatorPanel';
+import OwnerCmsWosPanel from './OwnerCmsWosPanel';
 import SiteBanner from './SiteBanner';
 
 const dashboardTabs = [
   { id: 'projects', label: 'Active projects' },
   { id: 'completed', label: 'Completed' },
-  { id: 'archive', label: 'Archive' },
   { id: 'assignments', label: 'Projects' },
   { id: 'calendar', label: 'Calendar overview' },
   { id: 'site-members', label: 'Site members', managersOnly: true },
@@ -41,10 +40,7 @@ function getScheduleStatus(project) {
 }
 
 function getProjectStatus(project) {
-  const lifecycle = getLifecycleStatus(project);
-  if (lifecycle === 'archived') return 'archived';
-  if (lifecycle === 'completed') return 'completed';
-  return getScheduleStatus(project);
+  return getLifecycleStatus(project) === 'completed' ? 'completed' : getScheduleStatus(project);
 }
 
 function monthParts(monthValue) {
@@ -102,6 +98,10 @@ function matchesProjectSearch(project, term) {
   return getProjectSearchText(project).includes(query);
 }
 
+function uniqueValues(values) {
+  return Array.from(new Set(values.filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b)));
+}
+
 function buildUserAssignments(projects) {
   const users = new Map();
 
@@ -148,17 +148,24 @@ export default function Dashboard({
   const [activeTab, setActiveTab] = useState('projects');
   const [calendarMonth, setCalendarMonth] = useState(start.slice(0, 7));
   const [searchTerm, setSearchTerm] = useState('');
+  const [customBuildings, setCustomBuildings] = useState(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      return JSON.parse(window.localStorage.getItem('psg-custom-buildings') || '[]');
+    } catch {
+      return [];
+    }
+  });
   const [form, setForm] = useState({
     name: '',
     location: '',
     description: '',
-    start_date: start,
-    end_date: addDays(start, 90)
+    start_date: formatDisplayDate(start),
+    end_date: formatDisplayDate(addDays(start, 90))
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionProjectId, setActionProjectId] = useState(null);
-  const [availableBuildings, setAvailableBuildings] = useState(() => getBuildingOptions());
 
   const canManageSite = Boolean(user?.can_manage_site || ['owner', 'manager'].includes(user?.site_role));
   const canAccessOwnerCms = user?.site_role === 'owner' && !user?.access_revoked;
@@ -173,27 +180,23 @@ export default function Dashboard({
     }
   }, [activeTab, visibleTabs]);
 
-  useEffect(() => {
-    setAvailableBuildings(getBuildingOptions());
-  }, []);
-
   const visibleProjects = useMemo(
     () => projects.filter((project) => matchesProjectSearch(project, searchTerm)),
     [projects, searchTerm]
   );
 
+  const buildingChoices = useMemo(
+    () => uniqueValues([...buildingOptions, ...projects.map((project) => project.location), ...customBuildings]),
+    [projects, customBuildings]
+  );
+
   const activeProjects = useMemo(
-    () => visibleProjects.filter((project) => getLifecycleStatus(project) === 'active'),
+    () => visibleProjects.filter((project) => getLifecycleStatus(project) !== 'completed'),
     [visibleProjects]
   );
 
   const completedProjects = useMemo(
     () => visibleProjects.filter((project) => getLifecycleStatus(project) === 'completed'),
-    [visibleProjects]
-  );
-
-  const archivedProjects = useMemo(
-    () => visibleProjects.filter((project) => getLifecycleStatus(project) === 'archived'),
     [visibleProjects]
   );
 
@@ -207,15 +210,13 @@ export default function Dashboard({
         summary.total += 1;
         if (lifecycle === 'completed') {
           summary.completed += 1;
-        } else if (lifecycle === 'archived') {
-          summary.archived += 1;
         } else {
           summary.active += 1;
           summary[status] = (summary[status] || 0) + 1;
         }
         return summary;
       },
-      { total: 0, active: 0, completed: 0, archived: 0, not_started: 0, in_progress: 0, blocked: 0, complete: 0 }
+      { total: 0, active: 0, completed: 0, not_started: 0, in_progress: 0, blocked: 0, complete: 0 }
     );
   }, [visibleProjects]);
 
@@ -234,16 +235,16 @@ export default function Dashboard({
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  function handleBuildingChange(value) {
-    if (value === '__add_new__') {
-      const nextValue = window.prompt('Add a new building name:');
-      if (!nextValue) return;
-      const updated = addBuildingOption(nextValue);
-      setAvailableBuildings(updated);
-      updateField('location', String(nextValue).trim());
-      return;
-    }
-    updateField('location', value);
+  function chooseCustomBuilding() {
+    const entered = window.prompt('Enter a new building name');
+    if (!entered || !entered.trim()) return '';
+    const next = entered.trim();
+    setCustomBuildings((current) => {
+      const nextList = uniqueValues([...current, next]);
+      window.localStorage.setItem('psg-custom-buildings', JSON.stringify(nextList));
+      return nextList;
+    });
+    return next;
   }
 
   async function submit(event) {
@@ -251,8 +252,12 @@ export default function Dashboard({
     setError('');
     setSaving(true);
     try {
-      await onCreateProject(form);
-      setForm({ name: '', location: '', description: '', start_date: start, end_date: addDays(start, 90) });
+      await onCreateProject({
+        ...form,
+        start_date: parseDisplayDate(form.start_date),
+        end_date: parseDisplayDate(form.end_date)
+      });
+      setForm({ name: '', location: '', description: '', start_date: formatDisplayDate(start), end_date: formatDisplayDate(addDays(start, 90)) });
       setActiveTab('projects');
     } catch (err) {
       setError(err.message);
@@ -262,7 +267,7 @@ export default function Dashboard({
   }
 
   async function moveProject(project, nextStatus) {
-    const label = nextStatus === 'completed' ? 'move this project to Completed' : nextStatus === 'archived' ? 'archive this project' : 'move this project back to Active Projects';
+    const label = nextStatus === 'completed' ? 'move this project to Completed' : 'move this project back to Active Projects';
     const confirmed = window.confirm(`Are you sure you want to ${label}?`);
     if (!confirmed) return;
 
@@ -270,7 +275,7 @@ export default function Dashboard({
     setActionProjectId(project.id);
     try {
       await onUpdateProject(project.id, { project_status: nextStatus });
-      setActiveTab(nextStatus === 'completed' ? 'completed' : nextStatus === 'archived' ? 'archive' : 'projects');
+      setActiveTab(nextStatus === 'completed' ? 'completed' : 'projects');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -298,7 +303,7 @@ export default function Dashboard({
   function renderProjectActions(project) {
     const lifecycle = getLifecycleStatus(project);
     const canManage = managerRoles.has(project.role);
-    const canDelete = project.role === 'owner';
+    const canDelete = user?.site_role === 'owner' && !user?.access_revoked;
     const busy = actionProjectId === project.id;
 
     return (
@@ -306,18 +311,13 @@ export default function Dashboard({
         <button className="primary-button compact" onClick={() => onOpenProject(project.id)} type="button">Open project</button>
         {canManage && lifecycle !== 'completed' && (
           <button className="ghost-button compact" disabled={busy} onClick={() => moveProject(project, 'completed')} type="button">
-            {busy ? 'Saving...' : 'Completed'}
+            {busy ? 'Saving...' : 'Move to completed'}
           </button>
         )}
         {canManage && lifecycle === 'completed' && (
-          <>
-            <button className="ghost-button compact" disabled={busy} onClick={() => moveProject(project, 'archived')} type="button">
-              {busy ? 'Saving...' : 'Archive now'}
-            </button>
-            <button className="ghost-button compact" disabled={busy} onClick={() => moveProject(project, 'active')} type="button">
-              {busy ? 'Saving...' : 'Move back to active'}
-            </button>
-          </>
+          <button className="ghost-button compact" disabled={busy} onClick={() => moveProject(project, 'active')} type="button">
+            {busy ? 'Saving...' : 'Move back to active'}
+          </button>
         )}
         {canDelete && (
           <button className="danger-button compact" disabled={busy} onClick={() => deleteProject(project)} type="button">
@@ -343,7 +343,6 @@ export default function Dashboard({
                   <span className={`role-pill role-${project.role}`}>{titleCase(project.role)}</span>
                   <span className={`status-pill status-${status}`}>{titleCase(status)}</span>
                   {lifecycle === 'completed' && <span className="archive-pill">Completed tab</span>}
-                  {lifecycle === 'archived' && <span className="archive-pill">Archived tab</span>}
                 </div>
                 <p className="muted">{project.location || 'No location set'}</p>
                 <p>{project.description || 'No project description yet.'}</p>
@@ -391,12 +390,20 @@ export default function Dashboard({
             </label>
             <label>
               Building
-              <select value={form.location} onChange={(event) => handleBuildingChange(event.target.value)}>
+              <select value={form.location} onChange={(event) => {
+                const next = event.target.value;
+                if (next === '__custom__') {
+                  const custom = chooseCustomBuilding();
+                  if (custom) updateField('location', custom);
+                  return;
+                }
+                updateField('location', next);
+              }}>
                 <option value="">Unassigned</option>
-                {availableBuildings.map((building) => (
+                {buildingChoices.map((building) => (
                   <option key={building} value={building}>{building}</option>
                 ))}
-                <option value="__add_new__">+ Add new building</option>
+                <option value="__custom__">Add new building...</option>
               </select>
             </label>
             <label>
@@ -406,11 +413,11 @@ export default function Dashboard({
             <div className="two-col">
               <label>
                 Start
-                <input type="date" value={form.start_date} onChange={(event) => updateField('start_date', event.target.value)} />
+                <input type="text" inputMode="numeric" placeholder="MM-DD-YYYY" value={form.start_date} onChange={(event) => updateField('start_date', event.target.value)} />
               </label>
               <label>
                 Finish
-                <input type="date" value={form.end_date} onChange={(event) => updateField('end_date', event.target.value)} />
+                <input type="text" inputMode="numeric" placeholder="MM-DD-YYYY" value={form.end_date} onChange={(event) => updateField('end_date', event.target.value)} />
               </label>
             </div>
             {error && <p className="error-box">{error}</p>}
@@ -450,28 +457,7 @@ export default function Dashboard({
           {renderProjectCards(
             completedProjects,
             'No completed projects yet',
-            'Use Completed on an active project when it is ready to file away.'
-          )}
-        </section>
-      </section>
-    );
-  }
-
-  function renderArchiveTab() {
-    return (
-      <section className="dashboard-stack">
-        <section className="panel project-list-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Archived projects</h2>
-              <p>{loading ? 'Loading archived projects...' : `${archivedProjects.length} archived project${archivedProjects.length === 1 ? '' : 's'}`}</p>
-            </div>
-          </div>
-          {error && <p className="error-box dashboard-error">{error}</p>}
-          {renderProjectCards(
-            archivedProjects,
-            'No archived projects yet',
-            'Projects automatically move here 30 days after they are completed.'
+            'Use Move to completed on an active project when it is ready to file away.'
           )}
         </section>
       </section>
@@ -614,10 +600,6 @@ export default function Dashboard({
             <span>Completed</span>
             <strong>{statusSummary.completed}</strong>
           </article>
-          <article className="metric-card panel">
-            <span>Archived</span>
-            <strong>{statusSummary.archived}</strong>
-          </article>
         </section>
 
         <section className="panel calendar-panel">
@@ -727,7 +709,6 @@ export default function Dashboard({
       {activeTab !== 'projects' && activeTab !== 'completed' && error && <p className="error-box dashboard-error">{error}</p>}
       {activeTab === 'projects' && renderProjectsTab()}
       {activeTab === 'completed' && renderCompletedTab()}
-      {activeTab === 'archive' && renderArchiveTab()}
       {activeTab === 'assignments' && renderAssignmentsTab()}
       {activeTab === 'calendar' && renderCalendarTab()}
       {activeTab === 'site-members' && canManageSite && <SiteMembersPanel currentUser={user} onOpenProject={onOpenProject} />}

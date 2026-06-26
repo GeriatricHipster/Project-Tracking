@@ -1,87 +1,76 @@
 import { useMemo, useState } from 'react';
 
-function currency(value) {
-  const number = Number(value || 0);
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(number);
-}
-
-function blankRow(id) {
-  return { id, item: '', material: '' };
+function money(value) {
+  const num = Number(value || 0);
+  return num.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
 }
 
 export default function MarkupCalculatorPanel() {
-  const [rows, setRows] = useState(() => [blankRow(1), blankRow(2), blankRow(3)]);
+  const [rows, setRows] = useState(Array.from({ length: 6 }, () => ({ material: '', labor: '' })));
 
   const totals = useMemo(() => {
     const materialTotal = rows.reduce((sum, row) => sum + Number(row.material || 0), 0);
-    const markupTotal = materialTotal * 0.05;
-    return { materialTotal, markupTotal, grandTotal: materialTotal + markupTotal };
+    const laborTotal = rows.reduce((sum, row) => sum + Number(row.labor || 0), 0);
+    const subtotal = materialTotal + laborTotal;
+    const markup = subtotal * 0.05;
+    return { materialTotal, laborTotal, subtotal, markup, grandTotal: subtotal + markup };
   }, [rows]);
 
-  function updateRow(id, field, value) {
-    setRows((current) => current.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
-  }
-
-  function addRow() {
-    setRows((current) => [...current, blankRow(current.length ? Math.max(...current.map((row) => row.id)) + 1 : 1)]);
-  }
-
-  function resetRows() {
-    setRows([blankRow(1), blankRow(2), blankRow(3)]);
+  function updateRow(index, field, value) {
+    setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)));
   }
 
   return (
     <section className="dashboard-stack">
-      <section className="panel markup-panel">
+      <section className="panel">
         <div className="panel-heading">
           <div>
             <h2>Markup calculator</h2>
-            <p>5% calculation only. Enter material amounts and the calculator will build the 5% markup totals.</p>
-          </div>
-          <div className="row-actions">
-            <button className="ghost-button compact" onClick={addRow} type="button">Add row</button>
-            <button className="ghost-button compact" onClick={resetRows} type="button">Reset</button>
+            <p>5% markup only.</p>
           </div>
         </div>
 
-        <div className="table-scroll markup-table-wrap">
+        <div className="markup-table-wrap">
           <table className="markup-table">
             <thead>
               <tr>
-                <th>Item</th>
+                <th>#</th>
                 <th>Material</th>
-                <th>5% Markup</th>
-                <th>Total</th>
+                <th>Labor</th>
+                <th>Row total</th>
+                <th>5% markup</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
-                const material = Number(row.material || 0);
-                const markup = material * 0.05;
+              {rows.map((row, index) => {
+                const rowTotal = Number(row.material || 0) + Number(row.labor || 0);
                 return (
-                  <tr key={row.id}>
-                    <td>
-                      <input value={row.item} onChange={(event) => updateRow(row.id, 'item', event.target.value)} placeholder="Description" />
-                    </td>
-                    <td>
-                      <input type="number" min="0" step="0.01" value={row.material} onChange={(event) => updateRow(row.id, 'material', event.target.value)} placeholder="0.00" />
-                    </td>
-                    <td>{currency(markup)}</td>
-                    <td>{currency(material + markup)}</td>
+                  <tr key={index}>
+                    <td>{index + 1}</td>
+                    <td><input type="number" min="0" step="0.01" value={row.material} onChange={(event) => updateRow(index, 'material', event.target.value)} /></td>
+                    <td><input type="number" min="0" step="0.01" value={row.labor} onChange={(event) => updateRow(index, 'labor', event.target.value)} /></td>
+                    <td>{money(rowTotal)}</td>
+                    <td>{money(rowTotal * 0.05)}</td>
                   </tr>
                 );
               })}
             </tbody>
             <tfoot>
               <tr>
-                <th>Total</th>
-                <th>{currency(totals.materialTotal)}</th>
-                <th>{currency(totals.markupTotal)}</th>
-                <th>{currency(totals.grandTotal)}</th>
+                <th colSpan="3">Totals</th>
+                <th>{money(totals.subtotal)}</th>
+                <th>{money(totals.markup)}</th>
               </tr>
             </tfoot>
           </table>
         </div>
+
+        <section className="summary-strip markup-summary">
+          <article className="metric-card panel"><span>Material total</span><strong>{money(totals.materialTotal)}</strong></article>
+          <article className="metric-card panel"><span>Labor total</span><strong>{money(totals.laborTotal)}</strong></article>
+          <article className="metric-card panel"><span>5% markup</span><strong>{money(totals.markup)}</strong></article>
+          <article className="metric-card panel"><span>Grand total</span><strong>{money(totals.grandTotal)}</strong></article>
+        </section>
       </section>
     </section>
   );

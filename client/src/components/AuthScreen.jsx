@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { memberTradeOptions } from '../lib/options';
+
+const userTradeOptions = ['CCure Team', 'Camera Team', 'Lock Smith', 'Vendor', 'PM', 'Manger', 'Supervisor'];
 
 export default function AuthScreen({ onAuth }) {
   const [mode, setMode] = useState('login');
@@ -58,24 +59,24 @@ export default function AuthScreen({ onAuth }) {
 
         <form className="stack" onSubmit={submit}>
           {mode === 'register' && (
-            <label>
-              Name
-              <input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Jane Project Manager" />
-            </label>
+            <>
+              <label>
+                Name
+                <input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Jane Project Manager" />
+              </label>
+              <label>
+                Trade
+                <select value={form.trade} onChange={(event) => updateField('trade', event.target.value)}>
+                  <option value="">Unassigned</option>
+                  {userTradeOptions.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
+                </select>
+              </label>
+            </>
           )}
           <label>
             Email
             <input type="email" value={form.email} onChange={(event) => updateField('email', event.target.value)} placeholder="you@company.com" />
           </label>
-          {mode === 'register' && (
-            <label>
-              Trade
-              <select value={form.trade} onChange={(event) => updateField('trade', event.target.value)}>
-                <option value="">Unassigned</option>
-                {memberTradeOptions.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
-              </select>
-            </label>
-          )}
           <label>
             Password
             <input type="password" value={form.password} onChange={(event) => updateField('password', event.target.value)} placeholder="At least 8 characters" />
