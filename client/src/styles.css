@@ -3079,3 +3079,27 @@ html[data-theme='dark'] .danger-button {
   background: #7f1d1d !important;
   color: #fee2e2 !important;
 }
+
+html[data-theme='dark'] .gantt-label-column,
+html[data-theme='dark'] .gantt-header-row,
+html[data-theme='dark'] .gantt-canvas,
+html[data-theme='dark'] .gantt-grid,
+html[data-theme='dark'] .gantt-scroll {
+  background: #f8fafc !important;
+}
+
+html[data-theme='dark'] .gantt-label-column,
+html[data-theme='dark'] .gantt-header-row,
+html[data-theme='dark'] .gantt-navigation-help,
+html[data-theme='dark'] .gantt-navigation-help *,
+html[data-theme='dark'] .gantt-label-column *,
+html[data-theme='dark'] .gantt-header-row * {
+  color: #0f172a !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+html[data-theme='dark'] .gantt-label-column .muted,
+html[data-theme='dark'] .gantt-navigation-help .muted {
+  color: #475569 !important;
+}
