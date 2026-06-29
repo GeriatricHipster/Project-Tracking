@@ -416,26 +416,28 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     </div>
 
     <div className="two-col">
-      <label>
-        Vendor
-        <input
-          disabled={!canEdit}
-          value={form.vendor}
-          onChange={(event) => updateField('vendor', event.target.value)}
-          placeholder="Vendor name"
-        />
-      </label>
+  <CustomizableSelect
+    label="Vendor"
+    value={form.vendor}
+    options={vendorOptions}
+    customValue={form.vendor_custom || ''}
+    disabled={!canEdit}
+    onChange={(value) => updateField('vendor', value)}
+    onCustomChange={(value) => updateField('vendor_custom', value)}
+    onAddCustom={() => addCustomVendor('vendor', 'vendor_custom', addVendorOption)}
+  />
 
-      <label>
-        Vendor 2
-        <input
-          disabled={!canEdit}
-          value={form.vendor_secondary}
-          onChange={(event) => updateField('vendor_secondary', event.target.value)}
-          placeholder="Second vendor name"
-        />
-      </label>
-    </div>
+      <CustomizableSelect
+    label="Vendor 2"
+    value={form.vendor_secondary}
+    options={vendorOptions}
+    customValue={form.vendor_secondary_custom || ''}
+    disabled={!canEdit}
+    onChange={(value) => updateField('vendor_secondary', value)}
+    onCustomChange={(value) => updateField('vendor_secondary_custom', value)}
+    onAddCustom={() => addCustomVendor('vendor_secondary', 'vendor_secondary_custom', addVendorOption)}
+  />
+</div>
   </section>
 
   <section className="panel task-section">
@@ -507,14 +509,16 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       />
     </div>
 
-    <label>
-      PM
-      <input
-        disabled={!canEdit}
-        value={form.pm}
-        onChange={(event) => updateField('pm', event.target.value)}
-        placeholder="PM name"
-      />
+    <CustomizableSelect
+  label="PM"
+  value={form.pm}
+  options={pmOptions}
+  customValue={form.pm_custom || ''}
+  disabled={!canEdit}
+  onChange={(value) => updateField('pm', value)}
+  onCustomChange={(value) => updateField('pm_custom', value)}
+  onAddCustom={addCustomPm}
+/>
     </label>
   </section>
 
