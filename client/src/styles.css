@@ -3209,3 +3209,66 @@ html[data-theme='dark'][data-background='steel'] body {
     radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.2), transparent 18rem),
     linear-gradient(180deg, #020617 0%, #082f49 52%, #111827 100%);
 }
+
+html[data-theme='dark'] .panel p,
+html[data-theme='dark'] .panel small,
+html[data-theme='dark'] .project-card p,
+html[data-theme='dark'] .project-card small,
+html[data-theme='dark'] .assignment-card p,
+html[data-theme='dark'] .assignment-card small,
+html[data-theme='dark'] .calendar-project-card p,
+html[data-theme='dark'] .calendar-project-card small,
+html[data-theme='dark'] .blueprint-item span,
+html[data-theme='dark'] .empty-state,
+html[data-theme='dark'] .empty-state p,
+html[data-theme='dark'] .project-title-block p,
+html[data-theme='dark'] .panel-heading p,
+html[data-theme='dark'] .calendar-row-meta,
+html[data-theme='dark'] .calendar-more,
+html[data-theme='dark'] .member-item span,
+html[data-theme='dark'] .dependency-item span,
+html[data-theme='dark'] .activity-item span,
+html[data-theme='dark'] .activity-item small,
+html[data-theme='dark'] .assigned-project-chip span,
+html[data-theme='dark'] .site-user-card small,
+html[data-theme='dark'] .site-user-card .muted {
+  color: #cbd5e1 !important;
+  opacity: 1 !important;
+}
+
+html[data-theme='dark'] .project-stats span,
+html[data-theme='dark'] .dashboard-snapshot span,
+html[data-theme='dark'] .role-pill,
+html[data-theme='dark'] .status-pill,
+html[data-theme='dark'] .priority-pill,
+html[data-theme='dark'] .archive-pill,
+html[data-theme='dark'] .member-chip,
+html[data-theme='dark'] .project-status-pill,
+html[data-theme='dark'] .project-status-mini,
+html[data-theme='dark'] .calendar-status-count {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+  opacity: 1 !important;
+}
+
+html[data-theme='dark'] .drop-zone span,
+html[data-theme='dark'] .blueprint-panel p,
+html[data-theme='dark'] .loading-panel,
+html[data-theme='dark'] .small-note {
+  color: #cbd5e1 !important;
+  opacity: 1 !important;
+}
+
+html[data-theme='dark'] .project-card *,
+html[data-theme='dark'] .assignment-card *,
+html[data-theme='dark'] .calendar-project-card *,
+html[data-theme='dark'] .project-assignment-card *,
+html[data-theme='dark'] .assignment-user-card *,
+html[data-theme='dark'] .site-user-card *,
+html[data-theme='dark'] .blueprint-item *,
+html[data-theme='dark'] .member-item *,
+html[data-theme='dark'] .activity-item *,
+html[data-theme='dark'] .dependency-item * {
+  text-shadow: none !important;
+}
