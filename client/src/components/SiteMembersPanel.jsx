@@ -126,6 +126,8 @@ function readStoredVendorOptions() {
 function writeStoredVendorOptions(values) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(VENDOR_STORAGE_KEY, JSON.stringify(normalizeList(values)));
+}
+
 function readStoredPmOptions() {
   if (typeof window === 'undefined') return [...pmSeed];
   try {
@@ -133,7 +135,7 @@ function readStoredPmOptions() {
     if (!raw) return [...pmSeed];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [...pmSeed];
-    return normalizeList([...pmSeed, ...parsed]);
+    return normalizeList(parsed);
   } catch {
     return [...pmSeed];
   }
@@ -175,22 +177,21 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
     }
   }
 
-useEffect(() => {
-  writeStoredSecuritySystems(securitySystems);
-}, [securitySystems]);
+  useEffect(() => {
+    loadUsers();
+  }, []);
 
-useEffect(() => {
-  writeStoredVendorOptions(vendorOptions);
-}, [vendorOptions]);
+  useEffect(() => {
+    writeStoredSecuritySystems(securitySystems);
+  }, [securitySystems]);
 
-useEffect(() => {
-  writeStoredPmOptions(pmOptions);
-}, [pmOptions]);
+  useEffect(() => {
+    writeStoredVendorOptions(vendorOptions);
   }, [vendorOptions]);
 
   useEffect(() => {
-  writeStoredPmOptions(pmOptions);
-}, [pmOptions]);
+    writeStoredPmOptions(pmOptions);
+  }, [pmOptions]);
 
   function canChangeUser(user) {
     if (user.id === currentUser?.id) return false;
@@ -254,7 +255,6 @@ useEffect(() => {
     notifyDropdownOptionsUpdated(SECURITY_SYSTEM_STORAGE_KEY);
   }
 
-
   function deleteVendorOption(option) {
     const confirmed = window.confirm(`Delete "${option}" from the Vendor dropdown?`);
     if (!confirmed) return;
@@ -272,40 +272,25 @@ useEffect(() => {
     writeStoredVendorOptions(next);
     notifyDropdownOptionsUpdated(VENDOR_STORAGE_KEY);
   }
+
   function deletePmOption(option) {
-  const confirmed = window.confirm(`Delete "${option}" from the PM dropdown?`);
-  if (!confirmed) return;
-  const next = normalizeList(pmOptions.filter((item) => item !== option));
-  setPmOptions(next);
-  writeStoredPmOptions(next);
-  notifyDropdownOptionsUpdated(PM_STORAGE_KEY);
-}
+    const confirmed = window.confirm(`Delete "${option}" from the PM dropdown?`);
+    if (!confirmed) return;
+    const next = normalizeList(pmOptions.filter((item) => item !== option));
+    setPmOptions(next);
+    writeStoredPmOptions(next);
+    notifyDropdownOptionsUpdated(PM_STORAGE_KEY);
+  }
 
-function resetPmOptions() {
-  const confirmed = window.confirm('Restore the PM dropdown to the default list?');
-  if (!confirmed) return;
-  const next = [...pmSeed];
-  setPmOptions(next);
-  writeStoredPmOptions(next);
-  notifyDropdownOptionsUpdated(PM_STORAGE_KEY);
-}
-function deletePmOption(option) {
-  const confirmed = window.confirm(`Delete "${option}" from the PM dropdown?`);
-  if (!confirmed) return;
-  const next = normalizeList(pmOptions.filter((item) => item !== option));
-  setPmOptions(next);
-  writeStoredPmOptions(next);
-  notifyDropdownOptionsUpdated(PM_STORAGE_KEY);
-}
+  function resetPmOptions() {
+    const confirmed = window.confirm('Restore the PM dropdown to the default list?');
+    if (!confirmed) return;
+    const next = [...pmSeed];
+    setPmOptions(next);
+    writeStoredPmOptions(next);
+    notifyDropdownOptionsUpdated(PM_STORAGE_KEY);
+  }
 
-function resetPmOptions() {
-  const confirmed = window.confirm('Restore the PM dropdown to the default list?');
-  if (!confirmed) return;
-  const next = [...pmSeed];
-  setPmOptions(next);
-  writeStoredPmOptions(next);
-  notifyDropdownOptionsUpdated(PM_STORAGE_KEY);
-}
   return (
     <section className="dashboard-stack">
       <section className="panel">
@@ -446,46 +431,6 @@ function resetPmOptions() {
           </section>
 
           <section className="panel">
-  <div className="panel-heading">
-    <div>
-      <h2>PM dropdown options</h2>
-      <p>Owners can remove PM options used in the task form.</p>
-    </div>
-    <button className="ghost-button compact" onClick={resetPmOptions} type="button">
-      Reset defaults
-    </button>
-  </div>
-
-  <p className="muted" style={{ marginTop: 0 }}>
-    Removing an option updates this browser&apos;s saved list. Open the task form again to see the change.
-  </p>
-
-  <div className="site-user-list">
-    {pmOptions.map((option) => (
-      <article className="site-user-card" key={option}>
-        <div className="site-user-main">
-          <div>
-            <h3>{option}</h3>
-            <p className="muted">Used by the PM dropdown.</p>
-          </div>
-          <div className="site-user-actions">
-            <button className="danger-button compact" onClick={() => deletePmOption(option)} type="button">
-              Delete option
-            </button>
-          </div>
-        </div>
-      </article>
-    ))}
-    {!pmOptions.length && (
-      <div className="empty-state">
-        <h3>No options found</h3>
-        <p>Reset the defaults to restore the list.</p>
-      </div>
-    )}
-  </div>
-</section>
-
-          <section className="panel">
             <div className="panel-heading">
               <div>
                 <h2>Vendor dropdown options</h2>
@@ -522,48 +467,46 @@ function resetPmOptions() {
               )}
             </div>
           </section>
+
           <section className="panel">
-  <div className="panel-heading">
-    <div>
-      <h2>PM dropdown options</h2>
-      <p>Owners can remove PM options used in the task form.</p>
-    </div>
-    <button className="ghost-button compact" onClick={resetPmOptions} type="button">
-      Reset defaults
-    </button>
-  </div>
+            <div className="panel-heading">
+              <div>
+                <h2>PM dropdown options</h2>
+                <p>Owners can remove PM options used in the task form.</p>
+              </div>
+              <button className="ghost-button compact" onClick={resetPmOptions} type="button">Reset defaults</button>
+            </div>
 
-  <p className="muted" style={{ marginTop: 0 }}>
-    Removing an option updates this browser&apos;s saved list. Open the task form again to see the change.
-  </p>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Removing an option updates this browser&apos;s saved list. Open the task form again to see the change.
+            </p>
 
-  <div className="site-user-list">
-    {pmOptions.map((option) => (
-      <article className="site-user-card" key={option}>
-        <div className="site-user-main">
-          <div>
-            <h3>{option}</h3>
-            <p className="muted">Used by the PM dropdown.</p>
-          </div>
-          <div className="site-user-actions">
-            <button className="danger-button compact" onClick={() => deletePmOption(option)} type="button">
-              Delete option
-            </button>
-          </div>
-        </div>
-      </article>
-    ))}
-    {!pmOptions.length && (
-      <div className="empty-state">
-        <h3>No options found</h3>
-        <p>Reset the defaults to restore the list.</p>
-      </div>
-    )}
-  </div>
-</section>
+            <div className="site-user-list">
+              {pmOptions.map((option) => (
+                <article className="site-user-card" key={option}>
+                  <div className="site-user-main">
+                    <div>
+                      <h3>{option}</h3>
+                      <p className="muted">Used by the PM dropdown.</p>
+                    </div>
+                    <div className="site-user-actions">
+                      <button className="danger-button compact" onClick={() => deletePmOption(option)} type="button">
+                        Delete option
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+              {!pmOptions.length && (
+                <div className="empty-state">
+                  <h3>No options found</h3>
+                  <p>Reset the defaults to restore the list.</p>
+                </div>
+              )}
+            </div>
+          </section>
         </>
       )}
     </section>
   );
 }
-
