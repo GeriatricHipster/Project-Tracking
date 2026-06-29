@@ -3272,3 +3272,18 @@ html[data-theme='dark'] .activity-item *,
 html[data-theme='dark'] .dependency-item * {
   text-shadow: none !important;
 }
+
+html[data-theme='dark'] .auth-tabs {
+  background: #111827 !important;
+  border: 1px solid #334155;
+}
+
+html[data-theme='dark'] .auth-tabs button {
+  color: #cbd5e1 !important;
+  background: transparent !important;
+}
+
+html[data-theme='dark'] .auth-tabs button.active {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #ef4444, #991b1b) !important;
+}
