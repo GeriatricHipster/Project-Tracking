@@ -162,8 +162,7 @@ function blankTask(project) {
   return {
     task_name_choice: '',
     task_name_custom: '',
-    secondary_task_choice: '',
-    secondary_task_custom: '',
+    secondary_task: '',
     description: '',
     trade: '',
     trade_custom: '',
@@ -261,12 +260,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         ...current,
         task_name_choice: taskNameOptions.includes(editingTask.name || '') ? editingTask.name : 'Other',
         task_name_custom: taskNameOptions.includes(editingTask.name || '') ? '' : (editingTask.name || ''),
-        secondary_task_choice: taskNameOptions.includes(editingTask.secondary_task || '')
-          ? editingTask.secondary_task
-          : (editingTask.secondary_task ? '__custom__' : ''),
-        secondary_task_custom: taskNameOptions.includes(editingTask.secondary_task || '')
-          ? ''
-          : (editingTask.secondary_task || ''),
+        secondary_task: editingTask.secondary_task || '',
         description: editingTask.description || '',
         trade: tradeOptions.includes(editingTask.trade || '') ? editingTask.trade : (editingTask.trade ? '__custom__' : ''),
         trade_custom: tradeOptions.includes(editingTask.trade || '') ? '' : (editingTask.trade || ''),
@@ -350,12 +344,6 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     setForm((current) => ({ ...current, task_name_choice: 'Other', task_name_custom: next }));
   }
 
-  function addCustomSecondaryTask() {
-    const next = String(form.secondary_task_custom || '').trim();
-    if (!next) return;
-    setForm((current) => ({ ...current, secondary_task_choice: next, secondary_task_custom: '' }));
-  }
-
   async function submit(event) {
     event.preventDefault();
     setError('');
@@ -366,10 +354,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
 
       await onSave({
         name: taskName || '',
-        secondary_task:
-          form.secondary_task_choice === '__custom__'
-            ? form.secondary_task_custom
-            : form.secondary_task_choice || null,
+        secondary_task: form.secondary_task || null,
         description: form.description || '',
         trade: form.trade === '__custom__' ? form.trade_custom : form.trade || null,
         vendor: form.vendor === '__custom__' ? form.vendor_custom : form.vendor || null,
@@ -405,7 +390,11 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       <div className="panel-heading">
         <div>
           <h2>{editingTask ? 'Edit task' : 'Add task'}</h2>
-          <p>{canEdit ? 'Update dates, vendor, status, responsibility, and progress.' : 'Viewer access is read-only except for project notes.'}</p>
+          <p>
+            {canEdit
+              ? 'Update dates, vendor, status, responsibility, and progress.'
+              : 'Viewer access is read-only except for project notes.'}
+          </p>
         </div>
         {editingTask && (
           <button className="ghost-button" onClick={onCancel} type="button">
@@ -460,16 +449,16 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             </label>
           )}
 
-          <CustomizableSelect
-            label="Secondary task"
-            value={form.secondary_task_choice}
-            options={taskNameOptions}
-            customValue={form.secondary_task_custom}
-            disabled={!canEdit}
-            onChange={(value) => updateField('secondary_task_choice', value)}
-            onCustomChange={(value) => updateField('secondary_task_custom', value)}
-            onAddCustom={addCustomSecondaryTask}
-          />
+          <label>
+            Secondary task
+            <input
+              disabled={!canEdit}
+              type="text"
+              value={form.secondary_task}
+              onChange={(event) => updateField('secondary_task', event.target.value)}
+              placeholder="Enter a secondary task"
+            />
+          </label>
 
           <div className="two-col">
             <CustomizableSelect
