@@ -79,6 +79,8 @@ const vendorSeed = [
   'Utah Yamas'
 ].sort((a, b) => a.localeCompare(b));
 
+const pmSeed = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));
+
 function titleCase(value) {
   return String(value || '')
     .replace(/_/g, ' ')
@@ -138,6 +140,7 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
   const [passwordDrafts, setPasswordDrafts] = useState({});
   const [securitySystems, setSecuritySystems] = useState(() => readStoredSecuritySystems());
   const [vendorOptions, setVendorOptions] = useState(() => readStoredVendorOptions());
+  const [pmOptions, setPmOptions] = useState(() => readStoredPmOptions());
 
   const currentSiteRole = currentUser?.site_role || 'member';
   const currentIsOwner = currentSiteRole === 'owner';
@@ -155,16 +158,17 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
     }
   }
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
+useEffect(() => {
+  writeStoredSecuritySystems(securitySystems);
+}, [securitySystems]);
 
-  useEffect(() => {
-    writeStoredSecuritySystems(securitySystems);
-  }, [securitySystems]);
+useEffect(() => {
+  writeStoredVendorOptions(vendorOptions);
+}, [vendorOptions]);
 
-  useEffect(() => {
-    writeStoredVendorOptions(vendorOptions);
+useEffect(() => {
+  writeStoredPmOptions(pmOptions);
+}, [pmOptions]);
   }, [vendorOptions]);
 
   function canChangeUser(user) {
@@ -247,7 +251,23 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
     writeStoredVendorOptions(next);
     notifyDropdownOptionsUpdated(VENDOR_STORAGE_KEY);
   }
+function deletePmOption(option) {
+  const confirmed = window.confirm(`Delete "${option}" from the PM dropdown?`);
+  if (!confirmed) return;
+  const next = normalizeList(pmOptions.filter((item) => item !== option));
+  setPmOptions(next);
+  writeStoredPmOptions(next);
+  notifyDropdownOptionsUpdated(PM_STORAGE_KEY);
+}
 
+function resetPmOptions() {
+  const confirmed = window.confirm('Restore the PM dropdown to the default list?');
+  if (!confirmed) return;
+  const next = [...pmSeed];
+  setPmOptions(next);
+  writeStoredPmOptions(next);
+  notifyDropdownOptionsUpdated(PM_STORAGE_KEY);
+}
   return (
     <section className="dashboard-stack">
       <section className="panel">
@@ -388,6 +408,46 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
           </section>
 
           <section className="panel">
+  <div className="panel-heading">
+    <div>
+      <h2>PM dropdown options</h2>
+      <p>Owners can remove PM options used in the task form.</p>
+    </div>
+    <button className="ghost-button compact" onClick={resetPmOptions} type="button">
+      Reset defaults
+    </button>
+  </div>
+
+  <p className="muted" style={{ marginTop: 0 }}>
+    Removing an option updates this browser&apos;s saved list. Open the task form again to see the change.
+  </p>
+
+  <div className="site-user-list">
+    {pmOptions.map((option) => (
+      <article className="site-user-card" key={option}>
+        <div className="site-user-main">
+          <div>
+            <h3>{option}</h3>
+            <p className="muted">Used by the PM dropdown.</p>
+          </div>
+          <div className="site-user-actions">
+            <button className="danger-button compact" onClick={() => deletePmOption(option)} type="button">
+              Delete option
+            </button>
+          </div>
+        </div>
+      </article>
+    ))}
+    {!pmOptions.length && (
+      <div className="empty-state">
+        <h3>No options found</h3>
+        <p>Reset the defaults to restore the list.</p>
+      </div>
+    )}
+  </div>
+</section>
+
+          <section className="panel">
             <div className="panel-heading">
               <div>
                 <h2>Vendor dropdown options</h2>
@@ -429,3 +489,4 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
     </section>
   );
 }
+
