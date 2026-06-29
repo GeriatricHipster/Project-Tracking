@@ -3347,3 +3347,16 @@ html[data-theme='dark'] .member-chip small {
   color: #475569 !important;
   opacity: 1 !important;
 }
+
+.workspace-side {
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
+.task-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.75rem;
+}
