@@ -64,7 +64,7 @@ const vendorBaseOptions = [
   'Thyssenkrupp',
   'Utah Yamas'
 ].sort((a, b) => a.localeCompare(b));
-const pmOptions = ['Austin', 'Kurt' , 'Custom'].sort((a, b) => a.localeCompare(b));
+const pmOptions = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));
 function deletePmOption(option) {
   const confirmed = window.confirm(`Delete "${option}" from the PM dropdown?`);
   if (!confirmed) return;
