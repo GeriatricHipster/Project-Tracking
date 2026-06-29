@@ -3093,6 +3093,45 @@ html[data-theme='dark'] .archived-row-header small {
   color: #94a3b8;
 }
 
+[data-theme='dark'] .project-card,
+[data-theme='dark'] .project-card h1,
+[data-theme='dark'] .project-card h2,
+[data-theme='dark'] .project-card h3,
+[data-theme='dark'] .project-card h4,
+[data-theme='dark'] .project-card p,
+[data-theme='dark'] .project-card span,
+[data-theme='dark'] .project-card strong,
+[data-theme='dark'] .project-card label {
+  color: #e2e8f0;
+}
+
+[data-theme='dark'] .project-card .muted {
+  color: #cbd5e1;
+}
+
+[data-theme='dark'] .project-card .role-pill,
+[data-theme='dark'] .project-card .status-pill,
+[data-theme='dark'] .project-card .archive-pill {
+  background: #1e293b;
+  color: #f8fafc;
+  border-color: #334155;
+}
+
+[data-theme='dark'] .project-card .project-card-title-row,
+[data-theme='dark'] .project-card .project-card-title-row * {
+  color: #f8fafc;
+}
+
+[data-theme='dark'] .project-card button {
+  color: #f8fafc;
+}
+
+[data-theme='dark'] .assigned-project-chip,
+[data-theme='dark'] .assigned-project-chip strong,
+[data-theme='dark'] .assigned-project-chip span {
+  color: #e2e8f0;
+}
+
 html[data-theme='dark'] .error-boundary-card {
   background: rgba(15, 23, 42, 0.92);
   border-color: #334155;
