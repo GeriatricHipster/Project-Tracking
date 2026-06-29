@@ -42,7 +42,7 @@ const taskNameOptions = [
 ].sort((a, b) => a.localeCompare(b));
 
 const tradeBaseOptions = ['CCure', 'Cameras', 'CCure & Cameras', 'Lock smiths'];
-const vendorBaseOptions = [
+const vendorSeed = [
   'Utah Yamas',
   'IES',
   'Ideacom',
@@ -137,11 +137,6 @@ function writeStoredList(key, values) {
   window.localStorage.setItem(key, JSON.stringify(values));
 }
 
-function notifyDropdownOptionsUpdated(storageKey) {
-  if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent('dropdown-options-updated', { detail: { storageKey } }));
-}
-
 function usePersistentList(storageKey, seed) {
   const [items, setItems] = useState(() => readStoredList(storageKey, seed));
 
@@ -203,8 +198,7 @@ function CustomizableSelect({
   onChange,
   onCustomChange,
   onAddCustom,
-  placeholder = 'Unassigned',
-  customOptionLabel = 'Custom'
+  placeholder = 'Unassigned'
 }) {
   const isCustom = value === '__custom__';
 
@@ -216,7 +210,7 @@ function CustomizableSelect({
         {options.map((option) => (
           <option key={option} value={option}>{option}</option>
         ))}
-        <option value="__custom__">{customOptionLabel}</option>
+        <option value="__custom__">Other</option>
       </select>
       {isCustom && (
         <div className="inline-custom-entry">
@@ -224,7 +218,7 @@ function CustomizableSelect({
             disabled={disabled}
             value={customValue}
             onChange={(event) => onCustomChange(event.target.value)}
-            placeholder={`Add ${customOptionLabel.toLowerCase()} ${label.toLowerCase()}`}
+            placeholder={`Add custom ${label.toLowerCase()}`}
           />
           <button className="ghost-button compact" disabled={disabled || !String(customValue || '').trim()} onClick={onAddCustom} type="button">
             Add
@@ -243,7 +237,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
   const [locksmithOptions, addLocksmithOption] = usePersistentList('psg-locksmiths', locksmithSeed);
   const [tradeOptions, addTradeOption] = usePersistentList('psg-trades', tradeBaseOptions);
   const [otherAssigneeOptions, addOtherAssigneeOption] = usePersistentList('psg-other-assignees', []);
-  const [vendorOptions, addVendorOption, setVendorOptions] = usePersistentList('psg-vendors', vendorBaseOptions);
+  const [vendorOptions, addVendorOption, setVendorOptions] = usePersistentList('psg-vendors', vendorSeed);
   const [pmOptions, addPmOption, setPmOptions] = usePersistentList('psg-pms', pmSeed);
 
   useEffect(() => {
@@ -253,7 +247,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         setAssigneeSystemOptions(readStoredList('psg-assignee-systems', assigneeSystemSeed));
       }
       if (!storageKey || storageKey === 'psg-vendors') {
-        setVendorOptions(readStoredList('psg-vendors', vendorBaseOptions));
+        setVendorOptions(readStoredList('psg-vendors', vendorSeed));
       }
       if (!storageKey || storageKey === 'psg-pms') {
         setPmOptions(readStoredList('psg-pms', pmSeed));
@@ -262,15 +256,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
 
     window.addEventListener('dropdown-options-updated', handleDropdownOptionsUpdated);
     return () => window.removeEventListener('dropdown-options-updated', handleDropdownOptionsUpdated);
-  }, [setAssigneeSystemOptions, setVendorOptions, setPmOptions]);
-
-  useEffect(() => {
-    notifyDropdownOptionsUpdated('psg-vendors');
-  }, [vendorOptions]);
-
-  useEffect(() => {
-    notifyDropdownOptionsUpdated('psg-pms');
-  }, [pmOptions]);
+  }, [setAssigneeSystemOptions, setPmOptions, setVendorOptions]);
 
   useEffect(() => {
     if (editingTask) {
@@ -364,11 +350,11 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         trade: form.trade === '__custom__' ? form.trade_custom : form.trade || null,
         vendor: form.vendor === '__custom__' ? form.vendor_custom : form.vendor || null,
         vendor_secondary: form.vendor_secondary === '__custom__' ? form.vendor_secondary_custom : form.vendor_secondary || null,
+        pm: form.pm === '__custom__' ? form.pm_custom : form.pm || null,
         assigned_to: form.assigned_to || null,
         assignee_secondary: form.assignee_secondary || null,
         assignee_tertiary: form.assignee_tertiary || null,
         assignee_quaternary: form.assignee_quaternary === '__custom__' ? form.assignee_quaternary_custom : form.assignee_quaternary || null,
-        pm: form.pm === '__custom__' ? form.pm_custom : form.pm || null,
         parent_task_id: form.parent_task_id || null,
         status: form.status || 'not_started',
         priority: form.priority || 'normal',
@@ -434,7 +420,6 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
               onChange={(value) => updateField('trade', value)}
               onCustomChange={(value) => updateField('trade_custom', value)}
               onAddCustom={addCustomTrade}
-              customOptionLabel="Custom"
             />
             <label>
               Parent task
@@ -455,7 +440,6 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
               onChange={(value) => updateField('vendor', value)}
               onCustomChange={(value) => updateField('vendor_custom', value)}
               onAddCustom={() => addCustomVendor('vendor', 'vendor_custom', addVendorOption)}
-              customOptionLabel="Other"
             />
             <CustomizableSelect
               label="Vendor 2"
@@ -466,7 +450,6 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
               onChange={(value) => updateField('vendor_secondary', value)}
               onCustomChange={(value) => updateField('vendor_secondary_custom', value)}
               onAddCustom={() => addCustomVendor('vendor_secondary', 'vendor_secondary_custom', addVendorOption)}
-              customOptionLabel="Other"
             />
           </div>
         </section>
@@ -494,7 +477,6 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
                 addAssigneeSystemOption(next);
                 setForm((current) => ({ ...current, assigned_to: next, assignee_system_custom: '' }));
               }}
-              customOptionLabel="Custom"
             />
             <CustomizableSelect
               label="Security Systems Team Member"
@@ -510,7 +492,6 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
                 addAssigneeSystemOption(next);
                 setForm((current) => ({ ...current, assignee_secondary: next, assignee_secondary_custom: '' }));
               }}
-              customOptionLabel="Custom"
             />
             <CustomizableSelect
               label="Lock Smiths"
@@ -526,7 +507,6 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
                 addLocksmithOption(next);
                 setForm((current) => ({ ...current, assignee_tertiary: next, assignee_tertiary_custom: '' }));
               }}
-              customOptionLabel="Custom"
             />
             <CustomizableSelect
               label="Other"
@@ -537,7 +517,6 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
               onChange={(value) => updateField('assignee_quaternary', value)}
               onCustomChange={(value) => updateField('assignee_quaternary_custom', value)}
               onAddCustom={addCustomOtherAssignee}
-              customOptionLabel="Custom"
             />
           </div>
 
@@ -550,7 +529,6 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             onChange={(value) => updateField('pm', value)}
             onCustomChange={(value) => updateField('pm_custom', value)}
             onAddCustom={addCustomPm}
-            customOptionLabel="Other"
           />
         </section>
 
@@ -633,4 +611,3 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     </section>
   );
 }
-
