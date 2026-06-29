@@ -1,0 +1,551 @@
+import { useEffect, useMemo, useState } from 'react';
+import { addDays, todayIso } from '../lib/dates';
+
+const statusOptions = [
+  ['', 'Unassigned'],
+  ['not_started', 'Not started'],
+  ['in_progress', 'In progress'],
+  ['blocked', 'Blocked'],
+  ['complete', 'Complete']
+];
+
+const priorityOptions = [
+  ['', 'Unassigned'],
+  ['low', 'Low'],
+  ['normal', 'Normal'],
+  ['high', 'High'],
+  ['critical', 'Critical']
+];
+
+const taskNameOptions = [
+  'Parts Procurement',
+  'Preprogramming (Vendor)',
+  'Preprogramming (Ccure Team) clearances/schedules etc.',
+  'CCure Operator Established',
+  'UIT (IP Addresses, Firewall)',
+  'Conduit Install',
+  'Cable Install',
+  'ADA Install',
+  'Ccure Hardware Install',
+  'Camera Hardware Install',
+  'Panel Install',
+  'Fire Integration',
+  'Alarm Panel Install/Integration',
+  'Elevator Integration',
+  'Final Programming',
+  'Vendor Testing',
+  'CCure Member Testing',
+  'Camera Member Testing',
+  'Key Shop Hardware Change',
+  'Punchlist',
+  'Closeout'
+].sort((a, b) => a.localeCompare(b));
+
+const tradeBaseOptions = ['CCure', 'Cameras', 'CCure & Cameras', 'Lock smiths'];
+const vendorBaseOptions = [
+  'Accent Automatic',
+  'Beacon',
+  'Convergint',
+  'DSI',
+  'Everbase',
+  'G4S',
+  'IC&E',
+  'Ideacom',
+  'IES',
+  'Nelson Fire',
+  'OTIS',
+  'Pavion',
+  'Pye Barker',
+  'PTI (Bosch)',
+  'S101',
+  'Schindler',
+  'SMT',
+  'Stone Security',
+  'Thyssenkrupp',
+  'Utah Yamas'
+].sort((a, b) => a.localeCompare(b));
+const pmOptions = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));
+
+const assigneeSystemSeed = [
+  'James',
+  'James & Kyra',
+  'James & Ryan',
+  'James & Locksmiths',
+  'James & Suvam',
+  'James & Justin',
+  'James & Derick',
+  'James & Kenna',
+  'James & Justin, Suvam',
+  'Kenna',
+  'Kenna & Kyra',
+  'Kenna & Ryan',
+  'Kenna & Locksmiths',
+  'Kenna & Justin',
+  'Kenna & Suvam',
+  'Kenna & Derick',
+  'Kenna & Justin, Suvam',
+  'Derick',
+  'Derick & Kyra',
+  'Derick & Ryan',
+  'Derick & Locksmiths',
+  'Derick & Justin',
+  'Derick & Suvam',
+  'Derick & James',
+  'Derick & Kenna',
+  'Derick & Justin, Suvam',
+  'Justin',
+  'Justin & Kyra',
+  'Justin & Ryan',
+  'Justin & Locksmiths',
+  'Justin & Derick',
+  'Justin & Suvam',
+  'Justin & Kenna',
+  'Justin & James',
+  'Suvam',
+  'Suvam & Kyra',
+  'Suvam & Ryan',
+  'Suvam & Locksmiths',
+  'Suvam & Derick',
+  'Suvam & Kenna',
+  'Suvam & Justin',
+  'Suvam & James',
+  'Ryan',
+  'Kyra',
+  'Bill',
+  'Bennett',
+  'Jim',
+  'Chris'
+].sort((a, b) => a.localeCompare(b));
+
+const locksmithSeed = ['Bill', 'Bennett', 'Chris', 'Jim'].sort((a, b) => a.localeCompare(b));
+
+function readStoredList(key, fallback) {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return fallback;
+    return [...new Set(parsed.map((value) => String(value).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStoredList(key, values) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(key, JSON.stringify(values));
+}
+
+function usePersistentList(storageKey, seed) {
+  const [items, setItems] = useState(() => readStoredList(storageKey, seed));
+
+  useEffect(() => {
+    writeStoredList(storageKey, items);
+  }, [items, storageKey]);
+
+  function addItem(value) {
+    const next = String(value || '').trim();
+    if (!next) return;
+    setItems((current) => {
+      const merged = [...new Set([...current, next])].sort((a, b) => a.localeCompare(b));
+      return merged;
+    });
+  }
+
+  return [items, addItem, setItems];
+}
+
+function blankTask(project) {
+  const start = project?.start_date || todayIso();
+  return {
+    task_name_choice: '',
+    task_name_custom: '',
+    description: '',
+    trade: '',
+    trade_custom: '',
+    vendor: '',
+    vendor_custom: '',
+    vendor_secondary: '',
+    vendor_secondary_custom: '',
+    assigned_to: '',
+    assignee_system_custom: '',
+    assignee_secondary: '',
+    assignee_secondary_custom: '',
+    assignee_tertiary: '',
+    assignee_tertiary_custom: '',
+    assignee_quaternary: '',
+    assignee_quaternary_custom: '',
+    pm: '',
+    parent_task_id: '',
+    status: '',
+    priority: '',
+    start_date: start,
+    end_date: addDays(start, 5),
+    percent_complete: 0,
+    color: '#2563eb',
+    sort_order: ''
+  };
+}
+
+function CustomizableSelect({
+  label,
+  value,
+  options,
+  customValue,
+  disabled,
+  onChange,
+  onCustomChange,
+  onAddCustom,
+  placeholder = 'Unassigned'
+}) {
+  const isCustom = value === '__custom__';
+
+  return (
+    <label>
+      {label}
+      <select disabled={disabled} value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">{placeholder}</option>
+        {options.map((option) => (
+          <option key={option} value={option}>{option}</option>
+        ))}
+        <option value="__custom__">Custom</option>
+      </select>
+      {isCustom && (
+        <div className="inline-custom-entry">
+          <input
+            disabled={disabled}
+            value={customValue}
+            onChange={(event) => onCustomChange(event.target.value)}
+            placeholder={`Add custom ${label.toLowerCase()}`}
+          />
+          <button className="ghost-button compact" disabled={disabled || !String(customValue || '').trim()} onClick={onAddCustom} type="button">
+            Add
+          </button>
+        </div>
+      )}
+    </label>
+  );
+}
+
+export default function TaskForm({ project, members, tasks, editingTask, canEdit, onSave, onCancel }) {
+  const [form, setForm] = useState(blankTask(project));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [assigneeSystemOptions, addAssigneeSystemOption, setAssigneeSystemOptions] = usePersistentList('psg-assignee-systems', assigneeSystemSeed);
+  const [locksmithOptions, addLocksmithOption] = usePersistentList('psg-locksmiths', locksmithSeed);
+  const [tradeOptions, addTradeOption] = usePersistentList('psg-trades', tradeBaseOptions);
+  const [otherAssigneeOptions, addOtherAssigneeOption] = usePersistentList('psg-other-assignees', []);
+  const [vendorOptions, addVendorOption, setVendorOptions] = usePersistentList('psg-vendors', vendorBaseOptions);
+
+  useEffect(() => {
+    function handleDropdownOptionsUpdated(event) {
+      const storageKey = event?.detail?.storageKey;
+      if (!storageKey || storageKey === 'psg-assignee-systems') {
+        setAssigneeSystemOptions(readStoredList('psg-assignee-systems', assigneeSystemSeed));
+      }
+      if (!storageKey || storageKey === 'psg-vendors') {
+        setVendorOptions(readStoredList('psg-vendors', vendorBaseOptions));
+      }
+    }
+
+    window.addEventListener('dropdown-options-updated', handleDropdownOptionsUpdated);
+    return () => window.removeEventListener('dropdown-options-updated', handleDropdownOptionsUpdated);
+  }, [setAssigneeSystemOptions, setVendorOptions]);
+
+  useEffect(() => {
+    if (editingTask) {
+      setForm((current) => ({
+        ...current,
+        task_name_choice: taskNameOptions.includes(editingTask.name || '') ? editingTask.name : 'Other',
+        task_name_custom: taskNameOptions.includes(editingTask.name || '') ? '' : (editingTask.name || ''),
+        trade: tradeOptions.includes(editingTask.trade || '') ? editingTask.trade : (editingTask.trade ? '__custom__' : ''),
+        trade_custom: tradeOptions.includes(editingTask.trade || '') ? '' : (editingTask.trade || ''),
+        vendor: vendorOptions.includes(editingTask.vendor || '') ? editingTask.vendor : (editingTask.vendor ? '__custom__' : ''),
+        vendor_custom: vendorOptions.includes(editingTask.vendor || '') ? '' : (editingTask.vendor || ''),
+        vendor_secondary: vendorOptions.includes(editingTask.vendor_secondary || '') ? editingTask.vendor_secondary : (editingTask.vendor_secondary ? '__custom__' : ''),
+        vendor_secondary_custom: vendorOptions.includes(editingTask.vendor_secondary || '') ? '' : (editingTask.vendor_secondary || ''),
+        assigned_to: editingTask.assigned_to || '',
+        assignee_system_custom: '',
+        assignee_secondary: editingTask.assignee_secondary || '',
+        assignee_secondary_custom: '',
+        assignee_tertiary: editingTask.assignee_tertiary || '',
+        assignee_tertiary_custom: '',
+        assignee_quaternary: otherAssigneeOptions.includes(editingTask.assignee_quaternary || '') ? editingTask.assignee_quaternary : (editingTask.assignee_quaternary ? '__custom__' : ''),
+        assignee_quaternary_custom: otherAssigneeOptions.includes(editingTask.assignee_quaternary || '') ? '' : (editingTask.assignee_quaternary || ''),
+        pm: editingTask.pm || '',
+        parent_task_id: editingTask.parent_task_id || '',
+        status: editingTask.status || '',
+        priority: editingTask.priority || '',
+        start_date: editingTask.start_date || project?.start_date || todayIso(),
+        end_date: editingTask.end_date || project?.start_date || todayIso(),
+        percent_complete: editingTask.percent_complete || 0,
+        color: editingTask.color || '#2563eb',
+        sort_order: editingTask.sort_order || ''
+      }));
+    } else {
+      setForm(blankTask(project));
+    }
+    setError('');
+  }, [editingTask, project, tradeOptions, vendorOptions, otherAssigneeOptions]);
+
+  const parentTaskOptions = useMemo(
+    () => tasks.filter((task) => !editingTask || task.id !== editingTask.id),
+    [tasks, editingTask]
+  );
+
+  function updateField(field, value) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function addCustomTrade() {
+    const next = String(form.trade_custom || '').trim();
+    if (!next) return;
+    addTradeOption(next);
+    setForm((current) => ({ ...current, trade: next, trade_custom: '' }));
+  }
+
+  function addCustomVendor(field, customField, setter, addOption) {
+    const next = String(form[customField] || '').trim();
+    if (!next) return;
+    addOption(next);
+    setter((current) => ({ ...current, [field]: next, [customField]: '' }));
+  }
+
+  function addCustomOtherAssignee() {
+    const next = String(form.assignee_quaternary_custom || '').trim();
+    if (!next) return;
+    addOtherAssigneeOption(next);
+    setForm((current) => ({ ...current, assignee_quaternary: next, assignee_quaternary_custom: '' }));
+  }
+
+  function addCustomTaskName() {
+    const next = String(form.task_name_custom || '').trim();
+    if (!next) return;
+    setForm((current) => ({ ...current, task_name_choice: 'Other', task_name_custom: next }));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setError('');
+    setSaving(true);
+    try {
+      const taskName = form.task_name_choice === 'Other' ? form.task_name_custom : form.task_name_choice;
+      await onSave({
+        name: taskName || '',
+        description: '',
+        trade: form.trade === '__custom__' ? form.trade_custom : form.trade || null,
+        vendor: form.vendor === '__custom__' ? form.vendor_custom : form.vendor || null,
+        vendor_secondary: form.vendor_secondary === '__custom__' ? form.vendor_secondary_custom : form.vendor_secondary || null,
+        assigned_to: form.assigned_to || null,
+        assignee_secondary: form.assignee_secondary || null,
+        assignee_tertiary: form.assignee_tertiary || null,
+        assignee_quaternary: form.assignee_quaternary === '__custom__' ? form.assignee_quaternary_custom : form.assignee_quaternary || null,
+        parent_task_id: form.parent_task_id || null,
+        status: form.status || 'not_started',
+        priority: form.priority || 'normal',
+        start_date: form.start_date || project?.start_date || todayIso(),
+        end_date: form.end_date || form.start_date || project?.start_date || todayIso(),
+        percent_complete: Number(form.percent_complete),
+        color: form.color,
+        sort_order: form.sort_order === '' ? undefined : Number(form.sort_order)
+      });
+      if (!editingTask) setForm(blankTask(project));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="panel task-form-panel">
+      <div className="panel-heading">
+        <div>
+          <h2>{editingTask ? 'Edit task' : 'Add task'}</h2>
+          <p>{canEdit ? 'Update dates, vendor, status, responsibility, and progress.' : 'Viewer access is read-only except for project notes.'}</p>
+        </div>
+        {editingTask && <button className="ghost-button" onClick={onCancel} type="button">Cancel edit</button>}
+      </div>
+
+      <form className="stack" onSubmit={submit}>
+        <label>
+          Task name
+          <select disabled={!canEdit} value={form.task_name_choice} onChange={(event) => updateField('task_name_choice', event.target.value)}>
+            <option value="">Unassigned</option>
+            {taskNameOptions.map((taskName) => <option key={taskName} value={taskName}>{taskName}</option>)}
+            <option value="Other">Other</option>
+          </select>
+        </label>
+
+        {form.task_name_choice === 'Other' && (
+          <label>
+            Custom task name
+            <textarea disabled={!canEdit} value={form.task_name_custom} onChange={(event) => updateField('task_name_custom', event.target.value)} placeholder="Enter a custom task name" />
+            <button className="ghost-button compact" disabled={!canEdit || !String(form.task_name_custom || '').trim()} onClick={addCustomTaskName} type="button">
+              Use custom task name
+            </button>
+          </label>
+        )}
+
+        <div className="two-col">
+          <CustomizableSelect
+            label="Trade"
+            value={form.trade}
+            options={tradeOptions}
+            customValue={form.trade_custom}
+            disabled={!canEdit}
+            onChange={(value) => updateField('trade', value)}
+            onCustomChange={(value) => updateField('trade_custom', value)}
+            onAddCustom={addCustomTrade}
+          />
+          <label>
+            Parent task
+            <select disabled={!canEdit} value={form.parent_task_id} onChange={(event) => updateField('parent_task_id', event.target.value)}>
+              <option value="">Unassigned</option>
+              {parentTaskOptions.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}
+            </select>
+          </label>
+        </div>
+
+        <div className="two-col">
+          <CustomizableSelect
+            label="Vendor"
+            value={form.vendor}
+            options={vendorOptions}
+            customValue={form.vendor_custom || ''}
+            disabled={!canEdit}
+            onChange={(value) => updateField('vendor', value)}
+            onCustomChange={(value) => updateField('vendor_custom', value)}
+            onAddCustom={() => addCustomVendor('vendor', 'vendor_custom', setForm, addVendorOption)}
+          />
+          <CustomizableSelect
+            label="Vendor 2"
+            value={form.vendor_secondary}
+            options={vendorOptions}
+            customValue={form.vendor_secondary_custom || ''}
+            disabled={!canEdit}
+            onChange={(value) => updateField('vendor_secondary', value)}
+            onCustomChange={(value) => updateField('vendor_secondary_custom', value)}
+            onAddCustom={() => addCustomVendor('vendor_secondary', 'vendor_secondary_custom', setForm, addVendorOption)}
+          />
+        </div>
+
+        <div className="four-col assignee-grid">
+          <CustomizableSelect
+            label="Security Systems Team Member"
+            value={form.assigned_to}
+            options={assigneeSystemOptions}
+            customValue={form.assignee_system_custom || ''}
+            disabled={!canEdit}
+            onChange={(value) => updateField('assigned_to', value)}
+            onCustomChange={(value) => updateField('assignee_system_custom', value)}
+            onAddCustom={() => {
+              const next = String(form.assignee_system_custom || '').trim();
+              if (!next) return;
+              addAssigneeSystemOption(next);
+              setForm((current) => ({ ...current, assigned_to: next, assignee_system_custom: '' }));
+            }}
+          />
+          <CustomizableSelect
+            label="Security Systems Team Member"
+            value={form.assignee_secondary}
+            options={assigneeSystemOptions}
+            customValue={form.assignee_secondary_custom || ''}
+            disabled={!canEdit}
+            onChange={(value) => updateField('assignee_secondary', value)}
+            onCustomChange={(value) => updateField('assignee_secondary_custom', value)}
+            onAddCustom={() => {
+              const next = String(form.assignee_secondary_custom || '').trim();
+              if (!next) return;
+              addAssigneeSystemOption(next);
+              setForm((current) => ({ ...current, assignee_secondary: next, assignee_secondary_custom: '' }));
+            }}
+          />
+          <CustomizableSelect
+            label="Lock Smiths"
+            value={form.assignee_tertiary}
+            options={locksmithOptions}
+            customValue={form.assignee_tertiary_custom || ''}
+            disabled={!canEdit}
+            onChange={(value) => updateField('assignee_tertiary', value)}
+            onCustomChange={(value) => updateField('assignee_tertiary_custom', value)}
+            onAddCustom={() => {
+              const next = String(form.assignee_tertiary_custom || '').trim();
+              if (!next) return;
+              addLocksmithOption(next);
+              setForm((current) => ({ ...current, assignee_tertiary: next, assignee_tertiary_custom: '' }));
+            }}
+          />
+          <CustomizableSelect
+            label="Other"
+            value={form.assignee_quaternary}
+            options={otherAssigneeOptions}
+            customValue={form.assignee_quaternary_custom}
+            disabled={!canEdit}
+            onChange={(value) => updateField('assignee_quaternary', value)}
+            onCustomChange={(value) => updateField('assignee_quaternary_custom', value)}
+            onAddCustom={addCustomOtherAssignee}
+          />
+        </div>
+
+        <label>
+          PM
+          <select disabled={!canEdit} value={form.pm} onChange={(event) => updateField('pm', event.target.value)}>
+            <option value="">Unassigned</option>
+            {pmOptions.map((pm) => <option key={pm} value={pm}>{pm}</option>)}
+          </select>
+        </label>
+
+        <label>
+          Description
+          <textarea disabled={!canEdit} value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Scope, constraints, notes, inspection needs" />
+        </label>
+
+        <div className="two-col">
+          <label>
+            Start
+            <input disabled={!canEdit} type="date" value={form.start_date} onChange={(event) => updateField('start_date', event.target.value)} />
+          </label>
+          <label>
+            Finish
+            <input disabled={!canEdit} type="date" value={form.end_date} onChange={(event) => updateField('end_date', event.target.value)} />
+          </label>
+        </div>
+
+        <div className="three-col">
+          <label>
+            Status
+            <select disabled={!canEdit} value={form.status} onChange={(event) => updateField('status', event.target.value)}>
+              {statusOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+            </select>
+          </label>
+          <label>
+            Priority
+            <select disabled={!canEdit} value={form.priority} onChange={(event) => updateField('priority', event.target.value)}>
+              {priorityOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+            </select>
+          </label>
+          <label>
+            Percent complete
+            <input disabled={!canEdit} type="number" min="0" max="100" value={form.percent_complete} onChange={(event) => updateField('percent_complete', event.target.value)} />
+          </label>
+        </div>
+
+        <div className="two-col">
+          <label>
+            Color
+            <input disabled={!canEdit} type="color" value={form.color} onChange={(event) => updateField('color', event.target.value)} />
+          </label>
+          <label>
+            Sort order
+            <input disabled={!canEdit} type="number" value={form.sort_order} onChange={(event) => updateField('sort_order', event.target.value)} placeholder="Auto" />
+          </label>
+        </div>
+
+        {error && <p className="error-box">{error}</p>}
+        <button className="primary-button" disabled={!canEdit || saving}>{saving ? 'Saving...' : editingTask ? 'Update task' : 'Add task'}</button>
+      </form>
+    </section>
+  );
+}
