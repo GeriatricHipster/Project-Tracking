@@ -146,6 +146,10 @@ export default function App() {
   function changeBackground(value) {
     setBackground(value);
   }
+  function scrollToTop() {
+  if (typeof window === 'undefined') return;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
   function logout() {
     setToken(null);
@@ -160,6 +164,11 @@ export default function App() {
       <button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
         {theme === 'dark' ? 'Light mode' : 'Dark mode'}
       </button>
+
+          <button className="ghost-button compact back-to-top-button" onClick={scrollToTop} type="button" aria-label="Back to top">
+      Back to top
+    </button>
+      
       <label className="background-select-wrap">
         <span className="sr-only">Background</span>
         <select className="background-select" value={background} onChange={(event) => changeBackground(event.target.value)} aria-label="Change app background">
