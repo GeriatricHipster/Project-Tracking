@@ -3357,3 +3357,138 @@ html[data-theme='dark'] .member-chip small {
   justify-content: flex-end;
   padding-top: 0.75rem;
 }
+
+/* Mobile-friendly layout pass */
+@media (max-width: 960px) {
+  .app-page {
+    padding: 0.85rem;
+  }
+
+  .topbar,
+  .project-header,
+  .panel-heading,
+  .dashboard-search-panel,
+  .calendar-toolbar,
+  .cms-sheet-meta,
+  .project-assignment-card,
+  .calendar-project-card,
+  .project-card,
+  .site-user-main,
+  .assignment-header,
+  .assignment-footer,
+  .calendar-row-meta,
+  .project-workspace {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .page-grid,
+  .project-workspace,
+  .expanded-gantt-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .create-panel,
+  .workspace-side {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .two-col,
+  .three-col,
+  .four-col,
+  .summary-grid,
+  .assignment-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-tabs,
+  .cms-sheet-tabs {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-wrap: nowrap;
+    padding-bottom: 0.25rem;
+  }
+
+  .dashboard-tabs button,
+  .cms-sheet-tabs button {
+    flex: 0 0 auto;
+    min-width: 120px;
+  }
+
+  .project-card-actions,
+  .project-action-row,
+  .topbar-actions,
+  .row-actions,
+  .member-actions,
+  .site-user-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .project-card-actions button,
+  .project-action-row button,
+  .topbar-actions button,
+  .row-actions button,
+  .member-actions button,
+  .site-user-actions button {
+    width: 100%;
+  }
+
+  .gantt-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .gantt-label-column {
+    border-right: 0;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .calendar-grid {
+    grid-template-columns: repeat(7, minmax(110px, 1fr));
+  }
+
+  table {
+    min-width: 860px;
+  }
+
+  .floating-controls {
+    top: 0.5rem;
+    right: 0.5rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .panel,
+  .auth-card,
+  .project-card,
+  .assignment-card,
+  .calendar-project-card,
+  .project-assignment-card,
+  .assignment-user-card,
+  .site-user-card,
+  .empty-state {
+    border-radius: 16px;
+  }
+
+  .primary-button,
+  .ghost-button,
+  .danger-button,
+  .theme-toggle-button,
+  .background-select {
+    width: 100%;
+  }
+
+  .calendar-grid {
+    grid-template-columns: repeat(7, minmax(92px, 1fr));
+  }
+
+  .gantt-toolbar,
+  .dashboard-search-panel {
+    gap: 0.5rem;
+  }
+}
