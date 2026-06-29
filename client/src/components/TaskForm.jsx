@@ -342,231 +342,234 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       </div>
 
       <form className="stack" onSubmit={submit}>
-        <section className="task-form-section">
-          <div className="task-form-section-header">
-            <div>
-              <h3>Task basics</h3>
-              <p>Pick the task name, trade, vendor, and parent task first.</p>
-            </div>
-          </div>
+        <form className="stack task-form-shell" onSubmit={submit}>
+  <section className="panel task-section">
+    <div className="panel-heading">
+      <div>
+        <h3>Task basics</h3>
+        <p>Core task details and the main vendor fields.</p>
+      </div>
+    </div>
 
-          <label>
-            Task name
-            <select disabled={!canEdit} value={form.task_name_choice} onChange={(event) => updateField('task_name_choice', event.target.value)}>
-              <option value="">Unassigned</option>
-              {taskNameOptions.map((taskName) => <option key={taskName} value={taskName}>{taskName}</option>)}
-              <option value="Other">Other</option>
-            </select>
-          </label>
+    <label>
+      Task name
+      <select disabled={!canEdit} value={form.task_name_choice} onChange={(event) => updateField('task_name_choice', event.target.value)}>
+        <option value="">Unassigned</option>
+        {taskNameOptions.map((taskName) => <option key={taskName} value={taskName}>{taskName}</option>)}
+        <option value="Other">Other</option>
+      </select>
+    </label>
 
-          {form.task_name_choice === 'Other' && (
-            <label>
-              Custom task name
-              <textarea disabled={!canEdit} value={form.task_name_custom} onChange={(event) => updateField('task_name_custom', event.target.value)} placeholder="Enter a custom task name" />
-              <button className="ghost-button compact" disabled={!canEdit || !String(form.task_name_custom || '').trim()} onClick={addCustomTaskName} type="button">
-                Use custom task name
-              </button>
-            </label>
-          )}
+    {form.task_name_choice === 'Other' && (
+      <label>
+        Custom task name
+        <textarea disabled={!canEdit} value={form.task_name_custom} onChange={(event) => updateField('task_name_custom', event.target.value)} placeholder="Enter a custom task name" />
+        <button className="ghost-button compact" disabled={!canEdit || !String(form.task_name_custom || '').trim()} onClick={addCustomTaskName} type="button">
+          Use custom task name
+        </button>
+      </label>
+    )}
 
-          <div className="two-col">
-            <CustomizableSelect
-              label="Trade"
-              value={form.trade}
-              options={tradeOptions}
-              customValue={form.trade_custom}
-              disabled={!canEdit}
-              onChange={(value) => updateField('trade', value)}
-              onCustomChange={(value) => updateField('trade_custom', value)}
-              onAddCustom={addCustomTrade}
-            />
-            <label>
-              Parent task
-              <select disabled={!canEdit} value={form.parent_task_id} onChange={(event) => updateField('parent_task_id', event.target.value)}>
-                <option value="">Unassigned</option>
-                {parentTaskOptions.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}
-              </select>
-            </label>
-          </div>
+    <div className="two-col">
+      <CustomizableSelect
+        label="Trade"
+        value={form.trade}
+        options={tradeOptions}
+        customValue={form.trade_custom}
+        disabled={!canEdit}
+        onChange={(value) => updateField('trade', value)}
+        onCustomChange={(value) => updateField('trade_custom', value)}
+        onAddCustom={addCustomTrade}
+      />
+      <label>
+        Parent task
+        <select disabled={!canEdit} value={form.parent_task_id} onChange={(event) => updateField('parent_task_id', event.target.value)}>
+          <option value="">Unassigned</option>
+          {parentTaskOptions.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}
+        </select>
+      </label>
+    </div>
 
-          <div className="two-col">
-            <CustomizableSelect
-              label="Vendor"
-              value={form.vendor}
-              options={vendorOptions}
-              customValue={form.vendor_custom || ''}
-              disabled={!canEdit}
-              onChange={(value) => updateField('vendor', value)}
-              onCustomChange={(value) => updateField('vendor_custom', value)}
-              onAddCustom={() => addCustomVendor('vendor', 'vendor_custom', setForm, addVendorOption)}
-            />
-            <CustomizableSelect
-              label="Vendor 2"
-              value={form.vendor_secondary}
-              options={vendorOptions}
-              customValue={form.vendor_secondary_custom || ''}
-              disabled={!canEdit}
-              onChange={(value) => updateField('vendor_secondary', value)}
-              onCustomChange={(value) => updateField('vendor_secondary_custom', value)}
-              onAddCustom={() => addCustomVendor('vendor_secondary', 'vendor_secondary_custom', setForm, addVendorOption)}
-            />
-          </div>
-        </section>
+    <div className="two-col">
+      <CustomizableSelect
+        label="Vendor"
+        value={form.vendor}
+        options={vendorOptions}
+        customValue={form.vendor_custom || ''}
+        disabled={!canEdit}
+        onChange={(value) => updateField('vendor', value)}
+        onCustomChange={(value) => updateField('vendor_custom', value)}
+        onAddCustom={() => addCustomVendor('vendor', 'vendor_custom', setForm, addVendorOption)}
+      />
+      <CustomizableSelect
+        label="Vendor 2"
+        value={form.vendor_secondary}
+        options={vendorOptions}
+        customValue={form.vendor_secondary_custom || ''}
+        disabled={!canEdit}
+        onChange={(value) => updateField('vendor_secondary', value)}
+        onCustomChange={(value) => updateField('vendor_secondary_custom', value)}
+        onAddCustom={() => addCustomVendor('vendor_secondary', 'vendor_secondary_custom', setForm, addVendorOption)}
+      />
+    </div>
+  </section>
 
-        <section className="task-form-section">
-          <div className="task-form-section-header">
-            <div>
-              <h3>People</h3>
-              <p>Assign the team members and the PM for this task.</p>
-            </div>
-          </div>
+  <section className="panel task-section">
+    <div className="panel-heading">
+      <div>
+        <h3>People</h3>
+        <p>Assign the team members and the PM for this task.</p>
+      </div>
+    </div>
 
-          <div className="four-col assignee-grid">
-            <CustomizableSelect
-              label="Security Systems Team Member"
-              value={form.assigned_to}
-              options={assigneeSystemOptions}
-              customValue={form.assignee_system_custom || ''}
-              disabled={!canEdit}
-              onChange={(value) => updateField('assigned_to', value)}
-              onCustomChange={(value) => updateField('assignee_system_custom', value)}
-              onAddCustom={() => {
-                const next = String(form.assignee_system_custom || '').trim();
-                if (!next) return;
-                addAssigneeSystemOption(next);
-                setForm((current) => ({ ...current, assigned_to: next, assignee_system_custom: '' }));
-              }}
-            />
-            <CustomizableSelect
-              label="Security Systems Team Member"
-              value={form.assignee_secondary}
-              options={assigneeSystemOptions}
-              customValue={form.assignee_secondary_custom || ''}
-              disabled={!canEdit}
-              onChange={(value) => updateField('assignee_secondary', value)}
-              onCustomChange={(value) => updateField('assignee_secondary_custom', value)}
-              onAddCustom={() => {
-                const next = String(form.assignee_secondary_custom || '').trim();
-                if (!next) return;
-                addAssigneeSystemOption(next);
-                setForm((current) => ({ ...current, assignee_secondary: next, assignee_secondary_custom: '' }));
-              }}
-            />
-            <CustomizableSelect
-              label="Lock Smiths"
-              value={form.assignee_tertiary}
-              options={locksmithOptions}
-              customValue={form.assignee_tertiary_custom || ''}
-              disabled={!canEdit}
-              onChange={(value) => updateField('assignee_tertiary', value)}
-              onCustomChange={(value) => updateField('assignee_tertiary_custom', value)}
-              onAddCustom={() => {
-                const next = String(form.assignee_tertiary_custom || '').trim();
-                if (!next) return;
-                addLocksmithOption(next);
-                setForm((current) => ({ ...current, assignee_tertiary: next, assignee_tertiary_custom: '' }));
-              }}
-            />
-            <CustomizableSelect
-              label="Other"
-              value={form.assignee_quaternary}
-              options={otherAssigneeOptions}
-              customValue={form.assignee_quaternary_custom}
-              disabled={!canEdit}
-              onChange={(value) => updateField('assignee_quaternary', value)}
-              onCustomChange={(value) => updateField('assignee_quaternary_custom', value)}
-              onAddCustom={addCustomOtherAssignee}
-            />
-          </div>
+    <div className="four-col assignee-grid">
+      <CustomizableSelect
+        label="Security Systems Team Member"
+        value={form.assigned_to}
+        options={assigneeSystemOptions}
+        customValue={form.assignee_system_custom || ''}
+        disabled={!canEdit}
+        onChange={(value) => updateField('assigned_to', value)}
+        onCustomChange={(value) => updateField('assignee_system_custom', value)}
+        onAddCustom={() => {
+          const next = String(form.assignee_system_custom || '').trim();
+          if (!next) return;
+          addAssigneeSystemOption(next);
+          setForm((current) => ({ ...current, assigned_to: next, assignee_system_custom: '' }));
+        }}
+      />
+      <CustomizableSelect
+        label="Security Systems Team Member"
+        value={form.assignee_secondary}
+        options={assigneeSystemOptions}
+        customValue={form.assignee_secondary_custom || ''}
+        disabled={!canEdit}
+        onChange={(value) => updateField('assignee_secondary', value)}
+        onCustomChange={(value) => updateField('assignee_secondary_custom', value)}
+        onAddCustom={() => {
+          const next = String(form.assignee_secondary_custom || '').trim();
+          if (!next) return;
+          addAssigneeSystemOption(next);
+          setForm((current) => ({ ...current, assignee_secondary: next, assignee_secondary_custom: '' }));
+        }}
+      />
+      <CustomizableSelect
+        label="Lock Smiths"
+        value={form.assignee_tertiary}
+        options={locksmithOptions}
+        customValue={form.assignee_tertiary_custom || ''}
+        disabled={!canEdit}
+        onChange={(value) => updateField('assignee_tertiary', value)}
+        onCustomChange={(value) => updateField('assignee_tertiary_custom', value)}
+        onAddCustom={() => {
+          const next = String(form.assignee_tertiary_custom || '').trim();
+          if (!next) return;
+          addLocksmithOption(next);
+          setForm((current) => ({ ...current, assignee_tertiary: next, assignee_tertiary_custom: '' }));
+        }}
+      />
+      <CustomizableSelect
+        label="Other"
+        value={form.assignee_quaternary}
+        options={otherAssigneeOptions}
+        customValue={form.assignee_quaternary_custom}
+        disabled={!canEdit}
+        onChange={(value) => updateField('assignee_quaternary', value)}
+        onCustomChange={(value) => updateField('assignee_quaternary_custom', value)}
+        onAddCustom={addCustomOtherAssignee}
+      />
+    </div>
 
-          <CustomizableSelect
-            label="PM"
-            value={form.pm}
-            options={pmOptions}
-            customValue={form.pm_custom || ''}
-            disabled={!canEdit}
-            onChange={(value) => updateField('pm', value)}
-            onCustomChange={(value) => updateField('pm_custom', value)}
-            onAddCustom={addCustomPm}
-          />
-        </section>
+    <CustomizableSelect
+      label="PM"
+      value={form.pm}
+      options={pmOptions}
+      customValue={form.pm_custom || ''}
+      disabled={!canEdit}
+      onChange={(value) => updateField('pm', value)}
+      onCustomChange={(value) => updateField('pm_custom', value)}
+      onAddCustom={addCustomPm}
+    />
+  </section>
 
-        <section className="task-form-section">
-          <div className="task-form-section-header">
-            <div>
-              <h3>Schedule</h3>
-              <p>Set the dates for this task.</p>
-            </div>
-          </div>
+  <section className="panel task-section">
+    <div className="panel-heading">
+      <div>
+        <h3>Schedule</h3>
+        <p>Set the dates for this task.</p>
+      </div>
+    </div>
 
-          <div className="two-col">
-            <label>
-              Start
-              <input disabled={!canEdit} type="date" value={form.start_date} onChange={(event) => updateField('start_date', event.target.value)} />
-            </label>
-            <label>
-              Finish
-              <input disabled={!canEdit} type="date" value={form.end_date} onChange={(event) => updateField('end_date', event.target.value)} />
-            </label>
-          </div>
-        </section>
+    <div className="two-col">
+      <label>
+        Start
+        <input disabled={!canEdit} type="date" value={form.start_date} onChange={(event) => updateField('start_date', event.target.value)} />
+      </label>
+      <label>
+        Finish
+        <input disabled={!canEdit} type="date" value={form.end_date} onChange={(event) => updateField('end_date', event.target.value)} />
+      </label>
+    </div>
+  </section>
 
-        <section className="task-form-section">
-          <div className="task-form-section-header">
-            <div>
-              <h3>Tracking</h3>
-              <p>Track progress, priority, and ordering.</p>
-            </div>
-          </div>
+  <section className="panel task-section">
+    <div className="panel-heading">
+      <div>
+        <h3>Tracking</h3>
+        <p>Status, priority, and progress settings.</p>
+      </div>
+    </div>
 
-          <div className="three-col">
-            <label>
-              Status
-              <select disabled={!canEdit} value={form.status} onChange={(event) => updateField('status', event.target.value)}>
-                {statusOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
-              </select>
-            </label>
-            <label>
-              Priority
-              <select disabled={!canEdit} value={form.priority} onChange={(event) => updateField('priority', event.target.value)}>
-                {priorityOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
-              </select>
-            </label>
-            <label>
-              Percent complete
-              <input disabled={!canEdit} type="number" min="0" max="100" value={form.percent_complete} onChange={(event) => updateField('percent_complete', event.target.value)} />
-            </label>
-          </div>
+    <div className="three-col">
+      <label>
+        Status
+        <select disabled={!canEdit} value={form.status} onChange={(event) => updateField('status', event.target.value)}>
+          {statusOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+        </select>
+      </label>
+      <label>
+        Priority
+        <select disabled={!canEdit} value={form.priority} onChange={(event) => updateField('priority', event.target.value)}>
+          {priorityOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+        </select>
+      </label>
+      <label>
+        Percent complete
+        <input disabled={!canEdit} type="number" min="0" max="100" value={form.percent_complete} onChange={(event) => updateField('percent_complete', event.target.value)} />
+      </label>
+    </div>
 
-          <div className="two-col">
-            <label>
-              Color
-              <input disabled={!canEdit} type="color" value={form.color} onChange={(event) => updateField('color', event.target.value)} />
-            </label>
-            <label>
-              Sort order
-              <input disabled={!canEdit} type="number" value={form.sort_order} onChange={(event) => updateField('sort_order', event.target.value)} placeholder="Auto" />
-            </label>
-          </div>
-        </section>
+    <div className="two-col">
+      <label>
+        Color
+        <input disabled={!canEdit} type="color" value={form.color} onChange={(event) => updateField('color', event.target.value)} />
+      </label>
+      <label>
+        Sort order
+        <input disabled={!canEdit} type="number" value={form.sort_order} onChange={(event) => updateField('sort_order', event.target.value)} placeholder="Auto" />
+      </label>
+    </div>
+  </section>
 
-        <section className="task-form-section">
-          <div className="task-form-section-header">
-            <div>
-              <h3>Notes</h3>
-              <p>Add the scope, details, and anything else the team should know.</p>
-            </div>
-          </div>
+  <section className="panel task-section">
+    <div className="panel-heading">
+      <div>
+        <h3>Notes</h3>
+        <p>Add the scope, details, and anything else the team should know.</p>
+      </div>
+    </div>
 
-          <label>
-            Description
-            <textarea disabled={!canEdit} value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Scope, constraints, notes, inspection needs" />
-          </label>
-        </section>
+    <label>
+      Description
+      <textarea disabled={!canEdit} value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Scope, constraints, notes, inspection needs" />
+    </label>
+  </section>
 
-        {error && <p className="error-box">{error}</p>}
-        <button className="primary-button" disabled={!canEdit || saving}>{saving ? 'Saving...' : editingTask ? 'Update task' : 'Add task'}</button>
-      </form>
+  {error && <p className="error-box">{error}</p>}
+  <button className="primary-button" disabled={!canEdit || saving}>
+    {saving ? 'Saving...' : editingTask ? 'Update task' : 'Add task'}
+  </button>
+</form>
     </section>
   );
 }
