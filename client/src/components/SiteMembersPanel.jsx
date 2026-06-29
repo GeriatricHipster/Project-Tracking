@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 const siteRoles = ['owner', 'manager', 'member'];
 const SECURITY_SYSTEM_STORAGE_KEY = 'psg-assignee-systems';
 const VENDOR_STORAGE_KEY = 'psg-vendors';
+const PM_STORAGE_KEY = 'psg-pms';
 
 const securitySystemSeed = [
   'James',
@@ -125,6 +126,22 @@ function readStoredVendorOptions() {
 function writeStoredVendorOptions(values) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(VENDOR_STORAGE_KEY, JSON.stringify(normalizeList(values)));
+function readStoredPmOptions() {
+  if (typeof window === 'undefined') return [...pmSeed];
+  try {
+    const raw = window.localStorage.getItem(PM_STORAGE_KEY);
+    if (!raw) return [...pmSeed];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [...pmSeed];
+    return normalizeList([...pmSeed, ...parsed]);
+  } catch {
+    return [...pmSeed];
+  }
+}
+
+function writeStoredPmOptions(values) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(PM_STORAGE_KEY, JSON.stringify(normalizeList(values)));
 }
 
 function notifyDropdownOptionsUpdated(storageKey) {
@@ -170,6 +187,10 @@ useEffect(() => {
   writeStoredPmOptions(pmOptions);
 }, [pmOptions]);
   }, [vendorOptions]);
+
+  useEffect(() => {
+  writeStoredPmOptions(pmOptions);
+}, [pmOptions]);
 
   function canChangeUser(user) {
     if (user.id === currentUser?.id) return false;
@@ -251,6 +272,23 @@ useEffect(() => {
     writeStoredVendorOptions(next);
     notifyDropdownOptionsUpdated(VENDOR_STORAGE_KEY);
   }
+  function deletePmOption(option) {
+  const confirmed = window.confirm(`Delete "${option}" from the PM dropdown?`);
+  if (!confirmed) return;
+  const next = normalizeList(pmOptions.filter((item) => item !== option));
+  setPmOptions(next);
+  writeStoredPmOptions(next);
+  notifyDropdownOptionsUpdated(PM_STORAGE_KEY);
+}
+
+function resetPmOptions() {
+  const confirmed = window.confirm('Restore the PM dropdown to the default list?');
+  if (!confirmed) return;
+  const next = [...pmSeed];
+  setPmOptions(next);
+  writeStoredPmOptions(next);
+  notifyDropdownOptionsUpdated(PM_STORAGE_KEY);
+}
 function deletePmOption(option) {
   const confirmed = window.confirm(`Delete "${option}" from the PM dropdown?`);
   if (!confirmed) return;
@@ -484,6 +522,45 @@ function resetPmOptions() {
               )}
             </div>
           </section>
+          <section className="panel">
+  <div className="panel-heading">
+    <div>
+      <h2>PM dropdown options</h2>
+      <p>Owners can remove PM options used in the task form.</p>
+    </div>
+    <button className="ghost-button compact" onClick={resetPmOptions} type="button">
+      Reset defaults
+    </button>
+  </div>
+
+  <p className="muted" style={{ marginTop: 0 }}>
+    Removing an option updates this browser&apos;s saved list. Open the task form again to see the change.
+  </p>
+
+  <div className="site-user-list">
+    {pmOptions.map((option) => (
+      <article className="site-user-card" key={option}>
+        <div className="site-user-main">
+          <div>
+            <h3>{option}</h3>
+            <p className="muted">Used by the PM dropdown.</p>
+          </div>
+          <div className="site-user-actions">
+            <button className="danger-button compact" onClick={() => deletePmOption(option)} type="button">
+              Delete option
+            </button>
+          </div>
+        </div>
+      </article>
+    ))}
+    {!pmOptions.length && (
+      <div className="empty-state">
+        <h3>No options found</h3>
+        <p>Reset the defaults to restore the list.</p>
+      </div>
+    )}
+  </div>
+</section>
         </>
       )}
     </section>
