@@ -64,7 +64,18 @@ const vendorBaseOptions = [
   'Thyssenkrupp',
   'Utah Yamas'
 ].sort((a, b) => a.localeCompare(b));
-const pmOptions = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));
+const pmOptions = ['Austin', 'Kurt' , 'Custom'].sort((a, b) => a.localeCompare(b));
+function deletePmOption(option) {
+  const confirmed = window.confirm(`Delete "${option}" from the PM dropdown?`);
+  if (!confirmed) return;
+  // remove from stored list, then refresh the dropdowns
+}
+
+function resetPmOptions() {
+  const confirmed = window.confirm('Restore the default PM dropdown options?');
+  if (!confirmed) return;
+  // restore defaults, then refresh the dropdowns
+}
 
 const assigneeSystemSeed = [
   'James',
@@ -489,13 +500,21 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
           />
         </div>
 
-        <label>
-          PM
-          <select disabled={!canEdit} value={form.pm} onChange={(event) => updateField('pm', event.target.value)}>
-            <option value="">Unassigned</option>
-            {pmOptions.map((pm) => <option key={pm} value={pm}>{pm}</option>)}
-          </select>
-        </label>
+        <CustomizableSelect
+  label="PM"
+  value={form.pm}
+  options={pmOptions}
+  customValue={form.pm_custom || ''}
+  disabled={!canEdit}
+  onChange={(value) => updateField('pm', value)}
+  onCustomChange={(value) => updateField('pm_custom', value)}
+  onAddCustom={() => {
+    const next = String(form.pm_custom || '').trim();
+    if (!next) return;
+    addPmOption(next);
+    setForm((current) => ({ ...current, pm: next, pm_custom: '' }));
+  }}
+/>
 
         <label>
           Description
