@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 
 const siteRoles = ['owner', 'manager', 'member'];
-const LIST_UPDATED_EVENT = 'psg-persistent-list-updated';
-const SECURITY_SYSTEMS_STORAGE_KEY = 'psg-assignee-systems';
-const SECURITY_SYSTEMS_DEFAULTS = [
+const SECURITY_SYSTEM_STORAGE_KEY = 'psg-assignee-systems';
+const VENDOR_STORAGE_KEY = 'psg-vendors';
+
+const securitySystemSeed = [
   'James',
   'James & Kyra',
   'James & Ryan',
@@ -55,35 +56,78 @@ const SECURITY_SYSTEMS_DEFAULTS = [
   'Chris'
 ].sort((a, b) => a.localeCompare(b));
 
+const vendorSeed = [
+  'Accent Automatic',
+  'Beacon',
+  'Convergint',
+  'DSI',
+  'Everbase',
+  'G4S',
+  'IC&E',
+  'Ideacom',
+  'IES',
+  'Nelson Fire',
+  'OTIS',
+  'Pavion',
+  'Pye Barker',
+  'PTI (Bosch)',
+  'S101',
+  'Schindler',
+  'SMT',
+  'Stone Security',
+  'Thyssenkrupp',
+  'Utah Yamas'
+].sort((a, b) => a.localeCompare(b));
+
 function titleCase(value) {
   return String(value || '')
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function readStoredList(key, fallback) {
-  if (typeof window === 'undefined') return fallback;
+function normalizeList(values) {
+  return [...new Set((values || []).map((value) => String(value || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+
+function readStoredSecuritySystems() {
+  if (typeof window === 'undefined') return [...securitySystemSeed];
   try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return fallback;
+    const raw = window.localStorage.getItem(SECURITY_SYSTEM_STORAGE_KEY);
+    if (!raw) return [...securitySystemSeed];
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return fallback;
-    return [...new Set(parsed.map((value) => String(value).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    if (!Array.isArray(parsed)) return [...securitySystemSeed];
+    return normalizeList(parsed);
   } catch {
-    return fallback;
+    return [...securitySystemSeed];
   }
 }
 
-function writeStoredList(key, values) {
+function writeStoredSecuritySystems(values) {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(key, JSON.stringify(values));
+  window.localStorage.setItem(SECURITY_SYSTEM_STORAGE_KEY, JSON.stringify(normalizeList(values)));
 }
 
-function broadcastListUpdate(storageKey) {
+function readStoredVendorOptions() {
+  if (typeof window === 'undefined') return [...vendorSeed];
+  try {
+    const raw = window.localStorage.getItem(VENDOR_STORAGE_KEY);
+    if (!raw) return [...vendorSeed];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [...vendorSeed];
+    return normalizeList([...vendorSeed, ...parsed]);
+  } catch {
+    return [...vendorSeed];
+  }
+}
+
+function writeStoredVendorOptions(values) {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent(LIST_UPDATED_EVENT, {
-    detail: { storageKey }
-  }));
+  window.localStorage.setItem(VENDOR_STORAGE_KEY, JSON.stringify(normalizeList(values)));
+}
+
+function notifyDropdownOptionsUpdated(storageKey) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('dropdown-options-updated', { detail: { storageKey } }));
 }
 
 export default function SiteMembersPanel({ currentUser, onOpenProject }) {
@@ -92,9 +136,8 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
   const [error, setError] = useState('');
   const [savingUserId, setSavingUserId] = useState(null);
   const [passwordDrafts, setPasswordDrafts] = useState({});
-  const [securitySystems, setSecuritySystems] = useState(() => readStoredList(SECURITY_SYSTEMS_STORAGE_KEY, SECURITY_SYSTEMS_DEFAULTS));
-  const [newSecuritySystem, setNewSecuritySystem] = useState('');
-  const [listNotice, setListNotice] = useState('');
+  const [securitySystems, setSecuritySystems] = useState(() => readStoredSecuritySystems());
+  const [vendorOptions, setVendorOptions] = useState(() => readStoredVendorOptions());
 
   const currentSiteRole = currentUser?.site_role || 'member';
   const currentIsOwner = currentSiteRole === 'owner';
@@ -117,30 +160,12 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
   }, []);
 
   useEffect(() => {
-    function handleStorageEvent(event) {
-      if (event.key === SECURITY_SYSTEMS_STORAGE_KEY) {
-        setSecuritySystems(readStoredList(SECURITY_SYSTEMS_STORAGE_KEY, SECURITY_SYSTEMS_DEFAULTS));
-      }
-    }
+    writeStoredSecuritySystems(securitySystems);
+  }, [securitySystems]);
 
-    function handleListUpdate(event) {
-      if (!event?.detail || event.detail.storageKey === SECURITY_SYSTEMS_STORAGE_KEY) {
-        setSecuritySystems(readStoredList(SECURITY_SYSTEMS_STORAGE_KEY, SECURITY_SYSTEMS_DEFAULTS));
-      }
-    }
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('storage', handleStorageEvent);
-      window.addEventListener(LIST_UPDATED_EVENT, handleListUpdate);
-    }
-
-    return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('storage', handleStorageEvent);
-        window.removeEventListener(LIST_UPDATED_EVENT, handleListUpdate);
-      }
-    };
-  }, []);
+  useEffect(() => {
+    writeStoredVendorOptions(vendorOptions);
+  }, [vendorOptions]);
 
   function canChangeUser(user) {
     if (user.id === currentUser?.id) return false;
@@ -186,35 +211,41 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
     }
   }
 
-  function saveSecuritySystems(nextValues) {
-    const normalized = [...new Set(nextValues.map((value) => String(value).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-    setSecuritySystems(normalized);
-    writeStoredList(SECURITY_SYSTEMS_STORAGE_KEY, normalized);
-    broadcastListUpdate(SECURITY_SYSTEMS_STORAGE_KEY);
-  }
-
-  function addSecuritySystemOption(event) {
-    event.preventDefault();
-    const next = String(newSecuritySystem || '').trim();
-    if (!next) return;
-    saveSecuritySystems([...securitySystems, next]);
-    setNewSecuritySystem('');
-    setListNotice(`Added "${next}".`);
-  }
-
-  function removeSecuritySystemOption(option) {
-    const confirmed = window.confirm(`Remove "${option}" from the Security Systems dropdown?`);
+  function deleteSecuritySystemOption(option) {
+    const confirmed = window.confirm(`Delete "${option}" from the Security Systems dropdown?`);
     if (!confirmed) return;
-    saveSecuritySystems(securitySystems.filter((entry) => entry !== option));
-    setListNotice(`Removed "${option}".`);
+    const next = normalizeList(securitySystems.filter((item) => item !== option));
+    setSecuritySystems(next);
+    writeStoredSecuritySystems(next);
+    notifyDropdownOptionsUpdated(SECURITY_SYSTEM_STORAGE_KEY);
   }
 
-  function resetSecuritySystems() {
-    const confirmed = window.confirm('Restore the default Security Systems dropdown list? This will replace any custom changes in this browser.');
+  function resetSecuritySystemOptions() {
+    const confirmed = window.confirm('Restore the Security Systems dropdown to the default list?');
     if (!confirmed) return;
-    saveSecuritySystems(SECURITY_SYSTEMS_DEFAULTS);
-    setNewSecuritySystem('');
-    setListNotice('Restored the default list.');
+    const next = [...securitySystemSeed];
+    setSecuritySystems(next);
+    writeStoredSecuritySystems(next);
+    notifyDropdownOptionsUpdated(SECURITY_SYSTEM_STORAGE_KEY);
+  }
+
+
+  function deleteVendorOption(option) {
+    const confirmed = window.confirm(`Delete "${option}" from the Vendor dropdown?`);
+    if (!confirmed) return;
+    const next = normalizeList(vendorOptions.filter((item) => item !== option));
+    setVendorOptions(next);
+    writeStoredVendorOptions(next);
+    notifyDropdownOptionsUpdated(VENDOR_STORAGE_KEY);
+  }
+
+  function resetVendorOptions() {
+    const confirmed = window.confirm('Restore the default Vendor dropdown options?');
+    if (!confirmed) return;
+    const next = [...vendorSeed];
+    setVendorOptions(next);
+    writeStoredVendorOptions(next);
+    notifyDropdownOptionsUpdated(VENDOR_STORAGE_KEY);
   }
 
   return (
@@ -303,7 +334,7 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
                     {projects.map((project) => (
                       <button className="assigned-project-chip" key={`${siteUser.id}-${project.id}`} onClick={() => onOpenProject(project.id)} type="button">
                         <strong>{project.name}</strong>
-                        <span>{titleCase(project.role)} · {titleCase(project.project_status)} · {project.location || 'No location set'}</span>
+                        <span>{titleCase(project.role)} ¬∑ {titleCase(project.project_status)} ¬∑ {project.location || 'No location set'}</span>
                       </button>
                     ))}
                     {!projects.length && <p className="muted">This user is not assigned to any projects yet.</p>}
@@ -317,54 +348,83 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
       </section>
 
       {currentIsOwner && (
-        <section className="panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Security Systems dropdown options</h2>
-              <p>Owners can add, remove, or reset the Security Systems team member list used in task forms.</p>
-            </div>
-            <button className="ghost-button compact" onClick={resetSecuritySystems} type="button">
-              Reset defaults
-            </button>
-          </div>
-
-          <form className="stack compact-form" onSubmit={addSecuritySystemOption}>
-            <label>
-              Add option
-              <input
-                value={newSecuritySystem}
-                onChange={(event) => setNewSecuritySystem(event.target.value)}
-                placeholder="Enter a new dropdown option"
-              />
-            </label>
-            <button className="primary-button compact" type="submit" disabled={!String(newSecuritySystem || '').trim()}>
-              Add option
-            </button>
-          </form>
-
-          {listNotice && <p className="notice-box">{listNotice}</p>}
-
-          <div className="member-list">
-            {securitySystems.map((option) => (
-              <div className="member-item" key={option}>
-                <div>
-                  <strong>{option}</strong>
-                  <span>Used in the Security Systems dropdown</span>
-                </div>
-                <div className="member-actions">
-                  <button
-                    className="danger-button compact"
-                    onClick={() => removeSecuritySystemOption(option)}
-                    type="button"
-                  >
-                    Delete
-                  </button>
-                </div>
+        <>
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Security Systems dropdown options</h2>
+                <p>Owners can remove options that appear in both Security Systems dropdowns on task forms.</p>
               </div>
-            ))}
-            {!securitySystems.length && <p className="muted">No dropdown options found.</p>}
-          </div>
-        </section>
+              <button className="ghost-button compact" onClick={resetSecuritySystemOptions} type="button">Reset defaults</button>
+            </div>
+
+            <p className="muted" style={{ marginTop: 0 }}>
+              Removing an option updates this browser&apos;s saved list. Open the task form again to see the change.
+            </p>
+
+            <div className="site-user-list">
+              {securitySystems.map((option) => (
+                <article className="site-user-card" key={option}>
+                  <div className="site-user-main">
+                    <div>
+                      <h3>{option}</h3>
+                      <p className="muted">Used by the Security Systems team member dropdowns.</p>
+                    </div>
+                    <div className="site-user-actions">
+                      <button className="danger-button compact" onClick={() => deleteSecuritySystemOption(option)} type="button">
+                        Delete option
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+              {!securitySystems.length && (
+                <div className="empty-state">
+                  <h3>No options found</h3>
+                  <p>Reset the defaults to restore the list.</p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Vendor dropdown options</h2>
+                <p>Owners can remove options from the Vendor and Vendor 2 dropdowns on task forms.</p>
+              </div>
+              <button className="ghost-button compact" onClick={resetVendorOptions} type="button">Reset defaults</button>
+            </div>
+
+            <p className="muted" style={{ marginTop: 0 }}>
+              Removing an option updates this browser&apos;s saved list. Open the task form again to see the change.
+            </p>
+
+            <div className="site-user-list">
+              {vendorOptions.map((option) => (
+                <article className="site-user-card" key={option}>
+                  <div className="site-user-main">
+                    <div>
+                      <h3>{option}</h3>
+                      <p className="muted">Used by the Vendor dropdowns.</p>
+                    </div>
+                    <div className="site-user-actions">
+                      <button className="danger-button compact" onClick={() => deleteVendorOption(option)} type="button">
+                        Delete option
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+              {!vendorOptions.length && (
+                <div className="empty-state">
+                  <h3>No options found</h3>
+                  <p>Reset the defaults to restore the list.</p>
+                </div>
+              )}
+            </div>
+          </section>
+        </>
       )}
     </section>
   );
