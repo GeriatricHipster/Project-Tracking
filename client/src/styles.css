@@ -3287,3 +3287,46 @@ html[data-theme='dark'] .auth-tabs button.active {
   color: #ffffff !important;
   background: linear-gradient(135deg, #ef4444, #991b1b) !important;
 }
+
+html[data-theme='dark'] .calendar-grid {
+  background: #0b1220 !important;
+  border-color: #334155 !important;
+}
+
+html[data-theme='dark'] .calendar-day {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+}
+
+html[data-theme='dark'] .calendar-weekday {
+  background: #111827 !important;
+  color: #cbd5e1 !important;
+  border-color: #334155 !important;
+}
+
+html[data-theme='dark'] .calendar-date-number {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html[data-theme='dark'] .calendar-event {
+  background: #1f2937 !important;
+  color: #f8fafc !important;
+  border: 1px solid #475569 !important;
+  opacity: 1 !important;
+}
+
+html[data-theme='dark'] .calendar-event span {
+  color: #f8fafc !important;
+  opacity: 1 !important;
+}
+
+html[data-theme='dark'] .calendar-event small {
+  color: #cbd5e1 !important;
+  opacity: 1 !important;
+}
+
+html[data-theme='dark'] .calendar-more {
+  color: #cbd5e1 !important;
+  opacity: 1 !important;
+}
