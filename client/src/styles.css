@@ -2935,6 +2935,24 @@ html[data-theme='dark'] .status-archived {
   color: #f8fafc !important;
 }
 
+html[data-theme='dark'] .project-card *,
+html[data-theme='dark'] .panel *,
+html[data-theme='dark'] .task-section *,
+html[data-theme='dark'] .site-user-card *,
+html[data-theme='dark'] .assigned-project-chip * {
+  color: #f8fafc !important;
+  opacity: 1 !important;
+}
+
+html[data-theme='dark'] .muted,
+html[data-theme='dark'] .project-card p,
+html[data-theme='dark'] .panel p,
+html[data-theme='dark'] .task-section p,
+html[data-theme='dark'] .site-user-card p,
+html[data-theme='dark'] .assigned-project-chip span {
+  color: #cbd5e1 !important;
+}
+
 [data-theme='dark'] .project-card .muted,
 [data-theme='dark'] .panel .muted,
 [data-theme='dark'] .task-section .muted,
