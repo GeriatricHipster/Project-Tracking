@@ -65,6 +65,16 @@ const vendorBaseOptions = [
   'Utah Yamas'
 ].sort((a, b) => a.localeCompare(b));
 const pmOptions = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));
+<CustomizableSelect
+  label="PM"
+  value={form.pm}
+  options={pmOptions}
+  customValue={form.pm_custom}
+  disabled={!canEdit}
+  onChange={(value) => updateField('pm', value)}
+  onCustomChange={(value) => updateField('pm_custom', value)}
+  onAddCustom={addCustomPm}
+/>
 
 const assigneeSystemSeed = [
   'James',
