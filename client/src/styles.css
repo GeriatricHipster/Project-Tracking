@@ -2629,6 +2629,60 @@ html[data-theme='dark'] option {
   color: #e5e7eb;
 }
 
+[data-theme='dark'] .panel,
+[data-theme='dark'] .task-section,
+[data-theme='dark'] .site-user-card,
+[data-theme='dark'] .empty-state,
+[data-theme='dark'] .assigned-project-chip {
+  color: #f8fafc;
+}
+
+[data-theme='dark'] .panel h1,
+[data-theme='dark'] .panel h2,
+[data-theme='dark'] .panel h3,
+[data-theme='dark'] .panel h4,
+[data-theme='dark'] .panel p,
+[data-theme='dark'] .panel label,
+[data-theme='dark'] .panel span,
+[data-theme='dark'] .task-section h1,
+[data-theme='dark'] .task-section h2,
+[data-theme='dark'] .task-section h3,
+[data-theme='dark'] .task-section h4,
+[data-theme='dark'] .task-section p,
+[data-theme='dark'] .task-section label,
+[data-theme='dark'] .task-section span,
+[data-theme='dark'] .site-user-card h1,
+[data-theme='dark'] .site-user-card h2,
+[data-theme='dark'] .site-user-card h3,
+[data-theme='dark'] .site-user-card p,
+[data-theme='dark'] .site-user-card label,
+[data-theme='dark'] .site-user-card span,
+[data-theme='dark'] .assigned-project-chip strong,
+[data-theme='dark'] .assigned-project-chip span,
+[data-theme='dark'] .empty-state h1,
+[data-theme='dark'] .empty-state h2,
+[data-theme='dark'] .empty-state h3,
+[data-theme='dark'] .empty-state p {
+  color: #e2e8f0;
+}
+
+[data-theme='dark'] .muted {
+  color: #cbd5e1;
+}
+
+[data-theme='dark'] input,
+[data-theme='dark'] select,
+[data-theme='dark'] textarea {
+  background: #0f172a;
+  color: #f8fafc;
+  border-color: #334155;
+}
+
+[data-theme='dark'] input::placeholder,
+[data-theme='dark'] textarea::placeholder {
+  color: #94a3b8;
+}
+
 .site-banner {
   width: min(1220px, 100%);
   margin: 0 auto 1rem;
