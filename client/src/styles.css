@@ -3165,3 +3165,53 @@ html[data-theme='dark'] .status-archived {
 .fullscreen-mode { min-height: calc(100vh - 2rem); }
 .cms-fullscreen-button { margin-right: auto; }
 .row-actions.stacked { display: flex; flex-direction: column; gap: 0.45rem; }
+
+[data-theme='dark'] .project-card,
+[data-theme='dark'] .project-card *,
+[data-theme='dark'] .panel,
+[data-theme='dark'] .panel *,
+[data-theme='dark'] .task-section,
+[data-theme='dark'] .task-section *,
+[data-theme='dark'] .site-user-card,
+[data-theme='dark'] .site-user-card *,
+[data-theme='dark'] .assigned-project-chip,
+[data-theme='dark'] .assigned-project-chip * {
+  opacity: 1 !important;
+  color: #f8fafc !important;
+}
+
+[data-theme='dark'] .project-card .muted,
+[data-theme='dark'] .panel .muted,
+[data-theme='dark'] .task-section .muted,
+[data-theme='dark'] .site-user-card .muted,
+[data-theme='dark'] .assigned-project-chip .muted {
+  color: #cbd5e1 !important;
+}
+
+[data-theme='dark'] .role-pill,
+[data-theme='dark'] .status-pill,
+[data-theme='dark'] .archive-pill {
+  background: #334155 !important;
+  color: #f8fafc !important;
+  border: 1px solid #64748b !important;
+}
+
+[data-theme='dark'] .project-card button,
+[data-theme='dark'] .panel button,
+[data-theme='dark'] .site-user-card button,
+[data-theme='dark'] .assigned-project-chip button {
+  color: #f8fafc !important;
+}
+
+[data-theme='dark'] input,
+[data-theme='dark'] select,
+[data-theme='dark'] textarea {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #475569 !important;
+}
+
+[data-theme='dark'] input::placeholder,
+[data-theme='dark'] textarea::placeholder {
+  color: #94a3b8 !important;
+}
