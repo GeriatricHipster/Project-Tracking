@@ -2,11 +2,88 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 
 const siteRoles = ['owner', 'manager', 'member'];
+const LIST_UPDATED_EVENT = 'psg-persistent-list-updated';
+const SECURITY_SYSTEMS_STORAGE_KEY = 'psg-assignee-systems';
+const SECURITY_SYSTEMS_DEFAULTS = [
+  'James',
+  'James & Kyra',
+  'James & Ryan',
+  'James & Locksmiths',
+  'James & Suvam',
+  'James & Justin',
+  'James & Derick',
+  'James & Kenna',
+  'James & Justin, Suvam',
+  'Kenna',
+  'Kenna & Kyra',
+  'Kenna & Ryan',
+  'Kenna & Locksmiths',
+  'Kenna & Justin',
+  'Kenna & Suvam',
+  'Kenna & Derick',
+  'Kenna & Justin, Suvam',
+  'Derick',
+  'Derick & Kyra',
+  'Derick & Ryan',
+  'Derick & Locksmiths',
+  'Derick & Justin',
+  'Derick & Suvam',
+  'Derick & James',
+  'Derick & Kenna',
+  'Derick & Justin, Suvam',
+  'Justin',
+  'Justin & Kyra',
+  'Justin & Ryan',
+  'Justin & Locksmiths',
+  'Justin & Derick',
+  'Justin & Suvam',
+  'Justin & Kenna',
+  'Justin & James',
+  'Suvam',
+  'Suvam & Kyra',
+  'Suvam & Ryan',
+  'Suvam & Locksmiths',
+  'Suvam & Derick',
+  'Suvam & Kenna',
+  'Suvam & Justin',
+  'Suvam & James',
+  'Ryan',
+  'Kyra',
+  'Bill',
+  'Bennett',
+  'Jim',
+  'Chris'
+].sort((a, b) => a.localeCompare(b));
 
 function titleCase(value) {
   return String(value || '')
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function readStoredList(key, fallback) {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return fallback;
+    return [...new Set(parsed.map((value) => String(value).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStoredList(key, values) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(key, JSON.stringify(values));
+}
+
+function broadcastListUpdate(storageKey) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(LIST_UPDATED_EVENT, {
+    detail: { storageKey }
+  }));
 }
 
 export default function SiteMembersPanel({ currentUser, onOpenProject }) {
@@ -15,6 +92,9 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
   const [error, setError] = useState('');
   const [savingUserId, setSavingUserId] = useState(null);
   const [passwordDrafts, setPasswordDrafts] = useState({});
+  const [securitySystems, setSecuritySystems] = useState(() => readStoredList(SECURITY_SYSTEMS_STORAGE_KEY, SECURITY_SYSTEMS_DEFAULTS));
+  const [newSecuritySystem, setNewSecuritySystem] = useState('');
+  const [listNotice, setListNotice] = useState('');
 
   const currentSiteRole = currentUser?.site_role || 'member';
   const currentIsOwner = currentSiteRole === 'owner';
@@ -34,6 +114,32 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
 
   useEffect(() => {
     loadUsers();
+  }, []);
+
+  useEffect(() => {
+    function handleStorageEvent(event) {
+      if (event.key === SECURITY_SYSTEMS_STORAGE_KEY) {
+        setSecuritySystems(readStoredList(SECURITY_SYSTEMS_STORAGE_KEY, SECURITY_SYSTEMS_DEFAULTS));
+      }
+    }
+
+    function handleListUpdate(event) {
+      if (!event?.detail || event.detail.storageKey === SECURITY_SYSTEMS_STORAGE_KEY) {
+        setSecuritySystems(readStoredList(SECURITY_SYSTEMS_STORAGE_KEY, SECURITY_SYSTEMS_DEFAULTS));
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', handleStorageEvent);
+      window.addEventListener(LIST_UPDATED_EVENT, handleListUpdate);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('storage', handleStorageEvent);
+        window.removeEventListener(LIST_UPDATED_EVENT, handleListUpdate);
+      }
+    };
   }, []);
 
   function canChangeUser(user) {
@@ -78,6 +184,37 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
     } finally {
       setSavingUserId(null);
     }
+  }
+
+  function saveSecuritySystems(nextValues) {
+    const normalized = [...new Set(nextValues.map((value) => String(value).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    setSecuritySystems(normalized);
+    writeStoredList(SECURITY_SYSTEMS_STORAGE_KEY, normalized);
+    broadcastListUpdate(SECURITY_SYSTEMS_STORAGE_KEY);
+  }
+
+  function addSecuritySystemOption(event) {
+    event.preventDefault();
+    const next = String(newSecuritySystem || '').trim();
+    if (!next) return;
+    saveSecuritySystems([...securitySystems, next]);
+    setNewSecuritySystem('');
+    setListNotice(`Added "${next}".`);
+  }
+
+  function removeSecuritySystemOption(option) {
+    const confirmed = window.confirm(`Remove "${option}" from the Security Systems dropdown?`);
+    if (!confirmed) return;
+    saveSecuritySystems(securitySystems.filter((entry) => entry !== option));
+    setListNotice(`Removed "${option}".`);
+  }
+
+  function resetSecuritySystems() {
+    const confirmed = window.confirm('Restore the default Security Systems dropdown list? This will replace any custom changes in this browser.');
+    if (!confirmed) return;
+    saveSecuritySystems(SECURITY_SYSTEMS_DEFAULTS);
+    setNewSecuritySystem('');
+    setListNotice('Restored the default list.');
   }
 
   return (
@@ -178,6 +315,57 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
           </div>
         )}
       </section>
+
+      {currentIsOwner && (
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Security Systems dropdown options</h2>
+              <p>Owners can add, remove, or reset the Security Systems team member list used in task forms.</p>
+            </div>
+            <button className="ghost-button compact" onClick={resetSecuritySystems} type="button">
+              Reset defaults
+            </button>
+          </div>
+
+          <form className="stack compact-form" onSubmit={addSecuritySystemOption}>
+            <label>
+              Add option
+              <input
+                value={newSecuritySystem}
+                onChange={(event) => setNewSecuritySystem(event.target.value)}
+                placeholder="Enter a new dropdown option"
+              />
+            </label>
+            <button className="primary-button compact" type="submit" disabled={!String(newSecuritySystem || '').trim()}>
+              Add option
+            </button>
+          </form>
+
+          {listNotice && <p className="notice-box">{listNotice}</p>}
+
+          <div className="member-list">
+            {securitySystems.map((option) => (
+              <div className="member-item" key={option}>
+                <div>
+                  <strong>{option}</strong>
+                  <span>Used in the Security Systems dropdown</span>
+                </div>
+                <div className="member-actions">
+                  <button
+                    className="danger-button compact"
+                    onClick={() => removeSecuritySystemOption(option)}
+                    type="button"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+            {!securitySystems.length && <p className="muted">No dropdown options found.</p>}
+          </div>
+        </section>
+      )}
     </section>
   );
 }
