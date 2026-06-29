@@ -64,18 +64,7 @@ const vendorBaseOptions = [
   'Thyssenkrupp',
   'Utah Yamas'
 ].sort((a, b) => a.localeCompare(b));
-const pmOptions = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));
-function deletePmOption(option) {
-  const confirmed = window.confirm(`Delete "${option}" from the PM dropdown?`);
-  if (!confirmed) return;
-  // remove from stored list, then refresh the dropdowns
-}
-
-function resetPmOptions() {
-  const confirmed = window.confirm('Restore the default PM dropdown options?');
-  if (!confirmed) return;
-  // restore defaults, then refresh the dropdowns
-}
+const pmSeed = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));
 
 const assigneeSystemSeed = [
   'James',
@@ -188,6 +177,7 @@ function blankTask(project) {
     assignee_quaternary: '',
     assignee_quaternary_custom: '',
     pm: '',
+    pm_custom: '',
     parent_task_id: '',
     status: '',
     priority: '',
@@ -248,6 +238,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
   const [tradeOptions, addTradeOption] = usePersistentList('psg-trades', tradeBaseOptions);
   const [otherAssigneeOptions, addOtherAssigneeOption] = usePersistentList('psg-other-assignees', []);
   const [vendorOptions, addVendorOption, setVendorOptions] = usePersistentList('psg-vendors', vendorBaseOptions);
+  const [pmOptions, addPmOption, setPmOptions] = usePersistentList('psg-pms', pmSeed);
 
   useEffect(() => {
     function handleDropdownOptionsUpdated(event) {
@@ -258,11 +249,14 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       if (!storageKey || storageKey === 'psg-vendors') {
         setVendorOptions(readStoredList('psg-vendors', vendorBaseOptions));
       }
+      if (!storageKey || storageKey === 'psg-pms') {
+        setPmOptions(readStoredList('psg-pms', pmSeed));
+      }
     }
 
     window.addEventListener('dropdown-options-updated', handleDropdownOptionsUpdated);
     return () => window.removeEventListener('dropdown-options-updated', handleDropdownOptionsUpdated);
-  }, [setAssigneeSystemOptions, setVendorOptions]);
+  }, [setAssigneeSystemOptions, setVendorOptions, setPmOptions]);
 
   useEffect(() => {
     if (editingTask) {
@@ -285,6 +279,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         assignee_quaternary: otherAssigneeOptions.includes(editingTask.assignee_quaternary || '') ? editingTask.assignee_quaternary : (editingTask.assignee_quaternary ? '__custom__' : ''),
         assignee_quaternary_custom: otherAssigneeOptions.includes(editingTask.assignee_quaternary || '') ? '' : (editingTask.assignee_quaternary || ''),
         pm: editingTask.pm || '',
+        pm_custom: '',
         parent_task_id: editingTask.parent_task_id || '',
         status: editingTask.status || '',
         priority: editingTask.priority || '',
@@ -298,7 +293,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       setForm(blankTask(project));
     }
     setError('');
-  }, [editingTask, project, tradeOptions, vendorOptions, otherAssigneeOptions]);
+  }, [editingTask, project, tradeOptions, vendorOptions, otherAssigneeOptions, pmOptions]);
 
   const parentTaskOptions = useMemo(
     () => tasks.filter((task) => !editingTask || task.id !== editingTask.id),
@@ -499,22 +494,21 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             onAddCustom={addCustomOtherAssignee}
           />
         </div>
-
         <CustomizableSelect
-  label="PM"
-  value={form.pm}
-  options={pmOptions}
-  customValue={form.pm_custom || ''}
-  disabled={!canEdit}
-  onChange={(value) => updateField('pm', value)}
-  onCustomChange={(value) => updateField('pm_custom', value)}
-  onAddCustom={() => {
-    const next = String(form.pm_custom || '').trim();
-    if (!next) return;
-    addPmOption(next);
-    setForm((current) => ({ ...current, pm: next, pm_custom: '' }));
-  }}
-/>
+          label="PM"
+          value={form.pm}
+          options={pmOptions}
+          customValue={form.pm_custom || ''}
+          disabled={!canEdit}
+          onChange={(value) => updateField('pm', value)}
+          onCustomChange={(value) => updateField('pm_custom', value)}
+          onAddCustom={() => {
+            const next = String(form.pm_custom || '').trim();
+            if (!next) return;
+            addPmOption(next);
+            setForm((current) => ({ ...current, pm: next, pm_custom: '' }));
+          }}
+        />
 
         <label>
           Description
