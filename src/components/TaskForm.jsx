@@ -43,28 +43,28 @@ const taskNameOptions = [
 
 const tradeBaseOptions = ['CCure', 'Cameras', 'CCure & Cameras', 'Lock smiths'];
 const vendorBaseOptions = [
-  'Accent Automatic',
-  'Beacon',
-  'Convergint',
-  'DSI',
-  'Everbase',
-  'G4S',
-  'IC&E',
-  'Ideacom',
+  'Utah Yamas',
   'IES',
-  'Nelson Fire',
-  'OTIS',
-  'Pavion',
-  'Pye Barker',
-  'PTI (Bosch)',
+  'Ideacom',
+  'Everbase',
+  'Convergint',
   'S101',
-  'Schindler',
-  'SMT',
   'Stone Security',
-  'Thyssenkrupp',
-  'Utah Yamas'
+  'Pavion',
+  'Beacon',
+  'Accent Automatic',
+  'Pye Barker',
+  'SMT',
+  'IC&E',
+  'Nelson Fire',
+  'DSI',
+  'G4S',
+  'PTI (Bosch)',
+  'OTIS',
+  'Schindler',
+  'Thyssenkrupp'
 ].sort((a, b) => a.localeCompare(b));
-const pmOptions = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));
+const pmSeed = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));
 
 const assigneeSystemSeed = [
   'James',
@@ -137,6 +137,11 @@ function writeStoredList(key, values) {
   window.localStorage.setItem(key, JSON.stringify(values));
 }
 
+function notifyDropdownOptionsUpdated(storageKey) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('dropdown-options-updated', { detail: { storageKey } }));
+}
+
 function usePersistentList(storageKey, seed) {
   const [items, setItems] = useState(() => readStoredList(storageKey, seed));
 
@@ -165,7 +170,9 @@ function blankTask(project) {
     trade: '',
     trade_custom: '',
     vendor: '',
+    vendor_custom: '',
     vendor_secondary: '',
+    vendor_secondary_custom: '',
     assigned_to: '',
     assignee_system_custom: '',
     assignee_secondary: '',
@@ -175,6 +182,7 @@ function blankTask(project) {
     assignee_quaternary: '',
     assignee_quaternary_custom: '',
     pm: '',
+    pm_custom: '',
     parent_task_id: '',
     status: '',
     priority: '',
@@ -195,7 +203,8 @@ function CustomizableSelect({
   onChange,
   onCustomChange,
   onAddCustom,
-  placeholder = 'Unassigned'
+  placeholder = 'Unassigned',
+  customOptionLabel = 'Custom'
 }) {
   const isCustom = value === '__custom__';
 
@@ -207,7 +216,7 @@ function CustomizableSelect({
         {options.map((option) => (
           <option key={option} value={option}>{option}</option>
         ))}
-        <option value="__custom__">Custom</option>
+        <option value="__custom__">{customOptionLabel}</option>
       </select>
       {isCustom && (
         <div className="inline-custom-entry">
@@ -215,7 +224,7 @@ function CustomizableSelect({
             disabled={disabled}
             value={customValue}
             onChange={(event) => onCustomChange(event.target.value)}
-            placeholder={`Add custom ${label.toLowerCase()}`}
+            placeholder={`Add ${customOptionLabel.toLowerCase()} ${label.toLowerCase()}`}
           />
           <button className="ghost-button compact" disabled={disabled || !String(customValue || '').trim()} onClick={onAddCustom} type="button">
             Add
@@ -230,10 +239,38 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
   const [form, setForm] = useState(blankTask(project));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [assigneeSystemOptions, addAssigneeSystemOption] = usePersistentList('psg-assignee-systems', assigneeSystemSeed);
+  const [assigneeSystemOptions, addAssigneeSystemOption, setAssigneeSystemOptions] = usePersistentList('psg-assignee-systems', assigneeSystemSeed);
   const [locksmithOptions, addLocksmithOption] = usePersistentList('psg-locksmiths', locksmithSeed);
   const [tradeOptions, addTradeOption] = usePersistentList('psg-trades', tradeBaseOptions);
   const [otherAssigneeOptions, addOtherAssigneeOption] = usePersistentList('psg-other-assignees', []);
+  const [vendorOptions, addVendorOption, setVendorOptions] = usePersistentList('psg-vendors', vendorBaseOptions);
+  const [pmOptions, addPmOption, setPmOptions] = usePersistentList('psg-pms', pmSeed);
+
+  useEffect(() => {
+    function handleDropdownOptionsUpdated(event) {
+      const storageKey = event?.detail?.storageKey;
+      if (!storageKey || storageKey === 'psg-assignee-systems') {
+        setAssigneeSystemOptions(readStoredList('psg-assignee-systems', assigneeSystemSeed));
+      }
+      if (!storageKey || storageKey === 'psg-vendors') {
+        setVendorOptions(readStoredList('psg-vendors', vendorBaseOptions));
+      }
+      if (!storageKey || storageKey === 'psg-pms') {
+        setPmOptions(readStoredList('psg-pms', pmSeed));
+      }
+    }
+
+    window.addEventListener('dropdown-options-updated', handleDropdownOptionsUpdated);
+    return () => window.removeEventListener('dropdown-options-updated', handleDropdownOptionsUpdated);
+  }, [setAssigneeSystemOptions, setVendorOptions, setPmOptions]);
+
+  useEffect(() => {
+    notifyDropdownOptionsUpdated('psg-vendors');
+  }, [vendorOptions]);
+
+  useEffect(() => {
+    notifyDropdownOptionsUpdated('psg-pms');
+  }, [pmOptions]);
 
   useEffect(() => {
     if (editingTask) {
@@ -243,8 +280,10 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         task_name_custom: taskNameOptions.includes(editingTask.name || '') ? '' : (editingTask.name || ''),
         trade: tradeOptions.includes(editingTask.trade || '') ? editingTask.trade : (editingTask.trade ? '__custom__' : ''),
         trade_custom: tradeOptions.includes(editingTask.trade || '') ? '' : (editingTask.trade || ''),
-        vendor: editingTask.vendor || '',
-        vendor_secondary: editingTask.vendor_secondary || '',
+        vendor: vendorOptions.includes(editingTask.vendor || '') ? editingTask.vendor : (editingTask.vendor ? '__custom__' : ''),
+        vendor_custom: vendorOptions.includes(editingTask.vendor || '') ? '' : (editingTask.vendor || ''),
+        vendor_secondary: vendorOptions.includes(editingTask.vendor_secondary || '') ? editingTask.vendor_secondary : (editingTask.vendor_secondary ? '__custom__' : ''),
+        vendor_secondary_custom: vendorOptions.includes(editingTask.vendor_secondary || '') ? '' : (editingTask.vendor_secondary || ''),
         assigned_to: editingTask.assigned_to || '',
         assignee_system_custom: '',
         assignee_secondary: editingTask.assignee_secondary || '',
@@ -253,7 +292,8 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         assignee_tertiary_custom: '',
         assignee_quaternary: otherAssigneeOptions.includes(editingTask.assignee_quaternary || '') ? editingTask.assignee_quaternary : (editingTask.assignee_quaternary ? '__custom__' : ''),
         assignee_quaternary_custom: otherAssigneeOptions.includes(editingTask.assignee_quaternary || '') ? '' : (editingTask.assignee_quaternary || ''),
-        pm: editingTask.pm || '',
+        pm: pmOptions.includes(editingTask.pm || '') ? editingTask.pm : (editingTask.pm ? '__custom__' : ''),
+        pm_custom: pmOptions.includes(editingTask.pm || '') ? '' : (editingTask.pm || ''),
         parent_task_id: editingTask.parent_task_id || '',
         status: editingTask.status || '',
         priority: editingTask.priority || '',
@@ -267,7 +307,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       setForm(blankTask(project));
     }
     setError('');
-  }, [editingTask, project, tradeOptions, otherAssigneeOptions]);
+  }, [editingTask, project, tradeOptions, vendorOptions, pmOptions, otherAssigneeOptions]);
 
   const parentTaskOptions = useMemo(
     () => tasks.filter((task) => !editingTask || task.id !== editingTask.id),
@@ -283,6 +323,20 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     if (!next) return;
     addTradeOption(next);
     setForm((current) => ({ ...current, trade: next, trade_custom: '' }));
+  }
+
+  function addCustomVendor(field, customField, addOption) {
+    const next = String(form[customField] || '').trim();
+    if (!next) return;
+    addOption(next);
+    setForm((current) => ({ ...current, [field]: next, [customField]: '' }));
+  }
+
+  function addCustomPm() {
+    const next = String(form.pm_custom || '').trim();
+    if (!next) return;
+    addPmOption(next);
+    setForm((current) => ({ ...current, pm: next, pm_custom: '' }));
   }
 
   function addCustomOtherAssignee() {
@@ -308,12 +362,13 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         name: taskName || '',
         description: '',
         trade: form.trade === '__custom__' ? form.trade_custom : form.trade || null,
-        vendor: form.vendor || null,
-        vendor_secondary: form.vendor_secondary || null,
+        vendor: form.vendor === '__custom__' ? form.vendor_custom : form.vendor || null,
+        vendor_secondary: form.vendor_secondary === '__custom__' ? form.vendor_secondary_custom : form.vendor_secondary || null,
         assigned_to: form.assigned_to || null,
         assignee_secondary: form.assignee_secondary || null,
         assignee_tertiary: form.assignee_tertiary || null,
         assignee_quaternary: form.assignee_quaternary === '__custom__' ? form.assignee_quaternary_custom : form.assignee_quaternary || null,
+        pm: form.pm === '__custom__' ? form.pm_custom : form.pm || null,
         parent_task_id: form.parent_task_id || null,
         status: form.status || 'not_started',
         priority: form.priority || 'normal',
@@ -379,6 +434,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
               onChange={(value) => updateField('trade', value)}
               onCustomChange={(value) => updateField('trade_custom', value)}
               onAddCustom={addCustomTrade}
+              customOptionLabel="Custom"
             />
             <label>
               Parent task
@@ -398,7 +454,8 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
               disabled={!canEdit}
               onChange={(value) => updateField('vendor', value)}
               onCustomChange={(value) => updateField('vendor_custom', value)}
-              onAddCustom={() => addCustomVendor('vendor', 'vendor_custom', setForm, addVendorOption)}
+              onAddCustom={() => addCustomVendor('vendor', 'vendor_custom', addVendorOption)}
+              customOptionLabel="Other"
             />
             <CustomizableSelect
               label="Vendor 2"
@@ -408,7 +465,8 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
               disabled={!canEdit}
               onChange={(value) => updateField('vendor_secondary', value)}
               onCustomChange={(value) => updateField('vendor_secondary_custom', value)}
-              onAddCustom={() => addCustomVendor('vendor_secondary', 'vendor_secondary_custom', setForm, addVendorOption)}
+              onAddCustom={() => addCustomVendor('vendor_secondary', 'vendor_secondary_custom', addVendorOption)}
+              customOptionLabel="Other"
             />
           </div>
         </section>
@@ -436,6 +494,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
                 addAssigneeSystemOption(next);
                 setForm((current) => ({ ...current, assigned_to: next, assignee_system_custom: '' }));
               }}
+              customOptionLabel="Custom"
             />
             <CustomizableSelect
               label="Security Systems Team Member"
@@ -451,6 +510,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
                 addAssigneeSystemOption(next);
                 setForm((current) => ({ ...current, assignee_secondary: next, assignee_secondary_custom: '' }));
               }}
+              customOptionLabel="Custom"
             />
             <CustomizableSelect
               label="Lock Smiths"
@@ -466,6 +526,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
                 addLocksmithOption(next);
                 setForm((current) => ({ ...current, assignee_tertiary: next, assignee_tertiary_custom: '' }));
               }}
+              customOptionLabel="Custom"
             />
             <CustomizableSelect
               label="Other"
@@ -476,6 +537,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
               onChange={(value) => updateField('assignee_quaternary', value)}
               onCustomChange={(value) => updateField('assignee_quaternary_custom', value)}
               onAddCustom={addCustomOtherAssignee}
+              customOptionLabel="Custom"
             />
           </div>
 
@@ -488,6 +550,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             onChange={(value) => updateField('pm', value)}
             onCustomChange={(value) => updateField('pm_custom', value)}
             onAddCustom={addCustomPm}
+            customOptionLabel="Other"
           />
         </section>
 
@@ -515,7 +578,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
           <div className="task-form-section-header">
             <div>
               <h3>Tracking</h3>
-              <p>Track progress, priority, and ordering.</p>
+              <p>Status, priority, and progress settings.</p>
             </div>
           </div>
 
@@ -570,3 +633,4 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     </section>
   );
 }
+
