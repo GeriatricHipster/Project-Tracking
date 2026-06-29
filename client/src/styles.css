@@ -768,20 +768,17 @@ textarea:focus {
 
 .project-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) clamp(320px, 30vw, 420px);
   gap: 1rem;
   align-items: start;
 }
 
-.workspace-main,
 .workspace-side {
-  display: grid;
-  gap: 1rem;
-}
-
-.workspace-side {
+  min-width: 0;
   position: sticky;
   top: 1rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
 }
 
 .table-scroll {
