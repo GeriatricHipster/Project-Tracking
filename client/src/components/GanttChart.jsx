@@ -71,14 +71,15 @@ function QuickActionMenu({ task, x, y, onClose, onAction }) {
     <div
       role="menu"
       aria-label={`Quick actions for ${task.name}`}
+      className="gantt-quick-menu"
       style={{
         position: 'fixed',
         left: Math.max(12, Math.min(x, window.innerWidth - 300)),
         top: Math.max(12, Math.min(y, window.innerHeight - 340)),
-        zIndex: 9999,
+        zIndex: 99999,
         width: 290,
         borderRadius: 18,
-        border: '1px solid #cbd5e1',
+        border: '1px solid #fecaca',
         background: '#ffffff',
         boxShadow: '0 18px 40px rgba(15, 23, 42, 0.24)',
         padding: 10,
@@ -91,7 +92,7 @@ function QuickActionMenu({ task, x, y, onClose, onAction }) {
           style={{
             display: 'block',
             fontSize: 13,
-            color: '#0f172a',
+            color: '#111827',
             marginBottom: 3,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
@@ -104,7 +105,7 @@ function QuickActionMenu({ task, x, y, onClose, onAction }) {
           style={{
             display: 'block',
             fontSize: 12,
-            color: '#64748b',
+            color: '#374151',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis'
@@ -120,6 +121,7 @@ function QuickActionMenu({ task, x, y, onClose, onAction }) {
             key={action.key}
             type="button"
             onClick={() => onAction(action.key)}
+            className="gantt-quick-action"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -127,11 +129,11 @@ function QuickActionMenu({ task, x, y, onClose, onAction }) {
               width: '100%',
               borderRadius: 12,
               padding: '10px 12px',
-              border: '1px solid #e2e8f0',
-              background: '#f8fafc',
-              color: '#0f172a',
+              border: '1px solid #fecaca',
+              background: '#fff5f5',
+              color: '#111827',
               fontSize: 14,
-              fontWeight: 700,
+              fontWeight: 800,
               cursor: 'pointer',
               textAlign: 'left'
             }}
@@ -147,13 +149,14 @@ function QuickActionMenu({ task, x, y, onClose, onAction }) {
           type="button"
           onClick={onClose}
           style={{
-            border: '1px solid #cbd5e1',
+            border: '1px solid #fecaca',
             background: '#fff',
-            color: '#0f172a',
+            color: '#111827',
             borderRadius: 10,
             padding: '8px 10px',
             fontSize: 13,
-            cursor: 'pointer'
+            cursor: 'pointer',
+            fontWeight: 700
           }}
         >
           Close
@@ -583,7 +586,7 @@ export default function GanttChart({
           {isFullscreen ? 'Exit full screen' : 'Full screen'}
         </button>
         <div>
-          <h2>Gantt chart</h2>
+          <h2 className="ui-red-title">Gantt chart</h2>
           <p>
             {formatDate(rangeStart)} to {formatDate(rangeEnd)} · scale: {scale.label} · zoom:{' '}
             {Math.round(zoom * 100)}%
@@ -627,12 +630,12 @@ export default function GanttChart({
           {tasks.length === 0 && <div className="gantt-empty-label">No tasks yet</div>}
           {tasks.map((task) => (
             <button
-              key={task.id}
               className="gantt-label-row expanded"
-              type="button"
+              key={task.id}
               onClick={() => queueSingleClick(task)}
               onDoubleClick={() => handleDoubleClick(task)}
               onContextMenu={(event) => handleContextMenu(event, task)}
+              type="button"
               style={{
                 cursor: 'pointer',
                 borderRadius: 12,
@@ -640,9 +643,9 @@ export default function GanttChart({
                 userSelect: 'none',
                 ...(selectedTaskId === task.id
                   ? {
-                      outline: '2px solid rgba(37, 99, 235, 0.35)',
-                      backgroundColor: 'rgba(37, 99, 235, 0.08)',
-                      boxShadow: 'inset 0 0 0 1px rgba(37, 99, 235, 0.15)',
+                      outline: '2px solid rgba(220, 38, 38, 0.35)',
+                      backgroundColor: 'rgba(220, 38, 38, 0.08)',
+                      boxShadow: 'inset 0 0 0 1px rgba(220, 38, 38, 0.15)',
                       transform: 'translateX(1px)'
                     }
                   : {})
@@ -729,8 +732,8 @@ export default function GanttChart({
                     transition: 'transform 120ms ease, box-shadow 120ms ease, outline 120ms ease, background-color 120ms ease',
                     ...(selected
                       ? {
-                          outline: '2px solid rgba(37, 99, 235, 0.35)',
-                          boxShadow: '0 0 0 3px rgba(37, 99, 235, 0.18), 0 10px 22px rgba(15, 23, 42, 0.18)',
+                          outline: '2px solid rgba(220, 38, 38, 0.35)',
+                          boxShadow: '0 0 0 3px rgba(220, 38, 38, 0.18), 0 10px 22px rgba(15, 23, 42, 0.18)',
                           transform: 'translateY(-1px)'
                         }
                       : {})
