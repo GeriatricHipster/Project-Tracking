@@ -7,9 +7,7 @@ import BlueprintsPanel from './BlueprintsPanel';
 import DependencyPanel from './DependencyPanel';
 import ErrorBoundary from './ErrorBoundary';
 import GanttChart from './GanttChart';
-import GanttChecklist from './GanttChecklist';
 import MembersPanel from './MembersPanel';
-import ProjectNotesPanel from './ProjectNotesPanel';
 import SiteBanner from './SiteBanner';
 import TaskForm from './TaskForm';
 import TaskTable from './TaskTable';
@@ -38,8 +36,6 @@ export default function ProjectView({ projectId, user, onBack }) {
   const projectRole = data?.project?.role || 'viewer';
   const canEdit = roleRank[projectRole] >= roleRank.editor;
   const canManage = roleRank[projectRole] >= roleRank.manager;
-  const canEditNotes = projectRole !== 'portfolio_viewer' && roleRank[projectRole] >= roleRank.viewer;
-  const canToggleChecklist = projectRole !== 'portfolio_viewer' && roleRank[projectRole] >= roleRank.viewer;
 
   async function loadProject({ quiet = false } = {}) {
     if (!quiet) setLoading(true);
@@ -142,14 +138,6 @@ export default function ProjectView({ projectId, user, onBack }) {
     await loadProject({ quiet: true });
   }
 
-  async function updateChecklistItem(item, isChecked) {
-    await api(`/projects/${projectId}/checklist/${item.item_key}`, {
-      method: 'PATCH',
-      body: { is_checked: isChecked }
-    });
-    await loadProject({ quiet: true });
-  }
-
   async function uploadBlueprint(file) {
     const formData = new FormData();
     formData.append('blueprint', file);
@@ -161,22 +149,6 @@ export default function ProjectView({ projectId, user, onBack }) {
     await api(`/blueprints/${blueprint.id}`, { method: 'DELETE' });
     await loadProject({ quiet: true });
   }
-
-  async function addProjectNote(body) {
-    await api(`/projects/${projectId}/notes`, { method: 'POST', body: { body } });
-    await loadProject({ quiet: true });
-  }
-
-  async function updateProjectNote(noteId, body) {
-    await api(`/projects/${projectId}/notes/${noteId}`, { method: 'PATCH', body: { body } });
-    await loadProject({ quiet: true });
-  }
-
-  async function deleteProjectNote(noteId) {
-    await api(`/projects/${projectId}/notes/${noteId}`, { method: 'DELETE' });
-    await loadProject({ quiet: true });
-  }
-
 
   if (loading && !data) {
     return (
@@ -198,7 +170,7 @@ export default function ProjectView({ projectId, user, onBack }) {
     );
   }
 
-  const { project, members, dependencies, checklist, blueprints, audit } = data;
+  const { project, members, dependencies, blueprints, audit } = data;
 
   return (
     <main className="app-page project-view">
@@ -243,18 +215,14 @@ export default function ProjectView({ projectId, user, onBack }) {
             onSave={saveTask}
             onCancel={() => setEditingTask(null)}
           />
-          <ProjectNotesPanel project={project} entries={data?.notes_entries || []} canEdit={canEditNotes} onCreateEntry={addProjectNote} onUpdateEntry={updateProjectNote} onDeleteEntry={deleteProjectNote} />
+
           <BlueprintsPanel
             blueprints={blueprints || []}
             canEdit={canEdit}
             onUpload={uploadBlueprint}
             onDelete={deleteBlueprint}
           />
-          <GanttChecklist
-            checklist={checklist || []}
-            canEdit={canToggleChecklist}
-            onToggle={updateChecklistItem}
-          />
+
           <TaskTable tasks={orderedTasks} canEdit={canEdit} onEdit={setEditingTask} onDelete={deleteTask} />
         </div>
 
