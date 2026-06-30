@@ -56,10 +56,10 @@ function quickActionPatch(action) {
   return {};
 }
 
-function QuickActionMenu({ task, x, y, canUpdate, onClose, onAction }) {
+function QuickActionMenu({ task, x, y, onClose, onAction }) {
   if (!task || typeof document === 'undefined') return null;
 
-  const items = [
+  const actions = [
     { key: 'complete', icon: '✔', label: 'Mark Complete' },
     { key: 'in_progress', icon: '⏸', label: 'Mark In Progress' },
     { key: 'blocked', icon: '🚫', label: 'Mark Blocked' },
@@ -73,16 +73,16 @@ function QuickActionMenu({ task, x, y, canUpdate, onClose, onAction }) {
       aria-label={`Quick actions for ${task.name}`}
       style={{
         position: 'fixed',
-        left: Math.max(12, Math.min(x, window.innerWidth - 280)),
-        top: Math.max(12, Math.min(y, window.innerHeight - 320)),
-        zIndex: 2000,
-        width: 280,
+        left: Math.max(12, Math.min(x, window.innerWidth - 300)),
+        top: Math.max(12, Math.min(y, window.innerHeight - 340)),
+        zIndex: 9999,
+        width: 290,
         borderRadius: 18,
-        border: '1px solid rgba(148, 163, 184, 0.28)',
-        background: 'rgba(255,255,255,0.98)',
-        boxShadow: '0 18px 40px rgba(15, 23, 42, 0.18)',
+        border: '1px solid #cbd5e1',
+        background: '#ffffff',
+        boxShadow: '0 18px 40px rgba(15, 23, 42, 0.24)',
         padding: 10,
-        backdropFilter: 'blur(14px)'
+        pointerEvents: 'auto'
       }}
       onContextMenu={(event) => event.preventDefault()}
     >
@@ -110,24 +110,16 @@ function QuickActionMenu({ task, x, y, canUpdate, onClose, onAction }) {
             textOverflow: 'ellipsis'
           }}
         >
-          {taskMeta(task) || 'No vendor/team assigned'}
+          {task.vendor || task.assigned_to_name || 'No vendor/team assigned'}
         </span>
       </div>
 
       <div style={{ display: 'grid', gap: 6 }}>
-        {items.map((item) => (
-          <div
-            key={item.key}
-            role="menuitem"
-            tabIndex={canUpdate ? 0 : -1}
-            onClick={() => canUpdate && onAction(item.key)}
-            onKeyDown={(event) => {
-              if (!canUpdate) return;
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                onAction(item.key);
-              }
-            }}
+        {actions.map((action) => (
+          <button
+            key={action.key}
+            type="button"
+            onClick={() => onAction(action.key)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -135,20 +127,18 @@ function QuickActionMenu({ task, x, y, canUpdate, onClose, onAction }) {
               width: '100%',
               borderRadius: 12,
               padding: '10px 12px',
-              background: canUpdate ? '#f8fafc' : '#f8fafc',
-              border: '1px solid rgba(226, 232, 240, 0.9)',
+              border: '1px solid #e2e8f0',
+              background: '#f8fafc',
               color: '#0f172a',
               fontSize: 14,
-              fontWeight: 600,
-              lineHeight: 1.2,
-              cursor: canUpdate ? 'pointer' : 'not-allowed',
-              userSelect: 'none',
-              opacity: canUpdate ? 1 : 0.55
+              fontWeight: 700,
+              cursor: 'pointer',
+              textAlign: 'left'
             }}
           >
-            <span style={{ width: 20, textAlign: 'center', flex: '0 0 20px' }}>{item.icon}</span>
-            <span style={{ flex: 1, color: '#0f172a' }}>{item.label}</span>
-          </div>
+            <span style={{ width: 20, textAlign: 'center' }}>{action.icon}</span>
+            <span>{action.label}</span>
+          </button>
         ))}
       </div>
 
@@ -157,7 +147,7 @@ function QuickActionMenu({ task, x, y, canUpdate, onClose, onAction }) {
           type="button"
           onClick={onClose}
           style={{
-            border: '1px solid rgba(148, 163, 184, 0.35)',
+            border: '1px solid #cbd5e1',
             background: '#fff',
             color: '#0f172a',
             borderRadius: 10,
@@ -169,12 +159,6 @@ function QuickActionMenu({ task, x, y, canUpdate, onClose, onAction }) {
           Close
         </button>
       </div>
-
-      {!canUpdate && (
-        <div style={{ padding: '6px 8px 0', fontSize: 12, color: '#64748b' }}>
-          Quick actions need an update callback from the parent.
-        </div>
-      )}
     </div>,
     document.body
   );
@@ -211,7 +195,6 @@ export default function GanttChart({
   const rowHeight = 66;
   const headerHeight = 104;
   const chartHeight = headerHeight + Math.max(tasks.length, 1) * rowHeight + 18;
-
   const today = todayIso();
   const todayOffset =
     today >= rangeStart && today <= rangeEnd
@@ -229,8 +212,6 @@ export default function GanttChart({
     }
     return units;
   }, [rangeStart, scale.stepDays, scale.unitWidth, totalDays]);
-
-  const canUpdateTasks = typeof onUpdateTask === 'function' || typeof onTaskAction === 'function';
 
   useEffect(() => {
     if (selectedTaskId && !taskById.has(selectedTaskId)) {
@@ -341,9 +322,7 @@ export default function GanttChart({
   function scrollToEditPane() {
     window.setTimeout(() => {
       const editPane = document.querySelector('.task-form-panel');
-      if (editPane) {
-        editPane.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+      if (editPane) editPane.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 75);
   }
 
@@ -396,13 +375,13 @@ export default function GanttChart({
   }
 
   function applyTaskUpdate(task, updates) {
-    const nextUpdates = { ...updates };
     if (typeof onUpdateTask === 'function') {
-      onUpdateTask(task.id, nextUpdates, task);
+      onUpdateTask(task.id, updates, task);
       return;
     }
+
     if (typeof onTaskAction === 'function') {
-      onTaskAction(task, nextUpdates);
+      onTaskAction(task, updates);
     }
   }
 
@@ -447,9 +426,7 @@ export default function GanttChart({
       const date = addDays(rangeStart, offset);
       ticks.push({ date, percent: clamp((offset / totalDays) * 100, 0, 100) });
     }
-    if (!ticks.some((tick) => tick.date === rangeEnd)) {
-      ticks.push({ date: rangeEnd, percent: 100 });
-    }
+    if (!ticks.some((tick) => tick.date === rangeEnd)) ticks.push({ date: rangeEnd, percent: 100 });
 
     const headerTicks = ticks
       .map(
@@ -599,24 +576,6 @@ export default function GanttChart({
     printWindow.document.close();
   }
 
-  function taskButtonStyles(task, isLabel) {
-    const selected = selectedTaskId === task.id || contextMenu?.taskId === task.id;
-    if (!selected) return {};
-
-    return isLabel
-      ? {
-          outline: '2px solid rgba(37, 99, 235, 0.35)',
-          backgroundColor: 'rgba(37, 99, 235, 0.08)',
-          boxShadow: 'inset 0 0 0 1px rgba(37, 99, 235, 0.15)',
-          transform: 'translateX(1px)'
-        }
-      : {
-          outline: '2px solid rgba(37, 99, 235, 0.35)',
-          boxShadow: '0 0 0 3px rgba(37, 99, 235, 0.18), 0 10px 22px rgba(15, 23, 42, 0.18)',
-          transform: 'translateY(-1px)'
-        };
-  }
-
   return (
     <section className={`panel gantt-panel expanded-gantt-panel ${isFullscreen ? 'gantt-fullscreen' : ''}`}>
       <div className="panel-heading gantt-heading">
@@ -649,12 +608,7 @@ export default function GanttChart({
           <button className="ghost-button compact" onClick={resetZoom} type="button">
             Reset zoom
           </button>
-          <button
-            className="ghost-button compact"
-            onClick={zoomIn}
-            disabled={zoomIndex === zoomLevels.length - 1}
-            type="button"
-          >
+          <button className="ghost-button compact" onClick={zoomIn} disabled={zoomIndex === zoomLevels.length - 1} type="button">
             Zoom in
           </button>
           <button className="primary-button compact" onClick={exportGanttPdf} type="button">
@@ -680,11 +634,18 @@ export default function GanttChart({
               onDoubleClick={() => handleDoubleClick(task)}
               onContextMenu={(event) => handleContextMenu(event, task)}
               style={{
-                ...taskButtonStyles(task, true),
                 cursor: 'pointer',
                 borderRadius: 12,
                 transition: 'transform 120ms ease, box-shadow 120ms ease, outline 120ms ease, background-color 120ms ease',
-                userSelect: 'none'
+                userSelect: 'none',
+                ...(selectedTaskId === task.id
+                  ? {
+                      outline: '2px solid rgba(37, 99, 235, 0.35)',
+                      backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                      boxShadow: 'inset 0 0 0 1px rgba(37, 99, 235, 0.15)',
+                      transform: 'translateX(1px)'
+                    }
+                  : {})
               }}
               title="Single-click to highlight, double-click to edit, right-click for quick actions"
             >
@@ -715,11 +676,7 @@ export default function GanttChart({
             </div>
 
             {timelineUnits.map((unit) => (
-              <div
-                className="gantt-grid-line vertical"
-                style={{ left: unit.left, height: chartHeight }}
-                key={`line-${unit.date}`}
-              />
+              <div className="gantt-grid-line vertical" style={{ left: unit.left, height: chartHeight }} key={`line-${unit.date}`} />
             ))}
 
             {tasks.map((task, index) => (
@@ -758,14 +715,11 @@ export default function GanttChart({
 
             {tasks.map((task) => {
               const position = getTaskPosition(task);
+              const selected = selectedTaskId === task.id || contextMenu?.taskId === task.id;
               return (
                 <button
-                  key={task.id}
                   className={`gantt-bar expanded status-bg-${task.status}`}
-                  type="button"
-                  onClick={() => queueSingleClick(task)}
-                  onDoubleClick={() => handleDoubleClick(task)}
-                  onContextMenu={(event) => handleContextMenu(event, task)}
+                  key={task.id}
                   style={{
                     left: position.left,
                     top: position.y - 21,
@@ -773,9 +727,19 @@ export default function GanttChart({
                     backgroundColor: task.color || '#2563eb',
                     cursor: 'pointer',
                     transition: 'transform 120ms ease, box-shadow 120ms ease, outline 120ms ease, background-color 120ms ease',
-                    ...taskButtonStyles(task, false)
+                    ...(selected
+                      ? {
+                          outline: '2px solid rgba(37, 99, 235, 0.35)',
+                          boxShadow: '0 0 0 3px rgba(37, 99, 235, 0.18), 0 10px 22px rgba(15, 23, 42, 0.18)',
+                          transform: 'translateY(-1px)'
+                        }
+                      : {})
                   }}
+                  onClick={() => queueSingleClick(task)}
+                  onDoubleClick={() => handleDoubleClick(task)}
+                  onContextMenu={(event) => handleContextMenu(event, task)}
                   title={`${task.name}: ${formatDate(task.start_date)} to ${formatDate(task.end_date)} · ${taskMeta(task) || 'No team/vendor assigned'} · ${task.percent_complete}% complete`}
+                  type="button"
                 >
                   <span className="gantt-progress" style={{ width: `${task.percent_complete}%` }} />
                   <span className="gantt-bar-label">{task.name}</span>
@@ -790,7 +754,6 @@ export default function GanttChart({
         task={taskById.get(contextMenu?.taskId)}
         x={contextMenu?.x || 0}
         y={contextMenu?.y || 0}
-        canUpdate={canUpdateTasks}
         onClose={() => setContextMenu(null)}
         onAction={handleQuickAction}
       />
