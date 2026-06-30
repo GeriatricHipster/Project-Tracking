@@ -162,7 +162,6 @@ function blankTask(project) {
   return {
     task_name_choice: '',
     task_name_custom: '',
-    secondary_task: '',
     description: '',
     trade: '',
     trade_custom: '',
@@ -189,6 +188,39 @@ function blankTask(project) {
     color: '#2563eb',
     sort_order: ''
   };
+}
+
+function makeChecklistId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return `check-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizeChecklistItems(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item, index) => {
+      if (typeof item === 'string') {
+        const text = item.trim();
+        if (!text) return null;
+        return {
+          id: `${makeChecklistId()}-${index}`,
+          text,
+          done: false
+        };
+      }
+
+      if (!item || typeof item !== 'object') return null;
+
+      const text = String(item.text ?? item.label ?? item.name ?? '').trim();
+      if (!text) return null;
+
+      return {
+        id: String(item.id || makeChecklistId()),
+        text,
+        done: Boolean(item.done ?? item.completed ?? item.complete ?? false)
+      };
+    })
+    .filter(Boolean);
 }
 
 function CustomizableSelect({
@@ -241,6 +273,9 @@ function CustomizableSelect({
 
 export default function TaskForm({ project, members, tasks, editingTask, canEdit, onSave, onCancel }) {
   const [form, setForm] = useState(blankTask(project));
+  const [checklistItems, setChecklistItems] = useState([]);
+  const [newChecklistText, setNewChecklistText] = useState('');
+  const [activeTab, setActiveTab] = useState('details');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -260,7 +295,6 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         ...current,
         task_name_choice: taskNameOptions.includes(editingTask.name || '') ? editingTask.name : 'Other',
         task_name_custom: taskNameOptions.includes(editingTask.name || '') ? '' : (editingTask.name || ''),
-        secondary_task: editingTask.secondary_task || '',
         description: editingTask.description || '',
         trade: tradeOptions.includes(editingTask.trade || '') ? editingTask.trade : (editingTask.trade ? '__custom__' : ''),
         trade_custom: tradeOptions.includes(editingTask.trade || '') ? '' : (editingTask.trade || ''),
@@ -295,8 +329,17 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         color: editingTask.color || '#2563eb',
         sort_order: editingTask.sort_order || ''
       }));
+
+      setChecklistItems(
+        normalizeChecklistItems(editingTask.checklist_items || editingTask.checklist || editingTask.subtasks || [])
+      );
+      setNewChecklistText('');
+      setActiveTab('details');
     } else {
       setForm(blankTask(project));
+      setChecklistItems([]);
+      setNewChecklistText('');
+      setActiveTab('details');
     }
     setError('');
   }, [editingTask, project, tradeOptions, vendorOptions, pmOptions, otherAssigneeOptions]);
@@ -344,6 +387,29 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     setForm((current) => ({ ...current, task_name_choice: 'Other', task_name_custom: next }));
   }
 
+  function addChecklistItem() {
+    const text = String(newChecklistText || '').trim();
+    if (!text) return;
+    setChecklistItems((current) => [...current, { id: makeChecklistId(), text, done: false }]);
+    setNewChecklistText('');
+  }
+
+  function toggleChecklistItem(itemId) {
+    setChecklistItems((current) =>
+      current.map((item) => (item.id === itemId ? { ...item, done: !item.done } : item))
+    );
+  }
+
+  function updateChecklistText(itemId, text) {
+    setChecklistItems((current) =>
+      current.map((item) => (item.id === itemId ? { ...item, text } : item))
+    );
+  }
+
+  function removeChecklistItem(itemId) {
+    setChecklistItems((current) => current.filter((item) => item.id !== itemId));
+  }
+
   async function submit(event) {
     event.preventDefault();
     setError('');
@@ -351,10 +417,16 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
 
     try {
       const taskName = form.task_name_choice === 'Other' ? form.task_name_custom : form.task_name_choice;
+      const cleanedChecklist = checklistItems
+        .map((item) => ({
+          id: item.id,
+          text: String(item.text || '').trim(),
+          done: Boolean(item.done)
+        }))
+        .filter((item) => item.text);
 
       await onSave({
         name: taskName || '',
-        secondary_task: form.secondary_task || null,
         description: form.description || '',
         trade: form.trade === '__custom__' ? form.trade_custom : form.trade || null,
         vendor: form.vendor === '__custom__' ? form.vendor_custom : form.vendor || null,
@@ -374,16 +446,33 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         end_date: form.end_date || form.start_date || project?.start_date || todayIso(),
         percent_complete: Number(form.percent_complete),
         color: form.color,
-        sort_order: form.sort_order === '' ? undefined : Number(form.sort_order)
+        sort_order: form.sort_order === '' ? undefined : Number(form.sort_order),
+        checklist_items: cleanedChecklist
       });
 
-      if (!editingTask) setForm(blankTask(project));
+      if (!editingTask) {
+        setForm(blankTask(project));
+        setChecklistItems([]);
+        setNewChecklistText('');
+        setActiveTab('details');
+      }
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
     }
   }
+
+  const tabButtonStyle = (active) => ({
+    border: '1px solid rgba(148, 163, 184, 0.35)',
+    background: active ? '#0f172a' : '#fff',
+    color: active ? '#fff' : '#0f172a',
+    borderRadius: 999,
+    padding: '8px 14px',
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer'
+  });
 
   return (
     <section className="panel task-form-panel">
@@ -403,322 +492,434 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         )}
       </div>
 
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        <button type="button" style={tabButtonStyle(activeTab === 'details')} onClick={() => setActiveTab('details')}>
+          Details
+        </button>
+        <button
+          type="button"
+          style={tabButtonStyle(activeTab === 'checklist')}
+          onClick={() => setActiveTab('checklist')}
+        >
+          Checklist
+        </button>
+      </div>
+
       <form className="stack task-form-shell" onSubmit={submit}>
-        <section className="panel task-section">
-          <div className="panel-heading">
-            <div>
-              <h3>Task basics</h3>
-              <p>Core task details and the main vendor fields.</p>
-            </div>
-          </div>
+        {activeTab === 'details' && (
+          <>
+            <section className="panel task-section">
+              <div className="panel-heading">
+                <div>
+                  <h3>Task basics</h3>
+                  <p>Core task details and the main vendor fields.</p>
+                </div>
+              </div>
 
-          <label>
-            Task name
-            <select
-              disabled={!canEdit}
-              value={form.task_name_choice}
-              onChange={(event) => updateField('task_name_choice', event.target.value)}
+              <label>
+                Task name
+                <select
+                  disabled={!canEdit}
+                  value={form.task_name_choice}
+                  onChange={(event) => updateField('task_name_choice', event.target.value)}
+                >
+                  <option value="">Unassigned</option>
+                  {taskNameOptions.map((taskName) => (
+                    <option key={taskName} value={taskName}>
+                      {taskName}
+                    </option>
+                  ))}
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+
+              {form.task_name_choice === 'Other' && (
+                <label>
+                  Custom task name
+                  <textarea
+                    disabled={!canEdit}
+                    value={form.task_name_custom}
+                    onChange={(event) => updateField('task_name_custom', event.target.value)}
+                    placeholder="Enter a custom task name"
+                  />
+                  <button
+                    className="ghost-button compact"
+                    disabled={!canEdit || !String(form.task_name_custom || '').trim()}
+                    onClick={addCustomTaskName}
+                    type="button"
+                  >
+                    Use custom task name
+                  </button>
+                </label>
+              )}
+
+              <div className="two-col">
+                <CustomizableSelect
+                  label="Trade"
+                  value={form.trade}
+                  options={tradeOptions}
+                  customValue={form.trade_custom}
+                  disabled={!canEdit}
+                  onChange={(value) => updateField('trade', value)}
+                  onCustomChange={(value) => updateField('trade_custom', value)}
+                  onAddCustom={addCustomTrade}
+                />
+
+                <label>
+                  Parent task
+                  <select
+                    disabled={!canEdit}
+                    value={form.parent_task_id}
+                    onChange={(event) => updateField('parent_task_id', event.target.value)}
+                  >
+                    <option value="">Unassigned</option>
+                    {parentTaskOptions.map((task) => (
+                      <option key={task.id} value={task.id}>
+                        {task.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="two-col">
+                <CustomizableSelect
+                  label="Vendor"
+                  value={form.vendor}
+                  options={vendorOptions}
+                  customValue={form.vendor_custom}
+                  disabled={!canEdit}
+                  onChange={(value) => updateField('vendor', value)}
+                  onCustomChange={(value) => updateField('vendor_custom', value)}
+                  onAddCustom={() => addCustomVendor('vendor', 'vendor_custom', addVendorOption)}
+                />
+
+                <CustomizableSelect
+                  label="Vendor 2"
+                  value={form.vendor_secondary}
+                  options={vendorOptions}
+                  customValue={form.vendor_secondary_custom}
+                  disabled={!canEdit}
+                  onChange={(value) => updateField('vendor_secondary', value)}
+                  onCustomChange={(value) => updateField('vendor_secondary_custom', value)}
+                  onAddCustom={() => addCustomVendor('vendor_secondary', 'vendor_secondary_custom', addVendorOption)}
+                />
+              </div>
+            </section>
+
+            <section className="panel task-section">
+              <div className="panel-heading">
+                <div>
+                  <h3>People</h3>
+                  <p>Assign the team members and the PM for this task.</p>
+                </div>
+              </div>
+
+              <div className="four-col assignee-grid">
+                <CustomizableSelect
+                  label="Security Systems Team Member"
+                  value={form.assigned_to}
+                  options={assigneeSystemOptions}
+                  customValue={form.assignee_system_custom || ''}
+                  disabled={!canEdit}
+                  onChange={(value) => updateField('assigned_to', value)}
+                  onCustomChange={(value) => updateField('assignee_system_custom', value)}
+                  onAddCustom={() => {
+                    const next = String(form.assignee_system_custom || '').trim();
+                    if (!next) return;
+                    addAssigneeSystemOption(next);
+                    setForm((current) => ({ ...current, assigned_to: next, assignee_system_custom: '' }));
+                  }}
+                />
+
+                <CustomizableSelect
+                  label="Security Systems Team Member"
+                  value={form.assignee_secondary}
+                  options={assigneeSystemOptions}
+                  customValue={form.assignee_secondary_custom || ''}
+                  disabled={!canEdit}
+                  onChange={(value) => updateField('assignee_secondary', value)}
+                  onCustomChange={(value) => updateField('assignee_secondary_custom', value)}
+                  onAddCustom={() => {
+                    const next = String(form.assignee_secondary_custom || '').trim();
+                    if (!next) return;
+                    addAssigneeSystemOption(next);
+                    setForm((current) => ({ ...current, assignee_secondary: next, assignee_secondary_custom: '' }));
+                  }}
+                />
+
+                <CustomizableSelect
+                  label="Lock Smiths"
+                  value={form.assignee_tertiary}
+                  options={locksmithOptions}
+                  customValue={form.assignee_tertiary_custom || ''}
+                  disabled={!canEdit}
+                  onChange={(value) => updateField('assignee_tertiary', value)}
+                  onCustomChange={(value) => updateField('assignee_tertiary_custom', value)}
+                  onAddCustom={() => {
+                    const next = String(form.assignee_tertiary_custom || '').trim();
+                    if (!next) return;
+                    addLocksmithOption(next);
+                    setForm((current) => ({ ...current, assignee_tertiary: next, assignee_tertiary_custom: '' }));
+                  }}
+                />
+
+                <CustomizableSelect
+                  label="Other"
+                  value={form.assignee_quaternary}
+                  options={otherAssigneeOptions}
+                  customValue={form.assignee_quaternary_custom}
+                  disabled={!canEdit}
+                  onChange={(value) => updateField('assignee_quaternary', value)}
+                  onCustomChange={(value) => updateField('assignee_quaternary_custom', value)}
+                  onAddCustom={addCustomOtherAssignee}
+                />
+              </div>
+
+              <CustomizableSelect
+                label="PM"
+                value={form.pm}
+                options={pmOptions}
+                customValue={form.pm_custom || ''}
+                disabled={!canEdit}
+                onChange={(value) => updateField('pm', value)}
+                onCustomChange={(value) => updateField('pm_custom', value)}
+                onAddCustom={addCustomPm}
+              />
+            </section>
+
+            <section className="panel task-section">
+              <div className="panel-heading">
+                <div>
+                  <h3>Schedule</h3>
+                  <p>Set the dates for this task.</p>
+                </div>
+              </div>
+
+              <div className="two-col">
+                <label>
+                  Start
+                  <input
+                    disabled={!canEdit}
+                    type="date"
+                    value={form.start_date}
+                    onChange={(event) => updateField('start_date', event.target.value)}
+                  />
+                </label>
+                <label>
+                  Finish
+                  <input
+                    disabled={!canEdit}
+                    type="date"
+                    value={form.end_date}
+                    onChange={(event) => updateField('end_date', event.target.value)}
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className="panel task-section">
+              <div className="panel-heading">
+                <div>
+                  <h3>Tracking</h3>
+                  <p>Status, priority, and progress settings.</p>
+                </div>
+              </div>
+
+              <div className="three-col">
+                <label>
+                  Status
+                  <select
+                    disabled={!canEdit}
+                    value={form.status}
+                    onChange={(event) => updateField('status', event.target.value)}
+                  >
+                    {statusOptions.map(([value, label]) => (
+                      <option value={value} key={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  Priority
+                  <select
+                    disabled={!canEdit}
+                    value={form.priority}
+                    onChange={(event) => updateField('priority', event.target.value)}
+                  >
+                    {priorityOptions.map(([value, label]) => (
+                      <option value={value} key={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  Percent complete
+                  <input
+                    disabled={!canEdit}
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={form.percent_complete}
+                    onChange={(event) => updateField('percent_complete', event.target.value)}
+                  />
+                </label>
+              </div>
+
+              <div className="two-col">
+                <label>
+                  Color
+                  <input
+                    disabled={!canEdit}
+                    type="color"
+                    value={form.color}
+                    onChange={(event) => updateField('color', event.target.value)}
+                  />
+                </label>
+
+                <label>
+                  Sort order
+                  <input
+                    disabled={!canEdit}
+                    type="number"
+                    value={form.sort_order}
+                    onChange={(event) => updateField('sort_order', event.target.value)}
+                    placeholder="Auto"
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className="panel task-section">
+              <div className="panel-heading">
+                <div>
+                  <h3>Notes</h3>
+                  <p>Add the scope, details, and anything else the team should know.</p>
+                </div>
+              </div>
+
+              <label>
+                Description
+                <textarea
+                  disabled={!canEdit}
+                  value={form.description}
+                  onChange={(event) => updateField('description', event.target.value)}
+                  placeholder="Scope, constraints, notes, inspection needs"
+                />
+              </label>
+            </section>
+          </>
+        )}
+
+        {activeTab === 'checklist' && (
+          <section className="panel task-section">
+            <div className="panel-heading">
+              <div>
+                <h3>Checklist</h3>
+                <p>Add as many sub tasks as you need, then mark each one complete with a click.</p>
+              </div>
+            </div>
+
+            <div
+              className="stack"
+              style={{
+                gap: 12
+              }}
             >
-              <option value="">Unassigned</option>
-              {taskNameOptions.map((taskName) => (
-                <option key={taskName} value={taskName}>
-                  {taskName}
-                </option>
-              ))}
-              <option value="Other">Other</option>
-            </select>
-          </label>
+              <label>
+                Add checklist item
+                <div className="inline-custom-entry">
+                  <input
+                    disabled={!canEdit}
+                    value={newChecklistText}
+                    onChange={(event) => setNewChecklistText(event.target.value)}
+                    placeholder="Example: Pull permits"
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        addChecklistItem();
+                      }
+                    }}
+                  />
+                  <button
+                    className="ghost-button compact"
+                    disabled={!canEdit || !String(newChecklistText || '').trim()}
+                    onClick={addChecklistItem}
+                    type="button"
+                  >
+                    Add item
+                  </button>
+                </div>
+              </label>
 
-          {form.task_name_choice === 'Other' && (
-            <label>
-              Custom task name
-              <textarea
-                disabled={!canEdit}
-                value={form.task_name_custom}
-                onChange={(event) => updateField('task_name_custom', event.target.value)}
-                placeholder="Enter a custom task name"
-              />
-              <button
-                className="ghost-button compact"
-                disabled={!canEdit || !String(form.task_name_custom || '').trim()}
-                onClick={addCustomTaskName}
-                type="button"
-              >
-                Use custom task name
-              </button>
-            </label>
-          )}
+              <div className="stack" style={{ gap: 10 }}>
+                {checklistItems.length === 0 && (
+                  <div className="empty-state table-empty">
+                    <h3>No checklist items yet</h3>
+                    <p>Add sub tasks here to track them independently.</p>
+                  </div>
+                )}
 
-          <label>
-            Secondary task
-            <input
-              disabled={!canEdit}
-              type="text"
-              value={form.secondary_task}
-              onChange={(event) => updateField('secondary_task', event.target.value)}
-              placeholder="Enter a secondary task"
-            />
-          </label>
+                {checklistItems.map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '44px minmax(0, 1fr) auto',
+                      gap: 10,
+                      alignItems: 'center',
+                      padding: '10px 12px',
+                      border: '1px solid rgba(148, 163, 184, 0.28)',
+                      borderRadius: 14,
+                      background: '#fff'
+                    }}
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={item.done}
+                      title={item.done ? 'Mark incomplete' : 'Mark complete'}
+                      onClick={() => canEdit && toggleChecklistItem(item.id)}
+                      disabled={!canEdit}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 12,
+                        border: 'none',
+                        background: item.done ? '#16a34a' : '#dc2626',
+                        color: '#fff',
+                        fontSize: 20,
+                        fontWeight: 800,
+                        cursor: canEdit ? 'pointer' : 'not-allowed'
+                      }}
+                    >
+                      {item.done ? '✔' : '✖'}
+                    </button>
 
-          <div className="two-col">
-            <CustomizableSelect
-              label="Trade"
-              value={form.trade}
-              options={tradeOptions}
-              customValue={form.trade_custom}
-              disabled={!canEdit}
-              onChange={(value) => updateField('trade', value)}
-              onCustomChange={(value) => updateField('trade_custom', value)}
-              onAddCustom={addCustomTrade}
-            />
+                    <input
+                      disabled={!canEdit}
+                      value={item.text}
+                      onChange={(event) => updateChecklistText(item.id, event.target.value)}
+                      placeholder="Checklist item"
+                    />
 
-            <label>
-              Parent task
-              <select
-                disabled={!canEdit}
-                value={form.parent_task_id}
-                onChange={(event) => updateField('parent_task_id', event.target.value)}
-              >
-                <option value="">Unassigned</option>
-                {parentTaskOptions.map((task) => (
-                  <option key={task.id} value={task.id}>
-                    {task.name}
-                  </option>
+                    <button
+                      type="button"
+                      className="ghost-button compact"
+                      disabled={!canEdit}
+                      onClick={() => removeChecklistItem(item.id)}
+                    >
+                      Remove
+                    </button>
+                  </div>
                 ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="two-col">
-            <CustomizableSelect
-              label="Vendor"
-              value={form.vendor}
-              options={vendorOptions}
-              customValue={form.vendor_custom}
-              disabled={!canEdit}
-              onChange={(value) => updateField('vendor', value)}
-              onCustomChange={(value) => updateField('vendor_custom', value)}
-              onAddCustom={() => addCustomVendor('vendor', 'vendor_custom', addVendorOption)}
-            />
-
-            <CustomizableSelect
-              label="Vendor 2"
-              value={form.vendor_secondary}
-              options={vendorOptions}
-              customValue={form.vendor_secondary_custom}
-              disabled={!canEdit}
-              onChange={(value) => updateField('vendor_secondary', value)}
-              onCustomChange={(value) => updateField('vendor_secondary_custom', value)}
-              onAddCustom={() => addCustomVendor('vendor_secondary', 'vendor_secondary_custom', addVendorOption)}
-            />
-          </div>
-        </section>
-
-        <section className="panel task-section">
-          <div className="panel-heading">
-            <div>
-              <h3>People</h3>
-              <p>Assign the team members and the PM for this task.</p>
+              </div>
             </div>
-          </div>
-
-          <div className="four-col assignee-grid">
-            <CustomizableSelect
-              label="Security Systems Team Member"
-              value={form.assigned_to}
-              options={assigneeSystemOptions}
-              customValue={form.assignee_system_custom || ''}
-              disabled={!canEdit}
-              onChange={(value) => updateField('assigned_to', value)}
-              onCustomChange={(value) => updateField('assignee_system_custom', value)}
-              onAddCustom={() => {
-                const next = String(form.assignee_system_custom || '').trim();
-                if (!next) return;
-                addAssigneeSystemOption(next);
-                setForm((current) => ({ ...current, assigned_to: next, assignee_system_custom: '' }));
-              }}
-            />
-
-            <CustomizableSelect
-              label="Security Systems Team Member"
-              value={form.assignee_secondary}
-              options={assigneeSystemOptions}
-              customValue={form.assignee_secondary_custom || ''}
-              disabled={!canEdit}
-              onChange={(value) => updateField('assignee_secondary', value)}
-              onCustomChange={(value) => updateField('assignee_secondary_custom', value)}
-              onAddCustom={() => {
-                const next = String(form.assignee_secondary_custom || '').trim();
-                if (!next) return;
-                addAssigneeSystemOption(next);
-                setForm((current) => ({ ...current, assignee_secondary: next, assignee_secondary_custom: '' }));
-              }}
-            />
-
-            <CustomizableSelect
-              label="Lock Smiths"
-              value={form.assignee_tertiary}
-              options={locksmithOptions}
-              customValue={form.assignee_tertiary_custom || ''}
-              disabled={!canEdit}
-              onChange={(value) => updateField('assignee_tertiary', value)}
-              onCustomChange={(value) => updateField('assignee_tertiary_custom', value)}
-              onAddCustom={() => {
-                const next = String(form.assignee_tertiary_custom || '').trim();
-                if (!next) return;
-                addLocksmithOption(next);
-                setForm((current) => ({ ...current, assignee_tertiary: next, assignee_tertiary_custom: '' }));
-              }}
-            />
-
-            <CustomizableSelect
-              label="Other"
-              value={form.assignee_quaternary}
-              options={otherAssigneeOptions}
-              customValue={form.assignee_quaternary_custom}
-              disabled={!canEdit}
-              onChange={(value) => updateField('assignee_quaternary', value)}
-              onCustomChange={(value) => updateField('assignee_quaternary_custom', value)}
-              onAddCustom={addCustomOtherAssignee}
-            />
-          </div>
-
-          <CustomizableSelect
-            label="PM"
-            value={form.pm}
-            options={pmOptions}
-            customValue={form.pm_custom || ''}
-            disabled={!canEdit}
-            onChange={(value) => updateField('pm', value)}
-            onCustomChange={(value) => updateField('pm_custom', value)}
-            onAddCustom={addCustomPm}
-          />
-        </section>
-
-        <section className="panel task-section">
-          <div className="panel-heading">
-            <div>
-              <h3>Schedule</h3>
-              <p>Set the dates for this task.</p>
-            </div>
-          </div>
-
-          <div className="two-col">
-            <label>
-              Start
-              <input
-                disabled={!canEdit}
-                type="date"
-                value={form.start_date}
-                onChange={(event) => updateField('start_date', event.target.value)}
-              />
-            </label>
-            <label>
-              Finish
-              <input
-                disabled={!canEdit}
-                type="date"
-                value={form.end_date}
-                onChange={(event) => updateField('end_date', event.target.value)}
-              />
-            </label>
-          </div>
-        </section>
-
-        <section className="panel task-section">
-          <div className="panel-heading">
-            <div>
-              <h3>Tracking</h3>
-              <p>Status, priority, and progress settings.</p>
-            </div>
-          </div>
-
-          <div className="three-col">
-            <label>
-              Status
-              <select
-                disabled={!canEdit}
-                value={form.status}
-                onChange={(event) => updateField('status', event.target.value)}
-              >
-                {statusOptions.map(([value, label]) => (
-                  <option value={value} key={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Priority
-              <select
-                disabled={!canEdit}
-                value={form.priority}
-                onChange={(event) => updateField('priority', event.target.value)}
-              >
-                {priorityOptions.map(([value, label]) => (
-                  <option value={value} key={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Percent complete
-              <input
-                disabled={!canEdit}
-                type="number"
-                min="0"
-                max="100"
-                value={form.percent_complete}
-                onChange={(event) => updateField('percent_complete', event.target.value)}
-              />
-            </label>
-          </div>
-
-          <div className="two-col">
-            <label>
-              Color
-              <input
-                disabled={!canEdit}
-                type="color"
-                value={form.color}
-                onChange={(event) => updateField('color', event.target.value)}
-              />
-            </label>
-
-            <label>
-              Sort order
-              <input
-                disabled={!canEdit}
-                type="number"
-                value={form.sort_order}
-                onChange={(event) => updateField('sort_order', event.target.value)}
-                placeholder="Auto"
-              />
-            </label>
-          </div>
-        </section>
-
-        <section className="panel task-section">
-          <div className="panel-heading">
-            <div>
-              <h3>Notes</h3>
-              <p>Add the scope, details, and anything else the team should know.</p>
-            </div>
-          </div>
-
-          <label>
-            Description
-            <textarea
-              disabled={!canEdit}
-              value={form.description}
-              onChange={(event) => updateField('description', event.target.value)}
-              placeholder="Scope, constraints, notes, inspection needs"
-            />
-          </label>
-        </section>
+          </section>
+        )}
 
         {error && <p className="error-box">{error}</p>}
 
