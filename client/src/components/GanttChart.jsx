@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { addDays, daysBetween, formatDate, maxIsoDate, minIsoDate, todayIso } from '../lib/dates';
 
 function getScale(totalDays) {
@@ -19,7 +19,9 @@ function taskMeta(task) {
   const parts = [];
   if (task.trade) parts.push(task.trade);
   if (task.vendor) parts.push(task.vendor);
+  if (task.vendor_secondary) parts.push(task.vendor_secondary);
   if (task.vendor_2) parts.push(task.vendor_2);
+  if (task.security_team_member) parts.push(task.security_team_member);
   if (task.security_systems_1) parts.push(task.security_systems_1);
   if (task.security_systems_2) parts.push(task.security_systems_2);
   if (task.locksmiths) parts.push(task.locksmiths);
@@ -48,18 +50,26 @@ function statusLabel(value) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export default function GanttChart({ project, tasks, dependencies, onEditTask, onSelectTask }) {
+export default function GanttChart({
+  project,
+  tasks = [],
+  dependencies = [],
+  onEditTask,
+  onSelectTask
+}) {
   const scrollRef = useRef(null);
   const shellRef = useRef(null);
   const clickTimerRef = useRef(null);
 
   const [zoomIndex, setZoomIndex] = useState(2);
   const [fullscreen, setFullscreen] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
 
-  const allStartDates = [project.start_date, ...tasks.map((task) => task.start_date)].filter(Boolean);
-  const allEndDates = [project.end_date, ...tasks.map((task) => task.end_date)].filter(Boolean);
-  const rangeStart = minIsoDate(allStartDates) || project.start_date || todayIso();
-  const rangeEnd = maxIsoDate(allEndDates) || project.end_date || rangeStart;
+  const allStartDates = [project?.start_date, ...tasks.map((task) => task.start_date)].filter(Boolean);
+  const allEndDates = [project?.end_date, ...tasks.map((task) => task.end_date)].filter(Boolean);
+  const rangeStart = minIsoDate(allStartDates) || project?.start_date || todayIso();
+  const rangeEnd = maxIsoDate(allEndDates) || project?.end_date || rangeStart;
+
   const totalDays = Math.max(1, daysBetween(rangeStart, rangeEnd) + 1);
   const baseScale = getScale(totalDays);
   const zoom = zoomLevels[zoomIndex];
@@ -87,18 +97,30 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask, o
     };
   }, []);
 
-  const units = [];
-  for (let offset = 0; offset <= totalDays; offset += scale.stepDays) {
-    const date = addDays(rangeStart, offset);
-    units.push({ date, left: (offset / scale.stepDays) * scale.unitWidth });
-  }
+  const units = useMemo(() => {
+    const result = [];
+    for (let offset = 0; offset <= totalDays; offset += scale.stepDays) {
+      const date = addDays(rangeStart, offset);
+      result.push({ date, left: (offset / scale.stepDays) * scale.unitWidth });
+    }
+    return result;
+  }, [rangeStart, scale.stepDays, scale.unitWidth, totalDays]);
 
-  const taskIndex = new Map(tasks.map((task, index) => [task.id, index]));
-  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const taskIndex = useMemo(
+    () => new Map(tasks.map((task, index) => [task.id, index])),
+    [tasks]
+  );
+
+  const taskById = useMemo(
+    () => new Map(tasks.map((task) => [task.id, task])),
+    [tasks]
+  );
 
   function getTaskPosition(task) {
-    const left = (daysBetween(rangeStart, task.start_date) / scale.stepDays) * scale.unitWidth;
-    const duration = Math.max(1, daysBetween(task.start_date, task.end_date) + 1);
+    const start = task.start_date || rangeStart;
+    const end = task.end_date || start;
+    const left = (daysBetween(rangeStart, start) / scale.stepDays) * scale.unitWidth;
+    const duration = Math.max(1, daysBetween(start, end) + 1);
     const width = Math.max(56, (duration / scale.stepDays) * scale.unitWidth);
     const rowIndex = taskIndex.get(task.id) || 0;
     const y = headerHeight + rowIndex * rowHeight + rowHeight / 2;
@@ -147,6 +169,7 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask, o
   }
 
   function focusTask(task) {
+    setSelectedTaskId(task.id);
     onSelectTask?.(task);
 
     const position = getTaskPosition(task);
@@ -159,6 +182,7 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask, o
   }
 
   function openEditor(task) {
+    setSelectedTaskId(task.id);
     onSelectTask?.(task);
     onEditTask?.(task);
   }
@@ -191,6 +215,7 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask, o
     const printHeaderHeight = 78;
     const printHeight = printHeaderHeight + Math.max(printableTasks.length, 1) * printRowHeight + 18;
     const tickStep = totalDays > 240 ? 30 : totalDays > 120 ? 14 : totalDays > 60 ? 7 : 3;
+
     const ticks = [];
     for (let offset = 0; offset <= totalDays; offset += tickStep) {
       const date = addDays(rangeStart, offset);
@@ -247,6 +272,7 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask, o
         const width = clamp((duration / totalDays) * 100, 1.5, 100 - left);
         const top = printHeaderHeight + index * printRowHeight + 9;
         const color = safeColor(task.color);
+
         return `
         <div class="print-bar" style="left:${left}%;top:${top}px;width:${width}%;background:${color}">
           <span class="print-progress" style="width:${clamp(Number(task.percent_complete || 0), 0, 100)}%"></span>
@@ -276,7 +302,7 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask, o
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>${escapeHtml(project.name)} Gantt chart</title>
+  <title>${escapeHtml(project?.name || 'Project')} Gantt chart</title>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; padding: 24px; font-family: Arial, Helvetica, sans-serif; color: #111827; background: #ffffff; }
@@ -313,8 +339,8 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask, o
   </style>
 </head>
 <body>
-  <h1>${escapeHtml(project.name)} — Gantt chart</h1>
-  <p>${escapeHtml(project.location || 'No location set')} · ${escapeHtml(formatDate(rangeStart))} to ${escapeHtml(formatDate(rangeEnd))}</p>
+  <h1>${escapeHtml(project?.name || 'Project')} — Gantt chart</h1>
+  <p>${escapeHtml(project?.location || 'No location set')} · ${escapeHtml(formatDate(rangeStart))} to ${escapeHtml(formatDate(rangeEnd))}</p>
   <div class="print-meta">
     <span>${printableTasks.length} task${printableTasks.length === 1 ? '' : 's'}</span>
     <span>${dependencies.length} dependenc${dependencies.length === 1 ? 'y' : 'ies'}</span>
@@ -412,12 +438,28 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask, o
       <div className="gantt-shell expanded-gantt-shell">
         <div className="gantt-label-column" style={{ paddingTop: headerHeight }}>
           {tasks.length === 0 && <div className="gantt-empty-label">No tasks yet</div>}
+
           {tasks.map((task) => (
             <button
-              className="gantt-label-row expanded"
               key={task.id}
-              onClick={() => onEditTask?.(task)}
+              className={`gantt-label-row expanded${selectedTaskId === task.id ? ' selected' : ''}`}
               type="button"
+              onClick={() => queueSingleClick(task)}
+              onDoubleClick={() => handleDoubleClick(task)}
+              style={{
+                cursor: 'pointer',
+                borderRadius: 12,
+                userSelect: 'none',
+                ...(selectedTaskId === task.id
+                  ? {
+                      outline: '2px solid rgba(37, 99, 235, 0.35)',
+                      backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                      boxShadow: 'inset 0 0 0 1px rgba(37, 99, 235, 0.15)',
+                      transform: 'translateX(1px)'
+                    }
+                  : {})
+              }}
+              title="Single-click to highlight, double-click to edit"
             >
               <span className={`status-dot status-${task.status}`} />
               <span className="gantt-label-text">
@@ -433,7 +475,7 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask, o
           ref={scrollRef}
           role="region"
           aria-label="Gantt timeline"
-          tabIndex="0"
+          tabIndex={0}
         >
           <div className="gantt-canvas" style={{ width: chartWidth, height: chartHeight }}>
             <div className="gantt-header-row expanded">
@@ -493,23 +535,32 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask, o
 
             {tasks.map((task) => {
               const position = getTaskPosition(task);
-              const top = position.y - 21;
+              const isSelected = selectedTaskId === task.id;
+
               return (
                 <button
-                  className={`gantt-bar expanded status-bg-${task.status}`}
                   key={task.id}
-                  style={{
-                    left: position.left,
-                    top,
-                    width: position.width,
-                    backgroundColor: task.color || '#2563eb'
-                  }}
+                  className={`gantt-bar expanded status-bg-${task.status}${isSelected ? ' selected' : ''}`}
+                  type="button"
                   onClick={() => queueSingleClick(task)}
                   onDoubleClick={() => handleDoubleClick(task)}
+                  style={{
+                    left: position.left,
+                    top: position.y - 21,
+                    width: position.width,
+                    backgroundColor: task.color || '#2563eb',
+                    cursor: 'pointer',
+                    ...(isSelected
+                      ? {
+                          outline: '2px solid rgba(37, 99, 235, 0.35)',
+                          boxShadow: '0 0 0 3px rgba(37, 99, 235, 0.18), 0 10px 22px rgba(15, 23, 42, 0.18)',
+                          transform: 'translateY(-1px)'
+                        }
+                      : {})
+                  }}
                   title={`${task.name}: ${formatDate(task.start_date)} to ${formatDate(task.end_date)} · ${
                     taskMeta(task) || 'No team/vendor assigned'
                   } · ${task.percent_complete}% complete`}
-                  type="button"
                 >
                   <span className="gantt-progress" style={{ width: `${task.percent_complete}%` }} />
                   <span className="gantt-bar-label">{task.name}</span>
