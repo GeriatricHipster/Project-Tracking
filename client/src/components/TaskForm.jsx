@@ -460,21 +460,22 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
   }
 
   const tabButtonStyle = (active) => ({
-    border: '1px solid rgba(148, 163, 184, 0.35)',
-    background: active ? '#0f172a' : '#fff',
-    color: active ? '#fff' : '#0f172a',
+    border: active ? '1px solid #7f1d1d' : '1px solid rgba(148, 163, 184, 0.55)',
+    background: active ? 'linear-gradient(135deg, #dc2626, #991b1b)' : '#ffffff',
+    color: active ? '#ffffff' : '#111827',
     borderRadius: 999,
-    padding: '8px 14px',
+    padding: '10px 14px',
     fontSize: 13,
-    fontWeight: 700,
-    cursor: 'pointer'
+    fontWeight: 800,
+    cursor: 'pointer',
+    boxShadow: active ? '0 10px 20px rgba(220, 38, 38, 0.20)' : '0 6px 14px rgba(15, 23, 42, 0.08)'
   });
 
   return (
     <section className="panel task-form-panel">
       <div className="panel-heading">
         <div>
-          <h2>{editingTask ? 'Edit task' : 'Add task'}</h2>
+          <h2 className="ui-red-title">{editingTask ? 'Edit task' : 'Add task'}</h2>
           <p>
             {canEdit
               ? 'Update dates, vendor, status, responsibility, and progress.'
@@ -488,7 +489,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div className="task-form-tabs">
         <button type="button" style={tabButtonStyle(activeTab === 'details')} onClick={() => setActiveTab('details')}>
           Details
         </button>
@@ -507,7 +508,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             <section className="panel task-section">
               <div className="panel-heading">
                 <div>
-                  <h3>Task basics</h3>
+                  <h3 className="ui-red-title">Task basics</h3>
                   <p>Core task details and the main vendor fields.</p>
                 </div>
               </div>
@@ -606,7 +607,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             <section className="panel task-section">
               <div className="panel-heading">
                 <div>
-                  <h3>People</h3>
+                  <h3 className="ui-red-title">People</h3>
                   <p>Assign the team members and the PM for this task.</p>
                 </div>
               </div>
@@ -687,7 +688,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             <section className="panel task-section">
               <div className="panel-heading">
                 <div>
-                  <h3>Schedule</h3>
+                  <h3 className="ui-red-title">Schedule</h3>
                   <p>Set the dates for this task.</p>
                 </div>
               </div>
@@ -717,7 +718,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             <section className="panel task-section">
               <div className="panel-heading">
                 <div>
-                  <h3>Tracking</h3>
+                  <h3 className="ui-red-title">Tracking</h3>
                   <p>Status, priority, and progress settings.</p>
                 </div>
               </div>
@@ -793,7 +794,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             <section className="panel task-section">
               <div className="panel-heading">
                 <div>
-                  <h3>Notes</h3>
+                  <h3 className="ui-red-title">Notes</h3>
                   <p>Add the scope, details, and anything else the team should know.</p>
                 </div>
               </div>
@@ -815,7 +816,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
           <section className="panel task-section">
             <div className="panel-heading">
               <div>
-                <h3>Checklist</h3>
+                <h3 className="ui-red-title">Checklist</h3>
                 <p>Add as many sub tasks as you need, then mark each one complete with a click.</p>
               </div>
             </div>
@@ -864,7 +865,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
                       gap: 10,
                       alignItems: 'center',
                       padding: '10px 12px',
-                      border: '1px solid rgba(148, 163, 184, 0.28)',
+                      border: '1px solid rgba(239, 68, 68, 0.22)',
                       borderRadius: 14,
                       background: '#fff'
                     }}
@@ -884,7 +885,8 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
                         color: '#fff',
                         fontSize: 20,
                         fontWeight: 800,
-                        cursor: canEdit ? 'pointer' : 'not-allowed'
+                        cursor: canEdit ? 'pointer' : 'not-allowed',
+                        boxShadow: '0 6px 14px rgba(15, 23, 42, 0.12)'
                       }}
                     >
                       {item.done ? '✔' : '✖'}
