@@ -3492,6 +3492,8 @@ html[data-theme='dark'] .member-chip small {
     gap: 0.5rem;
   }
 
+}
+
 .task-form-tabs {
   display: flex;
   gap: 10px;
