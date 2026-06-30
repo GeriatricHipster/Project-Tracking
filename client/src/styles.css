@@ -3491,4 +3491,80 @@ html[data-theme='dark'] .member-chip small {
   .dashboard-search-panel {
     gap: 0.5rem;
   }
+
+.task-form-tabs {
+  display: flex;
+  gap: 10px;
+  margin: 0 0 16px;
+  flex-wrap: wrap;
+}
+
+.ui-red-title {
+  color: #b91c1c !important;
+}
+
+.panel-heading h2.ui-red-title,
+.panel-heading h3.ui-red-title {
+  position: relative;
+}
+
+.panel-heading h2.ui-red-title::after,
+.panel-heading h3.ui-red-title::after {
+  content: '';
+  display: block;
+  width: 48px;
+  height: 3px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #dc2626, #fca5a5);
+}
+
+.task-form-tabs button {
+  min-width: 112px;
+}
+
+.task-form-tabs button:hover {
+  transform: translateY(-1px);
+}
+
+.gantt-quick-menu button,
+.gantt-quick-action {
+  color: #111827 !important;
+}
+
+.gantt-quick-menu button:hover,
+.gantt-quick-action:hover {
+  background: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+}
+
+.today-line {
+  background: #dc2626 !important;
+  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.15);
+}
+
+.today-line span {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+
+.gantt-label-row.expanded:hover,
+.gantt-bar:hover,
+.task-section:hover {
+  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.18), 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.error-box {
+  border-left: 4px solid #dc2626;
+}
+
+.primary-button {
+  background: linear-gradient(135deg, #dc2626, #991b1b);
+  border-color: #7f1d1d;
+}
+
+.primary-button:hover {
+  filter: brightness(1.03);
 }
