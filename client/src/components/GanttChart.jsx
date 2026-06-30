@@ -19,9 +19,7 @@ function taskMeta(task) {
   const parts = [];
   if (task.trade) parts.push(task.trade);
   if (task.vendor) parts.push(task.vendor);
-  if (task.vendor_secondary) parts.push(task.vendor_secondary);
   if (task.vendor_2) parts.push(task.vendor_2);
-  if (task.security_team_member) parts.push(task.security_team_member);
   if (task.security_systems_1) parts.push(task.security_systems_1);
   if (task.security_systems_2) parts.push(task.security_systems_2);
   if (task.locksmiths) parts.push(task.locksmiths);
@@ -106,15 +104,8 @@ export default function GanttChart({
     return result;
   }, [rangeStart, scale.stepDays, scale.unitWidth, totalDays]);
 
-  const taskIndex = useMemo(
-    () => new Map(tasks.map((task, index) => [task.id, index])),
-    [tasks]
-  );
-
-  const taskById = useMemo(
-    () => new Map(tasks.map((task) => [task.id, task])),
-    [tasks]
-  );
+  const taskIndex = useMemo(() => new Map(tasks.map((task, index) => [task.id, index])), [tasks]);
+  const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
 
   function getTaskPosition(task) {
     const start = task.start_date || rangeStart;
@@ -438,7 +429,6 @@ export default function GanttChart({
       <div className="gantt-shell expanded-gantt-shell">
         <div className="gantt-label-column" style={{ paddingTop: headerHeight }}>
           {tasks.length === 0 && <div className="gantt-empty-label">No tasks yet</div>}
-
           {tasks.map((task) => (
             <button
               key={task.id}
