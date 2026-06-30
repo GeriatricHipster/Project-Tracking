@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { addDays, daysBetween, formatDate, maxIsoDate, minIsoDate, todayIso } from '../lib/dates';
 
@@ -56,23 +57,17 @@ function quickActionPatch(action) {
 }
 
 function QuickActionMenu({ task, x, y, canUpdate, onClose, onAction }) {
-  if (!task) return null;
+  if (!task || typeof document === 'undefined') return null;
 
-  const itemStyle = {
-    appearance: 'none',
-    width: '100%',
-    border: 'none',
-    background: 'transparent',
-    padding: '10px 12px',
-    textAlign: 'left',
-    borderRadius: 10,
-    cursor: canUpdate ? 'pointer' : 'not-allowed',
-    fontSize: 14,
-    lineHeight: 1.2,
-    color: '#0f172a'
-  };
+  const items = [
+    { key: 'complete', icon: '✔', label: 'Mark Complete' },
+    { key: 'in_progress', icon: '⏸', label: 'Mark In Progress' },
+    { key: 'blocked', icon: '🚫', label: 'Mark Blocked' },
+    { key: 'finish_date', icon: '📅', label: 'Change Finish Date' },
+    { key: 'reassign', icon: '👤', label: 'Reassign' }
+  ];
 
-  return (
+  return createPortal(
     <div
       role="menu"
       aria-label={`Quick actions for ${task.name}`}
@@ -81,23 +76,23 @@ function QuickActionMenu({ task, x, y, canUpdate, onClose, onAction }) {
         left: Math.max(12, Math.min(x, window.innerWidth - 280)),
         top: Math.max(12, Math.min(y, window.innerHeight - 320)),
         zIndex: 2000,
-        width: 260,
-        borderRadius: 16,
+        width: 280,
+        borderRadius: 18,
         border: '1px solid rgba(148, 163, 184, 0.28)',
         background: 'rgba(255,255,255,0.98)',
         boxShadow: '0 18px 40px rgba(15, 23, 42, 0.18)',
-        padding: 8,
+        padding: 10,
         backdropFilter: 'blur(14px)'
       }}
       onContextMenu={(event) => event.preventDefault()}
     >
-      <div style={{ padding: '6px 10px 8px' }}>
+      <div style={{ padding: '4px 8px 10px' }}>
         <strong
           style={{
             display: 'block',
             fontSize: 13,
             color: '#0f172a',
-            marginBottom: 2,
+            marginBottom: 3,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis'
@@ -119,31 +114,52 @@ function QuickActionMenu({ task, x, y, canUpdate, onClose, onAction }) {
         </span>
       </div>
 
-      <div style={{ display: 'grid', gap: 4 }}>
-        <button type="button" style={itemStyle} onClick={() => canUpdate && onAction('complete')} disabled={!canUpdate}>
-          ✔ Mark Complete
-        </button>
-        <button type="button" style={itemStyle} onClick={() => canUpdate && onAction('in_progress')} disabled={!canUpdate}>
-          ⏸ Mark In Progress
-        </button>
-        <button type="button" style={itemStyle} onClick={() => canUpdate && onAction('blocked')} disabled={!canUpdate}>
-          🚫 Mark Blocked
-        </button>
-        <button type="button" style={itemStyle} onClick={() => canUpdate && onAction('finish_date')} disabled={!canUpdate}>
-          📅 Change Finish Date
-        </button>
-        <button type="button" style={itemStyle} onClick={() => canUpdate && onAction('reassign')} disabled={!canUpdate}>
-          👤 Reassign
-        </button>
+      <div style={{ display: 'grid', gap: 6 }}>
+        {items.map((item) => (
+          <div
+            key={item.key}
+            role="menuitem"
+            tabIndex={canUpdate ? 0 : -1}
+            onClick={() => canUpdate && onAction(item.key)}
+            onKeyDown={(event) => {
+              if (!canUpdate) return;
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onAction(item.key);
+              }
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              width: '100%',
+              borderRadius: 12,
+              padding: '10px 12px',
+              background: canUpdate ? '#f8fafc' : '#f8fafc',
+              border: '1px solid rgba(226, 232, 240, 0.9)',
+              color: '#0f172a',
+              fontSize: 14,
+              fontWeight: 600,
+              lineHeight: 1.2,
+              cursor: canUpdate ? 'pointer' : 'not-allowed',
+              userSelect: 'none',
+              opacity: canUpdate ? 1 : 0.55
+            }}
+          >
+            <span style={{ width: 20, textAlign: 'center', flex: '0 0 20px' }}>{item.icon}</span>
+            <span style={{ flex: 1, color: '#0f172a' }}>{item.label}</span>
+          </div>
+        ))}
       </div>
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', padding: '10px 6px 2px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 10 }}>
         <button
           type="button"
           onClick={onClose}
           style={{
             border: '1px solid rgba(148, 163, 184, 0.35)',
             background: '#fff',
+            color: '#0f172a',
             borderRadius: 10,
             padding: '8px 10px',
             fontSize: 13,
@@ -155,11 +171,12 @@ function QuickActionMenu({ task, x, y, canUpdate, onClose, onAction }) {
       </div>
 
       {!canUpdate && (
-        <div style={{ padding: '6px 10px 2px', fontSize: 12, color: '#64748b' }}>
+        <div style={{ padding: '6px 8px 0', fontSize: 12, color: '#64748b' }}>
           Quick actions need an update callback from the parent.
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -175,7 +192,6 @@ export default function GanttChart({
   const scrollRef = useRef(null);
   const timelineRef = useRef(null);
   const clickTimerRef = useRef(null);
-  const menuRef = useRef(null);
 
   const [zoomIndex, setZoomIndex] = useState(2);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -195,6 +211,7 @@ export default function GanttChart({
   const rowHeight = 66;
   const headerHeight = 104;
   const chartHeight = headerHeight + Math.max(tasks.length, 1) * rowHeight + 18;
+
   const today = todayIso();
   const todayOffset =
     today >= rangeStart && today <= rangeEnd
@@ -203,6 +220,7 @@ export default function GanttChart({
 
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
   const taskIndex = useMemo(() => new Map(tasks.map((task, index) => [task.id, index])), [tasks]);
+
   const timelineUnits = useMemo(() => {
     const units = [];
     for (let offset = 0; offset <= totalDays; offset += scale.stepDays) {
@@ -233,7 +251,7 @@ export default function GanttChart({
     function handleMouseDown(event) {
       if (!contextMenu) return;
       const target = event.target;
-      if (menuRef.current?.contains(target) || timelineRef.current?.contains(target)) return;
+      if (timelineRef.current?.contains(target)) return;
       setContextMenu(null);
     }
 
@@ -320,6 +338,15 @@ export default function GanttChart({
     }
   }
 
+  function scrollToEditPane() {
+    window.setTimeout(() => {
+      const editPane = document.querySelector('.task-form-panel');
+      if (editPane) {
+        editPane.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 75);
+  }
+
   function focusTask(task) {
     setSelectedTaskId(task.id);
     onSelectTask?.(task);
@@ -337,6 +364,7 @@ export default function GanttChart({
     setSelectedTaskId(task.id);
     onSelectTask?.(task);
     onEditTask?.(task);
+    scrollToEditPane();
   }
 
   function queueSingleClick(task) {
@@ -419,7 +447,9 @@ export default function GanttChart({
       const date = addDays(rangeStart, offset);
       ticks.push({ date, percent: clamp((offset / totalDays) * 100, 0, 100) });
     }
-    if (!ticks.some((tick) => tick.date === rangeEnd)) ticks.push({ date: rangeEnd, percent: 100 });
+    if (!ticks.some((tick) => tick.date === rangeEnd)) {
+      ticks.push({ date: rangeEnd, percent: 100 });
+    }
 
     const headerTicks = ticks
       .map(
@@ -667,7 +697,13 @@ export default function GanttChart({
           ))}
         </div>
 
-        <div className="gantt-scroll expanded-gantt-scroll" ref={scrollRef} role="region" aria-label="Gantt timeline" tabIndex={0}>
+        <div
+          className="gantt-scroll expanded-gantt-scroll"
+          ref={scrollRef}
+          role="region"
+          aria-label="Gantt timeline"
+          tabIndex={0}
+        >
           <div className="gantt-canvas" ref={timelineRef} style={{ width: chartWidth, height: chartHeight }}>
             <div className="gantt-header-row expanded">
               {timelineUnits.map((unit) => (
@@ -679,11 +715,19 @@ export default function GanttChart({
             </div>
 
             {timelineUnits.map((unit) => (
-              <div className="gantt-grid-line vertical" style={{ left: unit.left, height: chartHeight }} key={`line-${unit.date}`} />
+              <div
+                className="gantt-grid-line vertical"
+                style={{ left: unit.left, height: chartHeight }}
+                key={`line-${unit.date}`}
+              />
             ))}
 
             {tasks.map((task, index) => (
-              <div className="gantt-grid-line horizontal" style={{ top: headerHeight + index * rowHeight, width: chartWidth }} key={`row-${task.id}`} />
+              <div
+                className="gantt-grid-line horizontal"
+                style={{ top: headerHeight + index * rowHeight, width: chartWidth }}
+                key={`row-${task.id}`}
+              />
             ))}
 
             {todayOffset !== null && (
