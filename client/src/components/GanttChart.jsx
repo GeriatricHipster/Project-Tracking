@@ -421,11 +421,6 @@ export default function GanttChart({
         </div>
       </div>
 
-      <p className="gantt-navigation-help">
-        Use the buttons or horizontal scroll bar to move through the schedule. Click a task name or bar to edit it.
-        Export PDF opens a printable Gantt view.
-      </p>
-
       <div className="gantt-shell expanded-gantt-shell">
         <div className="gantt-label-column" style={{ paddingTop: headerHeight }}>
           {tasks.length === 0 && <div className="gantt-empty-label">No tasks yet</div>}
