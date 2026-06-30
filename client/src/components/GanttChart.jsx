@@ -9,6 +9,7 @@ function getScale(totalDays) {
 }
 
 const zoomLevels = [0.8, 1, 1.25, 1.55, 1.9, 2.25];
+const SINGLE_CLICK_DELAY_MS = 220;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -47,15 +48,18 @@ function statusLabel(value) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export default function GanttChart({ project, tasks, dependencies, onEditTask }) {
+export default function GanttChart({ project, tasks, dependencies, onEditTask, onSelectTask }) {
   const scrollRef = useRef(null);
   const shellRef = useRef(null);
+  const clickTimerRef = useRef(null);
+
   const [zoomIndex, setZoomIndex] = useState(2);
   const [fullscreen, setFullscreen] = useState(false);
-  const allStartDates = [project.start_date, ...tasks.map((task) => task.start_date)];
-  const allEndDates = [project.end_date, ...tasks.map((task) => task.end_date)];
-  const rangeStart = minIsoDate(allStartDates) || project.start_date;
-  const rangeEnd = maxIsoDate(allEndDates) || project.end_date;
+
+  const allStartDates = [project.start_date, ...tasks.map((task) => task.start_date)].filter(Boolean);
+  const allEndDates = [project.end_date, ...tasks.map((task) => task.end_date)].filter(Boolean);
+  const rangeStart = minIsoDate(allStartDates) || project.start_date || todayIso();
+  const rangeEnd = maxIsoDate(allEndDates) || project.end_date || rangeStart;
   const totalDays = Math.max(1, daysBetween(rangeStart, rangeEnd) + 1);
   const baseScale = getScale(totalDays);
   const zoom = zoomLevels[zoomIndex];
@@ -66,14 +70,21 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
   const headerHeight = 104;
   const chartHeight = headerHeight + Math.max(tasks.length, 1) * rowHeight + 18;
   const today = todayIso();
-  const todayOffset = today >= rangeStart && today <= rangeEnd
-    ? (daysBetween(rangeStart, today) / scale.stepDays) * scale.unitWidth
-    : null;
+  const todayOffset =
+    today >= rangeStart && today <= rangeEnd
+      ? (daysBetween(rangeStart, today) / scale.stepDays) * scale.unitWidth
+      : null;
 
   useEffect(() => {
     const handler = () => setFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener('fullscreenchange', handler);
     return () => document.removeEventListener('fullscreenchange', handler);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) window.clearTimeout(clickTimerRef.current);
+    };
   }, []);
 
   const units = [];
@@ -94,16 +105,29 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
     return { left, width, right: left + width, y };
   }
 
-  function zoomOut() { setZoomIndex((current) => Math.max(0, current - 1)); }
-  function zoomIn() { setZoomIndex((current) => Math.min(zoomLevels.length - 1, current + 1)); }
-  function resetZoom() { setZoomIndex(2); }
+  function zoomOut() {
+    setZoomIndex((current) => Math.max(0, current - 1));
+  }
+
+  function zoomIn() {
+    setZoomIndex((current) => Math.min(zoomLevels.length - 1, current + 1));
+  }
+
+  function resetZoom() {
+    setZoomIndex(2);
+  }
+
   function scrollToToday() {
     if (!scrollRef.current || todayOffset === null) return;
     const maxLeft = Math.max(0, chartWidth - scrollRef.current.clientWidth);
     const target = clamp(todayOffset - scrollRef.current.clientWidth / 2, 0, maxLeft);
     scrollRef.current.scrollTo({ left: target, behavior: 'smooth' });
   }
-  function scrollToStart() { scrollRef.current?.scrollTo({ left: 0, behavior: 'smooth' }); }
+
+  function scrollToStart() {
+    scrollRef.current?.scrollTo({ left: 0, behavior: 'smooth' });
+  }
+
   function scrollByDays(days) {
     if (!scrollRef.current) return;
     const pixels = (days / scale.stepDays) * scale.unitWidth;
@@ -111,12 +135,48 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
   }
 
   async function toggleFullscreen() {
-    if (!shellRef.current) return;
-    if (document.fullscreenElement) {
-      await document.exitFullscreen();
-      return;
+    try {
+      if (!document.fullscreenElement) {
+        await shellRef.current?.requestFullscreen?.();
+      } else {
+        await document.exitFullscreen?.();
+      }
+    } catch {
+      setFullscreen((current) => !current);
     }
-    await shellRef.current.requestFullscreen?.();
+  }
+
+  function focusTask(task) {
+    onSelectTask?.(task);
+
+    const position = getTaskPosition(task);
+    const container = scrollRef.current;
+    if (!container) return;
+
+    const maxLeft = Math.max(0, chartWidth - container.clientWidth);
+    const target = clamp(position.left + position.width / 2 - container.clientWidth / 2, 0, maxLeft);
+    container.scrollTo({ left: target, behavior: 'smooth' });
+  }
+
+  function openEditor(task) {
+    onSelectTask?.(task);
+    onEditTask?.(task);
+  }
+
+  function queueSingleClick(task) {
+    if (clickTimerRef.current) window.clearTimeout(clickTimerRef.current);
+    clickTimerRef.current = window.setTimeout(() => {
+      focusTask(task);
+      clickTimerRef.current = null;
+    }, SINGLE_CLICK_DELAY_MS);
+  }
+
+  function handleDoubleClick(task) {
+    if (clickTimerRef.current) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    openEditor(task);
   }
 
   function exportGanttPdf() {
@@ -140,49 +200,71 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
       ticks.push({ date: rangeEnd, percent: 100 });
     }
 
-    const headerTicks = ticks.map((tick) => `
+    const headerTicks = ticks
+      .map(
+        (tick) => `
       <div class="print-tick" style="left:${tick.percent}%">
         <strong>${escapeHtml(tick.date.slice(5))}</strong>
         <span>${escapeHtml(tick.date.slice(0, 4))}</span>
       </div>
-    `).join('');
+    `
+      )
+      .join('');
 
-    const gridLines = ticks.map((tick) => `
+    const gridLines = ticks
+      .map(
+        (tick) => `
       <div class="print-grid-line vertical" style="left:${tick.percent}%;height:${printHeight}px"></div>
-    `).join('');
+    `
+      )
+      .join('');
 
     const labelRows = printableTasks.length
-      ? printableTasks.map((task) => `
+      ? printableTasks
+          .map(
+            (task) => `
           <div class="print-label-row" style="height:${printRowHeight}px">
             <strong>${escapeHtml(task.name)}</strong>
             <span>${escapeHtml(taskMeta(task) || 'No vendor/team assigned')}</span>
           </div>
-        `).join('')
+        `
+          )
+          .join('')
       : `<div class="print-label-row" style="height:${printRowHeight}px"><strong>No tasks yet</strong><span>Add tasks before exporting.</span></div>`;
 
-    const rowLines = Array.from({ length: Math.max(printableTasks.length, 1) }, (_, index) => `
+    const rowLines = Array.from(
+      { length: Math.max(printableTasks.length, 1) },
+      (_, index) => `
       <div class="print-grid-line horizontal" style="top:${printHeaderHeight + index * printRowHeight}px"></div>
-    `).join('');
+    `
+    ).join('');
 
-    const bars = printableTasks.map((task, index) => {
-      const startOffset = clamp(daysBetween(rangeStart, task.start_date), 0, totalDays);
-      const duration = Math.max(1, daysBetween(task.start_date, task.end_date) + 1);
-      const left = clamp((startOffset / totalDays) * 100, 0, 100);
-      const width = clamp((duration / totalDays) * 100, 1.5, 100 - left);
-      const top = printHeaderHeight + index * printRowHeight + 9;
-      const color = safeColor(task.color);
-      return `
+    const bars = printableTasks
+      .map((task, index) => {
+        const startOffset = clamp(daysBetween(rangeStart, task.start_date), 0, totalDays);
+        const duration = Math.max(1, daysBetween(task.start_date, task.end_date) + 1);
+        const left = clamp((startOffset / totalDays) * 100, 0, 100);
+        const width = clamp((duration / totalDays) * 100, 1.5, 100 - left);
+        const top = printHeaderHeight + index * printRowHeight + 9;
+        const color = safeColor(task.color);
+        return `
         <div class="print-bar" style="left:${left}%;top:${top}px;width:${width}%;background:${color}">
           <span class="print-progress" style="width:${clamp(Number(task.percent_complete || 0), 0, 100)}%"></span>
           <span class="print-bar-label">${escapeHtml(task.name)} · ${escapeHtml(statusLabel(task.status))} · ${escapeHtml(task.percent_complete || 0)}%</span>
         </div>
       `;
-    }).join('');
+      })
+      .join('');
 
-    const todayPercent = today >= rangeStart && today <= rangeEnd
-      ? clamp((daysBetween(rangeStart, today) / totalDays) * 100, 0, 100)
-      : null;
-    const todayLine = todayPercent === null ? '' : `
+    const todayPercent =
+      today >= rangeStart && today <= rangeEnd
+        ? clamp((daysBetween(rangeStart, today) / totalDays) * 100, 0, 100)
+        : null;
+
+    const todayLine =
+      todayPercent === null
+        ? ''
+        : `
       <div class="print-today-line" style="left:${todayPercent}%"><span>Today</span></div>
     `;
 
@@ -268,32 +350,75 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
   }
 
   return (
-    <section className={`panel gantt-panel expanded-gantt-panel${fullscreen ? ' fullscreen' : ''}`} ref={shellRef}>
+    <section
+      ref={shellRef}
+      className={`panel gantt-panel expanded-gantt-panel${fullscreen ? ' fullscreen' : ''}`}
+    >
       <div className="panel-heading gantt-heading">
         <div>
           <h2>Gantt chart</h2>
-          <p>{formatDate(rangeStart)} to {formatDate(rangeEnd)} · scale: {scale.label} · zoom: {Math.round(zoom * 100)}%</p>
+          <p>
+            {formatDate(rangeStart)} to {formatDate(rangeEnd)} · scale: {scale.label} · zoom:{' '}
+            {Math.round(zoom * 100)}%
+          </p>
         </div>
+
         <div className="gantt-toolbar" aria-label="Gantt navigation controls">
-          <button className="ghost-button compact" onClick={toggleFullscreen} type="button">{fullscreen ? 'Exit full screen' : 'Full screen'}</button>
-          <button className="ghost-button compact" onClick={scrollToStart} type="button">Start</button>
-          <button className="ghost-button compact" onClick={() => scrollByDays(-30)} type="button">Prev 30 days</button>
-          <button className="ghost-button compact" onClick={scrollToToday} disabled={todayOffset === null} type="button">Today</button>
-          <button className="ghost-button compact" onClick={() => scrollByDays(30)} type="button">Next 30 days</button>
-          <button className="ghost-button compact" onClick={zoomOut} disabled={zoomIndex === 0} type="button">Zoom out</button>
-          <button className="ghost-button compact" onClick={resetZoom} type="button">Reset zoom</button>
-          <button className="ghost-button compact" onClick={zoomIn} disabled={zoomIndex === zoomLevels.length - 1} type="button">Zoom in</button>
-          <button className="primary-button compact" onClick={exportGanttPdf} type="button">Export PDF</button>
+          <button className="ghost-button compact" onClick={toggleFullscreen} type="button">
+            {fullscreen ? 'Exit full screen' : 'Full screen'}
+          </button>
+          <button className="ghost-button compact" onClick={scrollToStart} type="button">
+            Start
+          </button>
+          <button className="ghost-button compact" onClick={() => scrollByDays(-30)} type="button">
+            Prev 30 days
+          </button>
+          <button
+            className="ghost-button compact"
+            onClick={scrollToToday}
+            disabled={todayOffset === null}
+            type="button"
+          >
+            Today
+          </button>
+          <button className="ghost-button compact" onClick={() => scrollByDays(30)} type="button">
+            Next 30 days
+          </button>
+          <button className="ghost-button compact" onClick={zoomOut} disabled={zoomIndex === 0} type="button">
+            Zoom out
+          </button>
+          <button className="ghost-button compact" onClick={resetZoom} type="button">
+            Reset zoom
+          </button>
+          <button
+            className="ghost-button compact"
+            onClick={zoomIn}
+            disabled={zoomIndex === zoomLevels.length - 1}
+            type="button"
+          >
+            Zoom in
+          </button>
+          <button className="primary-button compact" onClick={exportGanttPdf} type="button">
+            Export PDF
+          </button>
         </div>
       </div>
 
-      <p className="gantt-navigation-help">Use the buttons or horizontal scroll bar to move through the schedule. Click a task name or bar to edit it. Export PDF opens a printable Gantt view.</p>
+      <p className="gantt-navigation-help">
+        Use the buttons or horizontal scroll bar to move through the schedule. Click a task name or bar to edit it.
+        Export PDF opens a printable Gantt view.
+      </p>
 
       <div className="gantt-shell expanded-gantt-shell">
         <div className="gantt-label-column" style={{ paddingTop: headerHeight }}>
           {tasks.length === 0 && <div className="gantt-empty-label">No tasks yet</div>}
           {tasks.map((task) => (
-            <button className="gantt-label-row expanded" key={task.id} onClick={() => onEditTask?.(task)} type="button">
+            <button
+              className="gantt-label-row expanded"
+              key={task.id}
+              onClick={() => onEditTask?.(task)}
+              type="button"
+            >
               <span className={`status-dot status-${task.status}`} />
               <span className="gantt-label-text">
                 <strong>{task.name}</strong>
@@ -303,11 +428,21 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
           ))}
         </div>
 
-        <div className="gantt-scroll expanded-gantt-scroll" ref={scrollRef} role="region" aria-label="Gantt timeline" tabIndex="0">
+        <div
+          className="gantt-scroll expanded-gantt-scroll"
+          ref={scrollRef}
+          role="region"
+          aria-label="Gantt timeline"
+          tabIndex="0"
+        >
           <div className="gantt-canvas" style={{ width: chartWidth, height: chartHeight }}>
             <div className="gantt-header-row expanded">
               {units.map((unit) => (
-                <div className="gantt-header-unit" style={{ left: unit.left, width: scale.unitWidth }} key={unit.date}>
+                <div
+                  className="gantt-header-unit"
+                  style={{ left: unit.left, width: scale.unitWidth }}
+                  key={unit.date}
+                >
                   <strong>{unit.date.slice(5)}</strong>
                   <span>{unit.date.slice(0, 4)}</span>
                 </div>
@@ -315,11 +450,19 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
             </div>
 
             {units.map((unit) => (
-              <div className="gantt-grid-line vertical" style={{ left: unit.left, height: chartHeight }} key={`line-${unit.date}`} />
+              <div
+                className="gantt-grid-line vertical"
+                style={{ left: unit.left, height: chartHeight }}
+                key={`line-${unit.date}`}
+              />
             ))}
 
             {tasks.map((task, index) => (
-              <div className="gantt-grid-line horizontal" style={{ top: headerHeight + index * rowHeight, width: chartWidth }} key={`row-${task.id}`} />
+              <div
+                className="gantt-grid-line horizontal"
+                style={{ top: headerHeight + index * rowHeight, width: chartWidth }}
+                key={`row-${task.id}`}
+              />
             ))}
 
             {todayOffset !== null && (
@@ -361,8 +504,11 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
                     width: position.width,
                     backgroundColor: task.color || '#2563eb'
                   }}
-                  onClick={() => onEditTask?.(task)}
-                  title={`${task.name}: ${formatDate(task.start_date)} to ${formatDate(task.end_date)} · ${taskMeta(task) || 'No team/vendor assigned'} · ${task.percent_complete}% complete`}
+                  onClick={() => queueSingleClick(task)}
+                  onDoubleClick={() => handleDoubleClick(task)}
+                  title={`${task.name}: ${formatDate(task.start_date)} to ${formatDate(task.end_date)} · ${
+                    taskMeta(task) || 'No team/vendor assigned'
+                  } · ${task.percent_complete}% complete`}
                   type="button"
                 >
                   <span className="gantt-progress" style={{ width: `${task.percent_complete}%` }} />
