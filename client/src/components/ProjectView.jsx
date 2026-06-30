@@ -5,7 +5,9 @@ import { formatDate } from '../lib/dates';
 import ActivityPanel from './ActivityPanel';
 import BlueprintsPanel from './BlueprintsPanel';
 import DependencyPanel from './DependencyPanel';
+import ErrorBoundary from './ErrorBoundary';
 import GanttChart from './GanttChart';
+import GanttChecklist from './GanttChecklist';
 import MembersPanel from './MembersPanel';
 import ProjectNotesPanel from './ProjectNotesPanel';
 import SiteBanner from './SiteBanner';
@@ -34,9 +36,13 @@ export default function ProjectView({ projectId, user, onBack }) {
   const [editingTask, setEditingTask] = useState(null);
 
   const projectRole = data?.project?.role || 'viewer';
+  const isVendorUser = user?.site_role === 'vendor';
   const canEdit = roleRank[projectRole] >= roleRank.editor;
   const canManage = roleRank[projectRole] >= roleRank.manager;
-  const canEditNotes = projectRole !== 'portfolio_viewer' && roleRank[projectRole] >= roleRank.viewer;
+  const canCreateNotes = projectRole !== 'portfolio_viewer';
+  const canUpdateNotes = canEdit || canManage;
+  const canDeleteNotes = canUpdateNotes;
+  const canToggleChecklist = projectRole !== 'portfolio_viewer';
 
   async function loadProject({ quiet = false } = {}) {
     if (!quiet) setLoading(true);
@@ -86,11 +92,9 @@ export default function ProjectView({ projectId, user, onBack }) {
 
   const orderedTasks = useMemo(() => {
     return [...(data?.tasks || [])].sort((a, b) => {
-      const sortA = Number(a.sort_order ?? 0);
-      const sortB = Number(b.sort_order ?? 0);
-      if (sortA !== sortB) return sortA - sortB;
-      if ((a.start_date || '') !== (b.start_date || '')) return String(a.start_date || '').localeCompare(String(b.start_date || ''));
-      return Number(a.id || 0) - Number(b.id || 0);
+      if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+      if (a.start_date !== b.start_date) return a.start_date.localeCompare(b.start_date);
+      return a.id - b.id;
     });
   }, [data]);
 
@@ -176,7 +180,6 @@ export default function ProjectView({ projectId, user, onBack }) {
     await loadProject({ quiet: true });
   }
 
-
   if (loading && !data) {
     return (
       <main className="app-page">
@@ -197,7 +200,7 @@ export default function ProjectView({ projectId, user, onBack }) {
     );
   }
 
-  const { project, members = [], dependencies = [], checklist = [], blueprints = [], audit = [] } = data || {};
+  const { project, members, dependencies, checklist, blueprints, audit } = data;
 
   return (
     <main className="app-page project-view">
@@ -209,7 +212,7 @@ export default function ProjectView({ projectId, user, onBack }) {
             <h1>{project.name}</h1>
             <span className={`role-pill role-${project.role}`}>{titleCase(project.role)}</span>
             {project.project_status === 'completed' && <span className="status-pill status-completed">Completed</span>}
-            {project.project_status === 'archived' && <span className="status-pill status-archived">Archived</span>}
+            {isVendorUser && <span className="role-pill role-vendor">Vendor</span>}
           </div>
           <p>{project.location || 'No location set'} · {formatDate(project.start_date)} to {formatDate(project.end_date)}</p>
           {project.description && <p className="project-description">{project.description}</p>}
@@ -220,7 +223,17 @@ export default function ProjectView({ projectId, user, onBack }) {
       {toast && <div className="toast">{toast}</div>}
       {error && <div className="error-box">{error}</div>}
 
-      <GanttChart project={project} tasks={orderedTasks} dependencies={dependencies} onEditTask={setEditingTask} />
+      <ErrorBoundary
+        resetKey={`gantt-${project.id}-${orderedTasks.length}`}
+        fallback={(fallbackError) => (
+          <section className="panel error-fallback">
+            <h2>Gantt chart could not load</h2>
+            <p>{fallbackError?.message || 'The schedule chart hit a display error, but the rest of the project is still available below.'}</p>
+          </section>
+        )}
+      >
+        <GanttChart project={project} tasks={orderedTasks} dependencies={dependencies} onEditTask={setEditingTask} />
+      </ErrorBoundary>
 
       <section className="project-workspace">
         <div className="workspace-main">
@@ -233,7 +246,27 @@ export default function ProjectView({ projectId, user, onBack }) {
             onSave={saveTask}
             onCancel={() => setEditingTask(null)}
           />
-          <ProjectNotesPanel project={project} entries={data?.notes_entries || []} canEdit={canEditNotes} onCreateEntry={addProjectNote} onUpdateEntry={updateProjectNote} onDeleteEntry={deleteProjectNote} />
+          <ProjectNotesPanel
+            project={project}
+            entries={data?.notes_entries || []}
+            canCreateEntry={canCreateNotes}
+            canUpdateEntry={canUpdateNotes}
+            canDeleteEntry={canDeleteNotes}
+            onCreateEntry={addProjectNote}
+            onUpdateEntry={updateProjectNote}
+            onDeleteEntry={deleteProjectNote}
+          />
+          <BlueprintsPanel
+            blueprints={blueprints || []}
+            canEdit={canEdit}
+            onUpload={uploadBlueprint}
+            onDelete={deleteBlueprint}
+          />
+          <GanttChecklist
+            checklist={checklist || []}
+            canEdit={canToggleChecklist}
+            onToggle={updateChecklistItem}
+          />
           <TaskTable tasks={orderedTasks} canEdit={canEdit} onEdit={setEditingTask} onDelete={deleteTask} />
         </div>
 
@@ -244,12 +277,6 @@ export default function ProjectView({ projectId, user, onBack }) {
             canEdit={canEdit}
             onAddDependency={addDependency}
             onDeleteDependency={deleteDependency}
-          />
-          <BlueprintsPanel
-            blueprints={blueprints || []}
-            canEdit={canEdit}
-            onUpload={uploadBlueprint}
-            onDelete={deleteBlueprint}
           />
           <MembersPanel
             currentUser={user}

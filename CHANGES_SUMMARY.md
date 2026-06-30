@@ -1,29 +1,15 @@
-# Hotfix summary
+# Changes included
 
-Recommended commit message:
+## Date format
 
-```text
-Fix project view date parsing and building dropdown button
-```
+- Replaces the front-end date helper with validation and formatting for `MM-DD-YYYY`.
+- Keeps ISO `YYYY-MM-DD` internally for storage, sorting, database compatibility, and Gantt calculations.
+- Updates task creation/editing to report `start_date must be a MM-DD-YYYY date.` when a bad date is entered.
+- Updates project creation to use the same date validation.
+- Updates server-side `normalizeDate()` so API requests accept `MM-DD-YYYY`, `M-D-YYYY`, `MM/DD/YYYY`, and `YYYY-MM-DD`, then store as `YYYY-MM-DD`.
 
-## Why this hotfix exists
+## Create Project building picker
 
-The prior MM-DD-YYYY update made the frontend date parser stricter than the original app. Existing project/task records can come back from Render/Postgres as full timestamps such as `2026-06-26T00:00:00.000Z`. The project page and Gantt chart use those dates to calculate ranges. When the parser could not read a timestamp, the project view could crash and the whole React app could go blank, which also made the Light/Dark mode controls disappear.
-
-## Files updated
-
-```text
-client/src/lib/dates.js
-client/src/components/TaskForm.jsx
-client/src/components/Dashboard.jsx
-client/src/styles.css
-server/src/server.js
-```
-
-## What changed
-
-- Keeps user-facing dates as `MM-DD-YYYY`.
-- Accepts existing backend dates in `YYYY-MM-DD` and `YYYY-MM-DDT...` formats.
-- Prevents invalid dates from crashing the Gantt/project screen.
-- Keeps the Create Project Building dropdown Add button update.
-- Makes server-side date validation accept `MM-DD-YYYY`, `MM/DD/YYYY`, `YYYY-MM-DD`, and ISO timestamp-style values while storing dates as `YYYY-MM-DD`.
+- Adds `addCustomBuilding()` helper in `Dashboard.jsx`.
+- Replaces the Building dropdown block with a dropdown plus an `Add` button.
+- Adds `.select-with-button` styles and mobile stacking.

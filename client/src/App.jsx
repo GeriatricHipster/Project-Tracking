@@ -1,37 +1,29 @@
 import { useEffect, useState } from 'react';
 import AuthScreen from './components/AuthScreen';
 import Dashboard from './components/Dashboard';
+import ErrorBoundary from './components/ErrorBoundary';
 import ProjectView from './components/ProjectView';
 import SiteBanner from './components/SiteBanner';
 import { api, getToken, setToken } from './lib/api';
 
-const backgroundOptions = [
-  { value: 'midnight', label: 'Midnight Violet' },
-  { value: 'ember', label: 'Sunset Flame' },
-  { value: 'ocean', label: 'Electric Ocean' },
-  { value: 'aurora', label: 'Aurora' },
-  { value: 'citrus', label: 'Citrus' },
-  { value: 'candy', label: 'Candy' }
+const backgroundChoices = [
+  { id: 'redwood', label: 'Redwood' },
+  { id: 'sunset', label: 'Sunset' },
+  { id: 'ocean', label: 'Ocean' },
+  { id: 'forest', label: 'Forest' },
+  { id: 'violet', label: 'Violet' },
+  { id: 'slate', label: 'Slate' }
 ];
-
-function backgroundStorageKey(userId) {
-  return userId ? `psg-background:${userId}` : 'psg-background:guest';
-}
-
-function readBackgroundPreference(userId) {
-  if (typeof window === 'undefined') return 'midnight';
-  const userKey = backgroundStorageKey(userId);
-  return window.localStorage.getItem(userKey)
-    || window.localStorage.getItem('psg-background:guest')
-    || backgroundOptions[0].value;
-}
 
 export default function App() {
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') return 'light';
     return window.localStorage.getItem('psg-theme') || 'light';
   });
-  const [background, setBackground] = useState(() => readBackgroundPreference(null));
+  const [background, setBackground] = useState(() => {
+    if (typeof window === 'undefined') return 'redwood';
+    return window.localStorage.getItem('psg-background') || 'redwood';
+  });
   const [token, setTokenState] = useState(getToken());
   const [user, setUser] = useState(null);
   const [projects, setProjects] = useState([]);
@@ -48,24 +40,11 @@ export default function App() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.background = background;
     document.documentElement.style.colorScheme = theme;
     window.localStorage.setItem('psg-theme', theme);
-  }, [theme]);
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    document.documentElement.dataset.background = background;
-    if (user?.id) {
-      window.localStorage.setItem(backgroundStorageKey(user.id), background);
-    } else {
-      window.localStorage.setItem('psg-background:guest', background);
-    }
-  }, [background, user?.id]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    setBackground(readBackgroundPreference(user.id));
-  }, [user?.id]);
+    window.localStorage.setItem('psg-background', background);
+  }, [theme, background]);
 
   function openProjectFromUrl(nextProjects) {
     const requestedProjectId = projectIdFromUrl();
@@ -102,9 +81,8 @@ export default function App() {
       try {
         const me = await api('/me');
         setUser(me.user);
-        setBackground(readBackgroundPreference(me.user.id));
         const nextProjects = await loadProjects();
-        await routeAfterAuth(nextProjects);
+        routeAfterAuth(nextProjects);
       } catch (error) {
         setToken(null);
         setTokenState(null);
@@ -119,9 +97,8 @@ export default function App() {
     setToken(data.token, rememberMe);
     setTokenState(data.token);
     setUser(data.user);
-    setBackground(readBackgroundPreference(data.user.id));
     const nextProjects = await loadProjects();
-    await routeAfterAuth(nextProjects);
+    routeAfterAuth(nextProjects);
   }
 
   async function createProject(payload) {
@@ -143,14 +120,6 @@ export default function App() {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
   }
 
-  function changeBackground(value) {
-    setBackground(value);
-  }
-  function scrollToTop() {
-  if (typeof window === 'undefined') return;
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
   function logout() {
     setToken(null);
     setTokenState(null);
@@ -159,53 +128,86 @@ export default function App() {
     setSelectedProjectId(null);
   }
 
-  const floatingControls = (
-    <div className="floating-controls" aria-label="Display controls">
+  const controls = (
+    <div className="site-controls">
       <button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
         {theme === 'dark' ? 'Light mode' : 'Dark mode'}
       </button>
-
-          <button className="ghost-button compact back-to-top-button" onClick={scrollToTop} type="button" aria-label="Back to top">
-      Back to top
-    </button>
-      
-      <label className="background-select-wrap">
-        <span className="sr-only">Background</span>
-        <select className="background-select" value={background} onChange={(event) => changeBackground(event.target.value)} aria-label="Change app background">
-          {backgroundOptions.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
+      <details className="background-menu">
+        <summary className="theme-toggle-button">Background</summary>
+        <div className="background-menu-panel">
+          {backgroundChoices.map((choice) => (
+            <button key={choice.id} className={background === choice.id ? 'active' : ''} onClick={() => setBackground(choice.id)} type="button">
+              {choice.label}
+            </button>
           ))}
-        </select>
-      </label>
+        </div>
+      </details>
     </div>
   );
 
+  function projectFallback(error) {
+    return (
+      <main className="app-page project-view">
+        <SiteBanner />
+        <section className="panel error-fallback">
+          <button className="ghost-button" onClick={() => { setSelectedProjectId(null); loadProjects(); }} type="button">Back to projects</button>
+          <h2>Project screen failed to load</h2>
+          <p>{error?.message || 'An unexpected project-view error occurred.'}</p>
+          <button className="primary-button" onClick={() => window.location.reload()} type="button">Reload app</button>
+        </section>
+      </main>
+    );
+  }
+
+  function dashboardFallback(error) {
+    return (
+      <main className="app-page">
+        <SiteBanner />
+        <section className="panel error-fallback">
+          <h2>Dashboard failed to load</h2>
+          <p>{error?.message || 'An unexpected dashboard error occurred.'}</p>
+          <button className="primary-button" onClick={() => window.location.reload()} type="button">Reload app</button>
+        </section>
+      </main>
+    );
+  }
+
   if (booting) {
-    return <>{floatingControls}<main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main></>;
+    return <><div className="top-right-controls">{controls}</div><main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main></>;
   }
 
   if (!token || !user) {
-    return <>{floatingControls}<AuthScreen onAuth={handleAuth} /></>;
+    return <><div className="top-right-controls">{controls}</div><AuthScreen onAuth={handleAuth} /></>;
   }
 
   if (selectedProjectId) {
-    return <>{floatingControls}<ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></>;
+    return (
+      <>
+        <div className="top-right-controls">{controls}</div>
+        <ErrorBoundary resetKey={`project-${selectedProjectId}`} fallback={projectFallback}>
+          <ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} />
+        </ErrorBoundary>
+      </>
+    );
   }
 
   return (
     <>
-      {floatingControls}
-      <Dashboard
-        user={user}
-        projects={projects}
-        loading={loadingProjects}
-        onOpenProject={setSelectedProjectId}
-        onCreateProject={createProject}
-        onUpdateProject={updateProject}
-        onDeleteProject={deleteProject}
-        onRefresh={loadProjects}
-        onLogout={logout}
-      />
+      <div className="top-right-controls">{controls}</div>
+      <ErrorBoundary resetKey="dashboard" fallback={dashboardFallback}>
+        <Dashboard
+          user={user}
+          projects={projects}
+          loading={loadingProjects}
+          onOpenProject={setSelectedProjectId}
+          onCreateProject={createProject}
+          onUpdateProject={updateProject}
+          onDeleteProject={deleteProject}
+          onRefresh={loadProjects}
+          onLogout={logout}
+        />
+      </ErrorBoundary>
     </>
   );
 }

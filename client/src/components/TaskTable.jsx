@@ -7,6 +7,12 @@ const statusLabel = {
   complete: 'Complete'
 };
 
+function summarizeTask(task) {
+  return [task.trade, task.vendor, task.vendor_2, task.security_systems_1, task.security_systems_2, task.locksmiths, task.other_assignee, task.pm]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 export default function TaskTable({ tasks, canEdit, onEdit, onDelete }) {
   return (
     <section className="panel table-panel">
@@ -22,11 +28,8 @@ export default function TaskTable({ tasks, canEdit, onEdit, onDelete }) {
           <thead>
             <tr>
               <th>Task</th>
-              <th>Trade</th>
-              <th>Vendor</th>
-              <th>More</th>
-              <th>Security team</th>
-              <th>PM</th>
+              <th>Trade / vendor</th>
+              <th>Assignments</th>
               <th>Assignee</th>
               <th>Status</th>
               <th>Dates</th>
@@ -42,20 +45,22 @@ export default function TaskTable({ tasks, canEdit, onEdit, onDelete }) {
                   <strong>{task.name}</strong>
                   {task.description && <span className="table-subtext">{task.description}</span>}
                 </td>
-                <td>{task.trade || '-'}</td>
-                <td>{task.vendor || '-'}</td>
                 <td>
-                  <div className="stack gap-tight">
-                    <span>{task.vendor_secondary || '-'}</span>
-                    <span className="table-subtext">
-                      {[task.assignee_secondary, task.assignee_tertiary, task.assignee_quaternary].filter(Boolean).length
-                        ? [task.assignee_secondary, task.assignee_tertiary, task.assignee_quaternary].filter(Boolean).join(' · ')
-                        : 'No extra assignees'}
-                    </span>
+                  <div className="table-substack">
+                    <span>Trade: {task.trade || '-'}</span>
+                    <span>Vendor 1: {task.vendor || '-'}</span>
+                    <span>Vendor 2: {task.vendor_2 || '-'}</span>
                   </div>
                 </td>
-                <td>{task.security_team_member || '-'}</td>
-                <td>{task.pm || '-'}</td>
+                <td>
+                  <div className="table-substack">
+                    <span>{task.security_systems_1 || '-'}</span>
+                    <span>{task.security_systems_2 || '-'}</span>
+                    <span>{task.locksmiths || '-'}</span>
+                    <span>{task.other_assignee || '-'}</span>
+                    <span>{task.pm || '-'}</span>
+                  </div>
+                </td>
                 <td>{task.assigned_to_name || '-'}</td>
                 <td><span className={`status-pill status-${task.status}`}>{statusLabel[task.status] || task.status}</span></td>
                 <td>{formatDate(task.start_date)} - {formatDate(task.end_date)}</td>
@@ -74,7 +79,7 @@ export default function TaskTable({ tasks, canEdit, onEdit, onDelete }) {
             ))}
             {tasks.length === 0 && (
               <tr>
-                <td colSpan="12">
+                <td colSpan="9">
                   <div className="empty-state table-empty">
                     <h3>No tasks yet</h3>
                     <p>Add the first schedule item to start building the Gantt chart.</p>

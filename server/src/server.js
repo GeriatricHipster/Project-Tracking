@@ -42,16 +42,17 @@ const roleRank = {
 };
 
 const statuses = new Set(['not_started', 'in_progress', 'blocked', 'complete']);
-const projectLifecycleStatuses = new Set(['active', 'completed', 'archived']);
+const projectLifecycleStatuses = new Set(['active', 'completed']);
 const priorities = new Set(['low', 'normal', 'high', 'critical']);
 const roles = new Set(['owner', 'manager', 'editor', 'viewer']);
 const inviteRoles = new Set(['manager', 'editor', 'viewer']);
-const vendors = new Set(['Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'PTI (Bosch)', 'S101', 'Schindler', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas']);
-const trades = new Set(['CCure', 'Cameras', 'CCure & Cameras']);
-const securityTeamMembers = new Set(['Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam']);
-const projectManagers = new Set(['Kurt', 'Austin']);
-const userTrades = new Set(['CCure Team', 'Camera Team', 'Lock Smith', 'Vendor', 'PM', 'Manger', 'Supervisor']);
-const siteRoles = new Set(['owner', 'manager', 'member']);
+const vendors = new Set(['Accent Automatic', 'Beacon', 'Convergint', 'DSI', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'PTI (Bosch)', 'Pye Barker', 'S101', 'SMT', 'Stone Security', 'Thyssenkrupp', 'Utah Yamas']);
+const trades = new Set(['CCure', 'Cameras', 'CCure & Cameras', 'Lock Smiths']);
+const securityTeamMembers = new Set(['Bill', 'Bennett', 'Chris', 'Derick', 'Jim', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam']);
+const projectManagers = new Set(['Austin', 'Kurt']);
+const siteRoles = new Set(['owner', 'manager', 'member', 'vendor']);
+const registrationSiteRoles = new Set(['member', 'vendor']);
+const userTradeOptions = new Set(['CCure Team', 'Camera Team', 'Lock Smith', 'Vendor', 'PM', 'Manger', 'Supervisor']);
 const dependencyTypes = new Set(['FS', 'SS', 'FF', 'SF']);
 const managerSiteRoles = new Set(['owner', 'manager']);
 const ownerCmsWorkOrderSheets = [
@@ -109,10 +110,14 @@ const blueprintUpload = multer({
       'application/x-acad',
       'application/dwg',
       'application/x-dwg',
-      'application/octet-stream'
+      'application/octet-stream',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     ]);
     if (!allowedTypes.has(file.mimetype)) {
-      callback(httpError(400, 'Blueprint uploads must be PDF, image, DWG, or common drawing files.'));
+      callback(httpError(400, 'Blueprint uploads must be PDF, image, DWG, Word, Excel, or common drawing files.'));
       return;
     }
     callback(null, true);
@@ -392,23 +397,51 @@ function normalizeBoolean(value, defaultValue = false) {
 }
 
 function normalizeDate(value, label) {
-  const text = String(value || '').slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    throw httpError(400, `${label} must be a YYYY-MM-DD date.`);
+  const text = String(value ?? '').trim();
+
+  if (!text) {
+    throw httpError(400, `${label} must be a MM-DD-YYYY date.`);
   }
-  const timestamp = Date.parse(`${text}T00:00:00.000Z`);
-  if (Number.isNaN(timestamp)) {
+
+  let year;
+  let month;
+  let day;
+  let match = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:\s.*)?$/);
+
+  if (match) {
+    month = Number(match[1]);
+    day = Number(match[2]);
+    year = Number(match[3]);
+  } else {
+    match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/);
+
+    if (!match) {
+      throw httpError(400, `${label} must be a MM-DD-YYYY date.`);
+    }
+
+    year = Number(match[1]);
+    month = Number(match[2]);
+    day = Number(match[3]);
+  }
+
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  const isValid =
+    Number.isInteger(year) &&
+    Number.isInteger(month) &&
+    Number.isInteger(day) &&
+    year >= 1000 &&
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    candidate.getUTCFullYear() === year &&
+    candidate.getUTCMonth() === month - 1 &&
+    candidate.getUTCDate() === day;
+
+  if (!isValid) {
     throw httpError(400, `${label} is not a valid date.`);
   }
-  return text;
-}
 
-function addDaysIso(value, days) {
-  const dateText = normalizeDate(value, 'date');
-  const [year, month, day] = dateText.split('-').map(Number);
-  const next = new Date(Date.UTC(year, month - 1, day));
-  next.setUTCDate(next.getUTCDate() + days);
-  return next.toISOString().slice(0, 10);
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 function ensureDateOrder(startDate, endDate) {
@@ -438,9 +471,6 @@ function normalizeTaskChoice(value, allowed, label, partial = false) {
   if (partial && value === undefined) return undefined;
   const text = cleanText(value);
   if (!text) return null;
-  if (!allowed.has(text)) {
-    throw httpError(400, `${label} must be one of: ${Array.from(allowed).join(', ')}.`);
-  }
   return text;
 }
 
@@ -477,16 +507,12 @@ function normalizeProgress(value) {
 
 function normalizeOptionalId(value, label) {
   if (value === undefined) return undefined;
-  if (value === null || value === '') return null;
-  return parseId(value, label);
-}
-
-function normalizeAssignedTo(value, partial = false) {
-  if (partial && value === undefined) return undefined;
-  if (value === undefined || value === null || value === '') return null;
+  if (value === null) return null;
   const text = String(value).trim();
-  if (/^\d+$/.test(text)) return parseId(text, 'assigned_to');
-  return null;
+  if (!text || text === 'Unassigned' || text === 'None') return null;
+  const number = Number(text);
+  if (!Number.isInteger(number) || number <= 0) return null;
+  return number;
 }
 
 function signToken(user) {
@@ -499,7 +525,7 @@ function publicUser(user) {
     id: user.id,
     name: user.name,
     email: user.email,
-    trade: user.trade || '',
+    trade: user.trade || null,
     site_role: siteRole,
     access_revoked: Boolean(user.access_revoked),
     can_manage_site: managerSiteRoles.has(siteRole)
@@ -587,71 +613,30 @@ function requireSiteOwner(user) {
   return siteRole;
 }
 
-const OWNER_CMS_ROW_COUNT = 300;
+const OWNER_CMS_ROW_COUNT = 150;
 const OWNER_CMS_COLUMN_COUNT = 20;
 
-function buildBlankOwnerCmsGrid() {
-  return Array.from({ length: OWNER_CMS_ROW_COUNT }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+function buildBlankOwnerCmsGrid(rowCount = OWNER_CMS_ROW_COUNT, columnCount = OWNER_CMS_COLUMN_COUNT) {
+  return Array.from({ length: rowCount }, () => Array.from({ length: columnCount }, () => ''));
 }
 
 function normalizeOwnerCmsGrid(cells) {
-  const blank = buildBlankOwnerCmsGrid();
-  if (!Array.isArray(cells)) return blank;
+  const sourceRows = Array.isArray(cells) ? cells : [];
+  const rowCount = Math.max(OWNER_CMS_ROW_COUNT, sourceRows.length);
+  const columnCount = Math.max(OWNER_CMS_COLUMN_COUNT, ...sourceRows.map((row) => (Array.isArray(row) ? row.length : 0)), OWNER_CMS_COLUMN_COUNT);
+  const blank = buildBlankOwnerCmsGrid(rowCount, columnCount);
 
-  for (let rowIndex = 0; rowIndex < Math.min(cells.length, OWNER_CMS_ROW_COUNT); rowIndex += 1) {
-    const row = cells[rowIndex];
+  for (let rowIndex = 0; rowIndex < sourceRows.length; rowIndex += 1) {
+    const row = sourceRows[rowIndex];
     if (!Array.isArray(row)) continue;
-    for (let colIndex = 0; colIndex < Math.min(row.length, OWNER_CMS_COLUMN_COUNT); colIndex += 1) {
+    if (!blank[rowIndex]) blank[rowIndex] = Array.from({ length: columnCount }, () => '');
+    for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
       const value = row[colIndex];
       blank[rowIndex][colIndex] = value === null || value === undefined ? '' : String(value);
     }
   }
 
   return blank;
-}
-
-function normalizeOwnerCmsArchivedRows(rows) {
-  if (!Array.isArray(rows)) return [];
-
-  return rows
-    .map((row, index) => {
-      if (Array.isArray(row)) {
-        return {
-          row_number: index + 1,
-          archived_at: null,
-          cells: normalizeOwnerCmsGrid([row])[0]
-        };
-      }
-
-      if (row && typeof row === 'object') {
-        return {
-          row_number: Number.isInteger(Number(row.row_number)) ? Number(row.row_number) : index + 1,
-          archived_at: row.archived_at || null,
-          cells: normalizeOwnerCmsGrid([Array.isArray(row.cells) ? row.cells : []])[0]
-        };
-      }
-
-      return {
-        row_number: index + 1,
-        archived_at: null,
-        cells: Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => '')
-      };
-    })
-    .filter((row) => row.cells.some((value) => String(value || '').trim().length > 0));
-}
-
-function rowHasContent(row) {
-  return Array.isArray(row) && row.some((value) => String(value || '').trim().length > 0);
-}
-
-async function archiveStaleCompletedProjects(db = { query }) {
-  await db.query(
-    `UPDATE projects
-     SET project_status = 'archived',
-         archived_at = COALESCE(archived_at, now())
-     WHERE project_status = 'completed'
-       AND COALESCE(completed_at, updated_at, created_at) <= now() - interval '30 days'`
-  );
 }
 
 function requireOwnerCmsSheet(sheetKey) {
@@ -805,35 +790,14 @@ async function loadProjectChecklist(projectId) {
   return result.rows;
 }
 
-let blueprintColumnInfoPromise = null;
-async function getBlueprintColumnInfo(db = { query }) {
-  if (!blueprintColumnInfoPromise) {
-    blueprintColumnInfoPromise = db.query(
-      `SELECT column_name
-       FROM information_schema.columns
-       WHERE table_schema = 'public'
-         AND table_name = 'project_blueprints'`
-    ).then((result) => {
-      const columns = new Set(result.rows.map((row) => row.column_name));
-      return {
-        hasOriginalName: columns.has('original_name'),
-        hasFileName: columns.has('file_name'),
-        hasSizeBytes: columns.has('size_bytes'),
-        hasFileSize: columns.has('file_size')
-      };
-    }).catch(() => ({ hasOriginalName: true, hasFileName: false, hasSizeBytes: true, hasFileSize: false }));
-  }
-  return blueprintColumnInfoPromise;
-}
-
 async function loadProjectBlueprints(projectId) {
   const result = await query(
     `SELECT
        pb.id,
        pb.project_id,
-       COALESCE(pb.original_name, pb.file_name, concat('blueprint-', pb.id)) AS original_name,
+       pb.original_name,
        pb.mime_type,
-       COALESCE(pb.size_bytes, pb.file_size, 1) AS size_bytes,
+       pb.size_bytes,
        pb.uploaded_by,
        uploader.name AS uploaded_by_name,
        pb.created_at
@@ -854,15 +818,16 @@ const taskSelect = `
   t.description,
   t.trade,
   t.vendor,
-  t.vendor_secondary,
+  t.vendor_2,
+  t.security_systems_1,
+  t.security_systems_2,
+  t.locksmiths,
+  t.other_assignee,
   t.security_team_member,
   t.pm,
   t.assigned_to,
   assignee.name AS assigned_to_name,
   assignee.email AS assigned_to_email,
-  t.assignee_secondary,
-  t.assignee_tertiary,
-  t.assignee_quaternary,
   t.status,
   t.priority,
   to_char(t.start_date, 'YYYY-MM-DD') AS start_date,
@@ -902,7 +867,6 @@ async function verifyParentTask(db, projectId, parentTaskId, taskId = null) {
 }
 
 async function loadProjectPayload(projectId, userId) {
-  await archiveStaleCompletedProjects();
   const access = await requireProjectAccess(projectId, userId);
 
   const projectResult = await query(
@@ -1033,18 +997,16 @@ function buildTaskInput(body, partial = false) {
 
   if (!partial || body.name !== undefined) input.name = requireText(body.name, 'Task name');
   if (!partial || body.description !== undefined) input.description = cleanText(body.description);
-  if (!partial || body.trade !== undefined) {
-    const tradeText = cleanText(body.trade);
-    input.trade = tradeText || null;
-  }
+  if (!partial || body.trade !== undefined) input.trade = normalizeTaskChoice(body.trade, trades, 'trade', partial);
   if (!partial || body.vendor !== undefined) input.vendor = normalizeVendor(body.vendor, partial);
-  if (!partial || body.vendor_secondary !== undefined) input.vendor_secondary = normalizeVendor(body.vendor_secondary, partial);
-  if (!partial || body.security_team_member !== undefined) input.security_team_member = normalizeTaskChoice(body.security_team_member, securityTeamMembers, 'security_team_member', partial);
-  if (!partial || body.pm !== undefined) input.pm = normalizeTaskChoice(body.pm, projectManagers, 'pm', partial);
-  if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeAssignedTo(body.assigned_to, partial);
-  if (!partial || body.assignee_secondary !== undefined) input.assignee_secondary = cleanText(body.assignee_secondary);
-  if (!partial || body.assignee_tertiary !== undefined) input.assignee_tertiary = cleanText(body.assignee_tertiary);
-  if (!partial || body.assignee_quaternary !== undefined) input.assignee_quaternary = cleanText(body.assignee_quaternary);
+  if (!partial || body.vendor_2 !== undefined) input.vendor_2 = cleanText(body.vendor_2);
+  if (!partial || body.security_systems_1 !== undefined) input.security_systems_1 = cleanText(body.security_systems_1);
+  if (!partial || body.security_systems_2 !== undefined) input.security_systems_2 = cleanText(body.security_systems_2);
+  if (!partial || body.locksmiths !== undefined) input.locksmiths = cleanText(body.locksmiths);
+  if (!partial || body.other_assignee !== undefined) input.other_assignee = cleanText(body.other_assignee);
+  if (!partial || body.security_team_member !== undefined) input.security_team_member = cleanText(body.security_team_member);
+  if (!partial || body.pm !== undefined) input.pm = cleanText(body.pm);
+  if (!partial || body.assigned_to !== undefined) input.assigned_to = normalizeOptionalId(body.assigned_to, 'assigned_to');
   if (!partial || body.parent_task_id !== undefined) input.parent_task_id = normalizeOptionalId(body.parent_task_id, 'parent_task_id');
 
   if (!partial || body.status !== undefined) {
@@ -1055,14 +1017,8 @@ function buildTaskInput(body, partial = false) {
     input.priority = partial ? normalizeOptionalEnum(body.priority, priorities, 'priority') : requireEnum(body.priority || 'normal', priorities, 'priority');
   }
 
-  if (!partial || body.start_date !== undefined) {
-    const rawStart = cleanText(body.start_date);
-    input.start_date = rawStart && /^\d{4}-\d{2}-\d{2}$/.test(rawStart) ? normalizeDate(rawStart, 'start_date') : todayIso();
-  }
-  if (!partial || body.end_date !== undefined) {
-    const rawEnd = cleanText(body.end_date);
-    input.end_date = rawEnd && /^\d{4}-\d{2}-\d{2}$/.test(rawEnd) ? normalizeDate(rawEnd, 'end_date') : (input.start_date || todayIso());
-  }
+  if (!partial || body.start_date !== undefined) input.start_date = normalizeDate(body.start_date, 'start_date');
+  if (!partial || body.end_date !== undefined) input.end_date = normalizeDate(body.end_date, 'end_date');
 
   if (!partial || body.percent_complete !== undefined) {
     input.percent_complete = body.percent_complete === undefined ? 0 : normalizeProgress(body.percent_complete);
@@ -1121,19 +1077,22 @@ app.post('/api/auth/register', asyncHandler(async (req, res) => {
   const name = requireText(req.body.name, 'Name');
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || '');
-  const trade = normalizeOptionalEnum(req.body.trade, userTrades, 'trade');
+  const trade = cleanText(req.body.trade);
+  const requestedSiteRole = req.body.site_role === undefined || req.body.site_role === null || req.body.site_role === ''
+    ? 'member'
+    : requireEnum(req.body.site_role, registrationSiteRoles, 'site_role');
 
   if (!/^\S+@\S+\.\S+$/.test(email)) throw httpError(400, 'A valid email is required.');
   if (password.length < 8) throw httpError(400, 'Password must be at least 8 characters.');
 
   const passwordHash = await bcrypt.hash(password, 12);
   const countResult = await query('SELECT count(*)::int AS count FROM users');
-  const siteRole = countResult.rows[0].count === 0 ? 'owner' : 'member';
+  const siteRole = countResult.rows[0].count === 0 ? 'owner' : requestedSiteRole;
 
   try {
     const result = await query(
-      'INSERT INTO users (name, email, password_hash, site_role, trade) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, site_role, access_revoked, trade',
-      [name, email, passwordHash, siteRole, trade]
+      'INSERT INTO users (name, email, password_hash, trade, site_role) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, trade, site_role, access_revoked',
+      [name, email, passwordHash, trade || null, siteRole]
     );
     const user = result.rows[0];
     res.status(201).json({ user: publicUser(user), token: signToken(user) });
@@ -1147,7 +1106,7 @@ app.post('/api/auth/login', asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || '');
 
-  const result = await query('SELECT id, name, email, password_hash, site_role, access_revoked, trade FROM users WHERE email = $1', [email]);
+  const result = await query('SELECT id, name, email, trade, password_hash, site_role, access_revoked FROM users WHERE email = $1', [email]);
   if (!result.rowCount) throw httpError(401, 'Invalid email or password.');
 
   const user = result.rows[0];
@@ -1168,25 +1127,23 @@ app.get('/api/owner/cms-wos', requireAuth, asyncHandler(async (req, res) => {
 
   const result = await tx(async (client) => {
     await client.query(
-      `INSERT INTO owner_cms_work_orders (sheet_key, sheet_name, cells, archived_cells)
+      `INSERT INTO owner_cms_work_orders (sheet_key, sheet_name, cells)
        VALUES
-         ('kurts_cms_wos', 'Kurts CMS WOs', '[]'::jsonb, '[]'::jsonb),
-         ('austins_cms_wos', 'Austins CMS WOs', '[]'::jsonb, '[]'::jsonb)
+         ('kurts_cms_wos', 'Kurts CMS WOs', '[]'::jsonb),
+         ('austins_cms_wos', 'Austins CMS WOs', '[]'::jsonb)
        ON CONFLICT (sheet_key) DO UPDATE SET
-         sheet_name = EXCLUDED.sheet_name,
-         archived_cells = COALESCE(owner_cms_work_orders.archived_cells, '[]'::jsonb)`
+         sheet_name = EXCLUDED.sheet_name`
     );
 
     const rows = await client.query(
-      `SELECT sheet_key, sheet_name, cells, archived_cells, created_at, updated_at
+      `SELECT sheet_key, sheet_name, cells, created_at, updated_at
        FROM owner_cms_work_orders
        ORDER BY sheet_name ASC`
     );
 
     return rows.rows.map((sheet) => ({
       ...sheet,
-      cells: normalizeOwnerCmsGrid(sheet.cells),
-      archived_rows: normalizeOwnerCmsArchivedRows(sheet.archived_cells)
+      cells: normalizeOwnerCmsGrid(sheet.cells)
     }));
   });
 
@@ -1200,7 +1157,7 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
     label: 'row_index',
     defaultValue: 0,
     min: 0,
-    max: OWNER_CMS_ROW_COUNT - 1
+    max: 9999
   });
   const colIndex = clampInteger(req.body.col_index ?? req.body.colIndex, {
     label: 'col_index',
@@ -1212,214 +1169,31 @@ app.patch('/api/owner/cms-wos/:sheetKey/cell', requireAuth, asyncHandler(async (
 
   const updated = await tx(async (client) => {
     const current = await client.query(
-      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
+      'SELECT sheet_key, sheet_name, cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
       [sheet.sheet_key]
     );
     if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
 
     const normalized = normalizeOwnerCmsGrid(current.rows[0].cells);
-    normalized[rowIndex][colIndex] = cellValue;
-    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
-
-    const saveResult = await client.query(
-      `UPDATE owner_cms_work_orders
-       SET cells = $1,
-           archived_cells = $2
-       WHERE sheet_key = $3
-       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
-      [JSON.stringify(normalized), JSON.stringify(archivedRows), sheet.sheet_key]
-    );
-
-    return {
-      ...saveResult.rows[0],
-      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
-      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
-    };
-  });
-
-  res.json({ sheet: updated });
-}));
-
-app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/archive', requireAuth, asyncHandler(async (req, res) => {
-  requireSiteOwner(req.user);
-  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
-  const rowIndex = clampInteger(req.params.rowIndex, {
-    label: 'rowIndex',
-    defaultValue: 0,
-    min: 0,
-    max: OWNER_CMS_ROW_COUNT - 1
-  });
-
-  const updated = await tx(async (client) => {
-    const current = await client.query(
-      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
-      [sheet.sheet_key]
-    );
-    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
-
-    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
-    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
-    const row = activeRows[rowIndex];
-    if (!row) throw httpError(404, 'Row not found.');
-
-    if (!rowHasContent(row)) {
-      throw httpError(400, 'That row is already blank.');
+    while (normalized.length <= rowIndex) {
+      normalized.push(Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
     }
-
-    archivedRows.unshift({
-      row_number: rowIndex + 1,
-      archived_at: new Date().toISOString(),
-      cells: [...row]
-    });
-    activeRows[rowIndex] = Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => '');
-
-    const saveResult = await client.query(
-      `UPDATE owner_cms_work_orders
-       SET cells = $1,
-           archived_cells = $2
-       WHERE sheet_key = $3
-       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
-      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
-    );
-
-    return {
-      ...saveResult.rows[0],
-      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
-      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
-    };
-  });
-
-  res.json({ sheet: updated });
-}));
-
-app.post('/api/owner/cms-wos/:sheetKey/rows/:rowIndex/insert', requireAuth, asyncHandler(async (req, res) => {
-  requireSiteOwner(req.user);
-  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
-  const rowIndex = clampInteger(req.params.rowIndex, {
-    label: 'rowIndex',
-    defaultValue: 0,
-    min: 0,
-    max: OWNER_CMS_ROW_COUNT - 1
-  });
-  const direction = String(req.body.direction || 'below').toLowerCase() === 'above' ? 'above' : 'below';
-
-  const updated = await tx(async (client) => {
-    const current = await client.query(
-      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
-      [sheet.sheet_key]
-    );
-    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
-
-    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
-    const insertAt = direction === 'above' ? rowIndex : rowIndex + 1;
-    if (insertAt < 0 || insertAt > activeRows.length) throw httpError(400, 'Unable to insert row at that position.');
-
-    activeRows.splice(insertAt, 0, Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
-    while (activeRows.length > OWNER_CMS_ROW_COUNT) activeRows.pop();
+    while (normalized[rowIndex].length < OWNER_CMS_COLUMN_COUNT) {
+      normalized[rowIndex].push('');
+    }
+    normalized[rowIndex][colIndex] = cellValue;
 
     const saveResult = await client.query(
       `UPDATE owner_cms_work_orders
        SET cells = $1
        WHERE sheet_key = $2
-       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
-      [JSON.stringify(activeRows), sheet.sheet_key]
+       RETURNING sheet_key, sheet_name, cells, created_at, updated_at`,
+      [JSON.stringify(normalized), sheet.sheet_key]
     );
 
     return {
       ...saveResult.rows[0],
-      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
-      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
-    };
-  });
-
-  res.json({ sheet: updated });
-}));
-
-app.post('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex/restore', requireAuth, asyncHandler(async (req, res) => {
-  requireSiteOwner(req.user);
-  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
-  const archiveIndex = clampInteger(req.params.archiveIndex, {
-    label: 'archiveIndex',
-    defaultValue: 0,
-    min: 0,
-    max: 999999
-  });
-
-  const updated = await tx(async (client) => {
-    const current = await client.query(
-      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
-      [sheet.sheet_key]
-    );
-    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
-
-    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
-    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
-    const archivedRow = archivedRows[archiveIndex];
-    if (!archivedRow) throw httpError(404, 'Archived row not found.');
-
-    let targetIndex = archivedRow.row_number ? Number(archivedRow.row_number) - 1 : activeRows.findIndex((row) => !rowHasContent(row));
-    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= OWNER_CMS_ROW_COUNT || rowHasContent(activeRows[targetIndex])) {
-      targetIndex = activeRows.findIndex((row) => !rowHasContent(row));
-    }
-    if (targetIndex < 0) throw httpError(400, 'No empty rows are available to restore this entry.');
-
-    activeRows[targetIndex] = [...archivedRow.cells];
-    archivedRows.splice(archiveIndex, 1);
-
-    const saveResult = await client.query(
-      `UPDATE owner_cms_work_orders
-       SET cells = $1,
-           archived_cells = $2
-       WHERE sheet_key = $3
-       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
-      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
-    );
-
-    return {
-      ...saveResult.rows[0],
-      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
-      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
-    };
-  });
-
-  res.json({ sheet: updated });
-}));
-
-app.delete('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex', requireAuth, asyncHandler(async (req, res) => {
-  requireSiteOwner(req.user);
-  const sheet = requireOwnerCmsSheet(req.params.sheetKey);
-  const archiveIndex = clampInteger(req.params.archiveIndex, {
-    label: 'archiveIndex',
-    defaultValue: 0,
-    min: 0,
-    max: 999999
-  });
-
-  const updated = await tx(async (client) => {
-    const current = await client.query(
-      'SELECT sheet_key, sheet_name, cells, archived_cells FROM owner_cms_work_orders WHERE sheet_key = $1 FOR UPDATE',
-      [sheet.sheet_key]
-    );
-    if (!current.rowCount) throw httpError(404, 'CMS work order sheet not found.');
-
-    const activeRows = normalizeOwnerCmsGrid(current.rows[0].cells);
-    const archivedRows = normalizeOwnerCmsArchivedRows(current.rows[0].archived_cells);
-    if (!archivedRows[archiveIndex]) throw httpError(404, 'Archived row not found.');
-    archivedRows.splice(archiveIndex, 1);
-
-    const saveResult = await client.query(
-      `UPDATE owner_cms_work_orders
-       SET cells = $1,
-           archived_cells = $2
-       WHERE sheet_key = $3
-       RETURNING sheet_key, sheet_name, cells, archived_cells, created_at, updated_at`,
-      [JSON.stringify(activeRows), JSON.stringify(archivedRows), sheet.sheet_key]
-    );
-
-    return {
-      ...saveResult.rows[0],
-      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells),
-      archived_rows: normalizeOwnerCmsArchivedRows(saveResult.rows[0].archived_cells)
+      cells: normalizeOwnerCmsGrid(saveResult.rows[0].cells)
     };
   });
 
@@ -1427,7 +1201,6 @@ app.delete('/api/owner/cms-wos/:sheetKey/archived/:archiveIndex', requireAuth, a
 }));
 
 app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
-  await archiveStaleCompletedProjects();
   const result = await query(
     `WITH portfolio_access AS (
        SELECT (
@@ -1526,7 +1299,6 @@ app.get('/api/projects', requireAuth, asyncHandler(async (req, res) => {
      SELECT
        project_rows.*,
        CASE
-         WHEN project_status = 'archived' THEN 'archived'
          WHEN project_status = 'completed' THEN 'completed'
          ELSE schedule_status
        END AS status
@@ -1616,13 +1388,6 @@ app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) 
       throw httpError(400, 'Ask another site owner to change your own site role.');
     }
 
-    let passwordHash = null;
-    if (req.body.password !== undefined || req.body.new_password !== undefined) {
-      const password = String(req.body.password ?? req.body.new_password ?? '');
-      if (password.length < 8) throw httpError(400, 'Password must be at least 8 characters.');
-      passwordHash = await bcrypt.hash(password, 12);
-    }
-
     await ensureLastSiteOwnerSafe(client, targetUserId, {
       nextRole: nextRole === undefined ? targetUser.site_role : nextRole,
       nextRevoked: nextRevoked === undefined ? targetUser.access_revoked : nextRevoked
@@ -1641,10 +1406,6 @@ app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) 
       values.push(nextRevoked);
       sets.push(`access_revoked = $${values.length}`);
     }
-    if (passwordHash) {
-      values.push(passwordHash);
-      sets.push(`password_hash = $${values.length}`);
-    }
     if (!sets.length) return targetUser;
 
     values.push(targetUserId);
@@ -1652,7 +1413,7 @@ app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) 
       `UPDATE users
        SET ${sets.join(', ')}
        WHERE id = $${values.length}
-       RETURNING id, name, email, trade, site_role, access_revoked, created_at, updated_at`,
+       RETURNING id, name, email, site_role, access_revoked, created_at, updated_at`,
       values
     );
 
@@ -1669,6 +1430,40 @@ app.patch('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) 
   });
 
   res.json({ user: updatedUser });
+}));
+
+app.patch('/api/site/users/:userId/password', requireAuth, asyncHandler(async (req, res) => {
+  const targetUserId = parseId(req.params.userId, 'userId');
+  const actorRole = requireSiteManagement(req.user);
+  const password = String(req.body.password || '');
+  if (password.length < 8) throw httpError(400, 'Password must be at least 8 characters.');
+
+  const updated = await tx(async (client) => {
+    const targetResult = await client.query('SELECT id, name, email, site_role, access_revoked FROM users WHERE id = $1', [targetUserId]);
+    if (!targetResult.rowCount) throw httpError(404, 'User not found.');
+    const targetUser = targetResult.rows[0];
+    if (targetUserId === req.user.id) throw httpError(400, 'Use the password screen to change your own password.');
+    ensureSiteActorCanManageTarget(actorRole, targetUser);
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const result = await client.query(
+      'UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING id, name, email, site_role, access_revoked, created_at, updated_at',
+      [passwordHash, targetUserId]
+    );
+
+    await writeAudit(client, {
+      userId: req.user.id,
+      action: 'site_user_password_changed',
+      entityType: 'site_user',
+      entityId: targetUserId,
+      before: targetUser,
+      after: { id: targetUserId }
+    });
+
+    return result.rows[0];
+  });
+
+  res.json({ user: updated });
 }));
 
 app.delete('/api/site/users/:userId', requireAuth, asyncHandler(async (req, res) => {
@@ -1783,18 +1578,8 @@ app.patch('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res)
     }
     if (req.body.project_status !== undefined || req.body.lifecycle_status !== undefined) {
       const requestedStatus = req.body.project_status !== undefined ? req.body.project_status : req.body.lifecycle_status;
-      const nextStatus = requireEnum(requestedStatus, projectLifecycleStatuses, 'project_status');
-      values.push(nextStatus);
+      values.push(requireEnum(requestedStatus, projectLifecycleStatuses, 'project_status'));
       sets.push(`project_status = $${values.length}`);
-      if (nextStatus === 'completed') {
-        sets.push('completed_at = COALESCE(completed_at, now())');
-        sets.push('archived_at = NULL');
-      } else if (nextStatus === 'active') {
-        sets.push('completed_at = NULL');
-        sets.push('archived_at = NULL');
-      } else if (nextStatus === 'archived') {
-        sets.push('archived_at = COALESCE(archived_at, now())');
-      }
     }
     if (req.body.start_date !== undefined) {
       values.push(nextStart);
@@ -1932,9 +1717,9 @@ app.delete('/api/projects/:projectId/notes/:noteId', requireAuth, asyncHandler(a
 
 app.delete('/api/projects/:projectId', requireAuth, asyncHandler(async (req, res) => {
   const projectId = parseId(req.params.projectId, 'projectId');
-  requireSiteOwner(req.user);
 
   await tx(async (client) => {
+    await requireProjectMembership(projectId, req.user.id, 'owner', client);
     const beforeResult = await client.query('SELECT * FROM projects WHERE id = $1', [projectId]);
     if (!beforeResult.rowCount) throw httpError(404, 'Project not found.');
     await writeAudit(client, {
@@ -2096,7 +1881,7 @@ app.patch('/api/projects/:projectId/checklist/:itemKey', requireAuth, asyncHandl
   const isChecked = normalizeBoolean(req.body.is_checked ?? req.body.checked, false);
 
   const item = await tx(async (client) => {
-    await requireProjectMembership(projectId, req.user.id, 'editor', client);
+    await requireProjectMembership(projectId, req.user.id, 'viewer', client);
     await ensureProjectChecklist(client, projectId);
 
     const before = await client.query(
@@ -2147,50 +1932,24 @@ app.post('/api/projects/:projectId/blueprints', requireAuth, asyncHandler(async 
 
   const blueprint = await tx(async (client) => {
     await requireProjectMembership(projectId, req.user.id, 'editor', client);
-    const columns = await getBlueprintColumnInfo(client);
-    const insertColumns = ['project_id'];
-    const values = [projectId];
-    const placeholders = ['$1'];
-
-    function pushColumn(columnName, value) {
-      insertColumns.push(columnName);
-      values.push(value);
-      placeholders.push(`$${values.length}`);
-    }
-
-    if (columns.hasOriginalName) pushColumn('original_name', originalName);
-    if (columns.hasFileName) pushColumn('file_name', originalName);
-    pushColumn('mime_type', mimeType);
-    if (columns.hasSizeBytes) pushColumn('size_bytes', req.file.size);
-    if (columns.hasFileSize) pushColumn('file_size', req.file.size);
-    pushColumn('file_data', req.file.buffer);
-    pushColumn('uploaded_by', req.user.id);
-
     const result = await client.query(
-      `INSERT INTO project_blueprints (${insertColumns.join(', ')})
-       VALUES (${placeholders.join(', ')})
-       RETURNING *`,
-      values
+      `INSERT INTO project_blueprints
+        (project_id, original_name, mime_type, size_bytes, file_data, uploaded_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, project_id, original_name, mime_type, size_bytes, uploaded_by, created_at`,
+      [projectId, originalName, mimeType, req.file.size, req.file.buffer, req.user.id]
     );
-
-    const row = result.rows[0];
-    const normalized = {
-      ...row,
-      original_name: row.original_name || row.file_name || originalName,
-      size_bytes: row.size_bytes || row.file_size || req.file.size,
-      uploaded_by_name: req.user.name
-    };
 
     await writeAudit(client, {
       projectId,
       userId: req.user.id,
       action: 'blueprint_uploaded',
       entityType: 'project_blueprint',
-      entityId: row.id,
-      after: { ...normalized, file_data: undefined }
+      entityId: result.rows[0].id,
+      after: { ...result.rows[0], file_data: undefined }
     });
 
-    return normalized;
+    return { ...result.rows[0], uploaded_by_name: req.user.name };
   });
 
   emitProjectChange(projectId, { actorId: req.user.id, message: `Blueprint uploaded: ${blueprint.original_name}` });
@@ -2265,7 +2024,7 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
 
     const insertResult = await client.query(
       `INSERT INTO tasks
-        (project_id, parent_task_id, name, description, trade, vendor, vendor_secondary, security_team_member, pm, assigned_to, assignee_secondary, assignee_tertiary, assignee_quaternary, status, priority, start_date, end_date,
+        (project_id, parent_task_id, name, description, trade, vendor, vendor_2, security_systems_1, security_systems_2, locksmiths, other_assignee, security_team_member, pm, assigned_to, status, priority, start_date, end_date,
          percent_complete, color, sort_order, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
        RETURNING id`,
@@ -2276,13 +2035,14 @@ app.post('/api/projects/:projectId/tasks', requireAuth, asyncHandler(async (req,
         input.description,
         input.trade,
         input.vendor,
-        input.vendor_secondary,
-        input.security_team_member,
-        input.pm,
+        input.vendor_2 ?? null,
+        input.security_systems_1 ?? null,
+        input.security_systems_2 ?? null,
+        input.locksmiths ?? null,
+        input.other_assignee ?? null,
+        input.security_team_member ?? null,
+        input.pm ?? null,
         input.assigned_to ?? null,
-        input.assignee_secondary ?? null,
-        input.assignee_tertiary ?? null,
-        input.assignee_quaternary ?? null,
         input.status,
         input.priority,
         input.start_date,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from 'react';
 
 function formatNoteDate(value) {
   if (!value) return 'Unknown date';
@@ -8,7 +8,16 @@ function formatNoteDate(value) {
   }).format(new Date(value));
 }
 
-export default function ProjectNotesPanel({ project, entries = [], canEdit, onCreateEntry, onUpdateEntry, onDeleteEntry }) {
+export default function ProjectNotesPanel({
+  project,
+  entries = [],
+  canCreateEntry,
+  canUpdateEntry,
+  canDeleteEntry,
+  onCreateEntry,
+  onUpdateEntry,
+  onDeleteEntry
+}) {
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -16,7 +25,10 @@ export default function ProjectNotesPanel({ project, entries = [], canEdit, onCr
   const [editingId, setEditingId] = useState(null);
   const [editingDraft, setEditingDraft] = useState('');
 
-  const orderedEntries = useMemo(() => [...entries].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || (b.id - a.id)), [entries]);
+  const orderedEntries = useMemo(
+    () => [...entries].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || (b.id - a.id)),
+    [entries]
+  );
 
   useEffect(() => {
     setDraft('');
@@ -84,11 +96,15 @@ export default function ProjectNotesPanel({ project, entries = [], canEdit, onCr
       <div className="panel-heading">
         <div>
           <h2>Project notes</h2>
-          <p>{canEdit ? 'Add dated note entries here. Viewers can edit this section only.' : 'Notes are read-only unless you are assigned to this project.'}</p>
+          <p>
+            {canCreateEntry
+              ? 'Add dated note entries here. Assigned users can add notes, while managers and editors can edit and delete them.'
+              : 'Notes are read-only unless you are assigned to this project.'}
+          </p>
         </div>
       </div>
 
-      {canEdit && (
+      {canCreateEntry && (
         <form className="stack project-notes-form" onSubmit={submit}>
           <label>
             Add a dated note
@@ -117,19 +133,30 @@ export default function ProjectNotesPanel({ project, entries = [], canEdit, onCr
                   <strong>{entry.created_by_name || 'System'}</strong>
                   <span>{formatNoteDate(entry.created_at)}</span>
                 </div>
-                {canEdit && (
+                {(canUpdateEntry || canDeleteEntry) && (
                   <div className="row-actions">
-                    <button className="ghost-button compact" onClick={() => { setEditingId(isEditing ? null : entry.id); setEditingDraft(entry.body); }} type="button">
-                      {isEditing ? 'Close' : 'Edit'}
-                    </button>
-                    <button className="danger-button compact" disabled={saving} onClick={() => deleteEntry(entry.id)} type="button">
-                      Delete
-                    </button>
+                    {canUpdateEntry && (
+                      <button
+                        className="ghost-button compact"
+                        onClick={() => {
+                          setEditingId(isEditing ? null : entry.id);
+                          setEditingDraft(entry.body);
+                        }}
+                        type="button"
+                      >
+                        {isEditing ? 'Close' : 'Edit'}
+                      </button>
+                    )}
+                    {canDeleteEntry && (
+                      <button className="danger-button compact" disabled={saving} onClick={() => deleteEntry(entry.id)} type="button">
+                        Delete
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
 
-              {isEditing ? (
+              {isEditing && canUpdateEntry ? (
                 <form className="stack project-note-edit-form" onSubmit={(event) => submitEdit(event, entry.id)}>
                   <textarea value={editingDraft} onChange={(event) => setEditingDraft(event.target.value)} />
                   <div className="row-actions">

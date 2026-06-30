@@ -3,19 +3,17 @@ CREATE TABLE IF NOT EXISTS users (
   name text NOT NULL,
   email text NOT NULL UNIQUE,
   password_hash text NOT NULL,
-  trade text,
   site_role text NOT NULL DEFAULT 'member',
   access_revoked boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT users_site_role_check CHECK (site_role IN ('owner', 'manager', 'member')),
-  CONSTRAINT users_trade_check CHECK (trade IS NULL OR trade IN ('CCure Team', 'Camera Team', 'Lock Smith', 'Vendor', 'PM', 'Manger', 'Supervisor'))
+  CONSTRAINT users_site_role_check CHECK (site_role IN ('owner', 'manager', 'member', 'vendor'))
 );
 
-ALTER TABLE users ADD COLUMN IF NOT EXISTS trade text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS site_role text NOT NULL DEFAULT 'member';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS access_revoked boolean NOT NULL DEFAULT false;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE users ADD COLUMN IF NOT EXISTS trade text;
 ALTER TABLE users ALTER COLUMN site_role SET DEFAULT 'member';
 
 DO $$
@@ -34,24 +32,16 @@ BEGIN
 END $$;
 
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_site_role_check;
-ALTER TABLE users DROP CONSTRAINT IF EXISTS users_trade_check;
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_access_status_check;
 
 UPDATE users
 SET site_role = CASE
   WHEN site_role IN ('owner', 'manager') THEN site_role
+  WHEN site_role = 'vendor' THEN 'vendor'
   ELSE 'member'
 END;
 
-ALTER TABLE users ADD CONSTRAINT users_site_role_check CHECK (site_role IN ('owner', 'manager', 'member'));
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'users_trade_check'
-  ) THEN
-    ALTER TABLE users ADD CONSTRAINT users_trade_check CHECK (trade IS NULL OR trade IN ('CCure Team', 'Camera Team', 'Lock Smith', 'Vendor', 'PM', 'Manger', 'Supervisor'));
-  END IF;
-END $$;
+ALTER TABLE users ADD CONSTRAINT users_site_role_check CHECK (site_role IN ('owner', 'manager', 'member', 'vendor'));
 
 UPDATE users
 SET site_role = 'owner', access_revoked = false
@@ -69,15 +59,13 @@ CREATE TABLE IF NOT EXISTS projects (
   description text,
   notes text NOT NULL DEFAULT '',
   project_status text NOT NULL DEFAULT 'active',
-  completed_at timestamptz,
-  archived_at timestamptz,
   start_date date NOT NULL,
   end_date date NOT NULL,
   created_by integer REFERENCES users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT projects_date_order CHECK (end_date >= start_date),
-  CONSTRAINT projects_project_status_check CHECK (project_status IN ('active', 'completed', 'archived'))
+  CONSTRAINT projects_project_status_check CHECK (project_status IN ('active', 'completed'))
 );
 
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS notes text NOT NULL DEFAULT '';
@@ -85,14 +73,12 @@ UPDATE projects SET notes = '' WHERE notes IS NULL;
 ALTER TABLE projects ALTER COLUMN notes SET DEFAULT '';
 ALTER TABLE projects ALTER COLUMN notes SET NOT NULL;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS project_status text NOT NULL DEFAULT 'active';
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS completed_at timestamptz;
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'projects_project_status_check'
   ) THEN
-    ALTER TABLE projects ADD CONSTRAINT projects_project_status_check CHECK (project_status IN ('active', 'completed', 'archived'));
+    ALTER TABLE projects ADD CONSTRAINT projects_project_status_check CHECK (project_status IN ('active', 'completed'));
   END IF;
 END $$;
 
@@ -113,13 +99,14 @@ CREATE TABLE IF NOT EXISTS tasks (
   description text,
   trade text,
   vendor text,
-  vendor_secondary text,
+  vendor_2 text,
+  security_systems_1 text,
+  security_systems_2 text,
+  locksmiths text,
+  other_assignee text,
   security_team_member text,
   pm text,
   assigned_to integer REFERENCES users(id) ON DELETE SET NULL,
-  assignee_secondary text,
-  assignee_tertiary text,
-  assignee_quaternary text,
   status text NOT NULL DEFAULT 'not_started',
   priority text NOT NULL DEFAULT 'normal',
   start_date date NOT NULL,
@@ -132,36 +119,24 @@ CREATE TABLE IF NOT EXISTS tasks (
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT tasks_status_check CHECK (status IN ('not_started', 'in_progress', 'blocked', 'complete')),
   CONSTRAINT tasks_priority_check CHECK (priority IN ('low', 'normal', 'high', 'critical')),
-  CONSTRAINT tasks_trade_check CHECK (trade IS NULL OR trade IN ('CCure', 'Cameras', 'CCure & Cameras')),
-  CONSTRAINT tasks_security_team_member_check CHECK (security_team_member IS NULL OR security_team_member IN ('Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam')),
-  CONSTRAINT tasks_pm_check CHECK (pm IS NULL OR pm IN ('Kurt', 'Austin')),
-  CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('Accent Automatic', 'Accent Auto', 'Beacon', 'Convergint', 'DSI', 'EverBase', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'S101', 'SMT', 'Stone', 'Stone Security', 'USHOP', 'Utah Yamas', 'Yamas')),
   CONSTRAINT tasks_progress_check CHECK (percent_complete >= 0 AND percent_complete <= 100),
   CONSTRAINT tasks_date_order CHECK (end_date >= start_date)
 );
 
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS trade text;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS vendor text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS vendor_secondary text;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS vendor_2 text;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS security_systems_1 text;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS security_systems_2 text;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS locksmiths text;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS other_assignee text;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS security_team_member text;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS pm text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_secondary text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_tertiary text;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_quaternary text;
-
-UPDATE tasks SET trade = NULL WHERE trade IS NOT NULL AND trade NOT IN ('CCure', 'Cameras', 'CCure & Cameras');
-UPDATE tasks SET vendor = NULL WHERE vendor IS NOT NULL AND vendor NOT IN ('Accent Automatic', 'Accent Auto', 'Beacon', 'Convergint', 'DSI', 'EverBase', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'S101', 'SMT', 'Stone', 'Stone Security', 'USHOP', 'Utah Yamas', 'Yamas');
-UPDATE tasks SET security_team_member = NULL WHERE security_team_member IS NOT NULL AND security_team_member NOT IN ('Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam');
-UPDATE tasks SET pm = NULL WHERE pm IS NOT NULL AND pm NOT IN ('Kurt', 'Austin');
 
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_trade_check;
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_vendor_check;
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_security_team_member_check;
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_pm_check;
-ALTER TABLE tasks ADD CONSTRAINT tasks_trade_check CHECK (trade IS NULL OR trade IN ('CCure', 'Cameras', 'CCure & Cameras', 'Lock smiths'));
-ALTER TABLE tasks ADD CONSTRAINT tasks_vendor_check CHECK (vendor IS NULL OR vendor IN ('Accent Automatic', 'Accent Auto', 'Beacon', 'Convergint', 'DSI', 'EverBase', 'Everbase', 'G4S', 'IC&E', 'Ideacom', 'IES', 'Nelson Fire', 'OTIS', 'Pavion', 'Pye Barker', 'S101', 'SMT', 'Stone', 'Stone Security', 'USHOP', 'Utah Yamas', 'Yamas'));
-ALTER TABLE tasks ADD CONSTRAINT tasks_security_team_member_check CHECK (security_team_member IS NULL OR security_team_member IN ('Derick', 'Eric', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam'));
-ALTER TABLE tasks ADD CONSTRAINT tasks_pm_check CHECK (pm IS NULL OR pm IN ('Kurt', 'Austin'));
 
 CREATE TABLE IF NOT EXISTS task_dependencies (
   id integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
@@ -304,10 +279,8 @@ CREATE TABLE IF NOT EXISTS project_blueprints (
   id integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
   project_id integer NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   original_name text NOT NULL,
-  file_name text,
   mime_type text NOT NULL DEFAULT 'application/octet-stream',
   size_bytes integer NOT NULL CHECK (size_bytes > 0),
-  file_size integer,
   file_data bytea NOT NULL,
   uploaded_by integer REFERENCES users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now()
@@ -326,12 +299,14 @@ BEGIN
       AND column_name = 'file_name'
   ) THEN
     UPDATE project_blueprints
-    SET original_name = file_name
-    WHERE original_name IS NULL AND file_name IS NOT NULL;
+    SET original_name = COALESCE(original_name, file_name),
+        file_name = COALESCE(file_name, original_name)
+    WHERE original_name IS NULL OR file_name IS NULL;
+    EXECUTE 'ALTER TABLE project_blueprints ALTER COLUMN file_name DROP NOT NULL';
   END IF;
 END $$;
-UPDATE project_blueprints SET original_name = COALESCE(original_name, file_name, concat('blueprint-', id));
-UPDATE project_blueprints SET file_name = COALESCE(file_name, original_name) WHERE file_name IS NULL;
+UPDATE project_blueprints SET original_name = concat('blueprint-', id) WHERE original_name IS NULL;
+UPDATE project_blueprints SET file_name = original_name WHERE file_name IS NULL;
 ALTER TABLE project_blueprints ALTER COLUMN original_name SET NOT NULL;
 
 ALTER TABLE project_blueprints ADD COLUMN IF NOT EXISTS size_bytes integer;
@@ -350,7 +325,6 @@ BEGIN
   END IF;
 END $$;
 UPDATE project_blueprints SET size_bytes = octet_length(file_data) WHERE size_bytes IS NULL AND file_data IS NOT NULL;
-UPDATE project_blueprints SET file_size = COALESCE(file_size, size_bytes) WHERE file_size IS NULL AND size_bytes IS NOT NULL;
 UPDATE project_blueprints SET size_bytes = 1 WHERE size_bytes IS NULL OR size_bytes <= 0;
 ALTER TABLE project_blueprints ALTER COLUMN size_bytes SET NOT NULL;
 DO $$
@@ -401,7 +375,6 @@ CREATE TABLE IF NOT EXISTS owner_cms_work_orders (
   sheet_key text PRIMARY KEY,
   sheet_name text NOT NULL,
   cells jsonb NOT NULL DEFAULT '[]'::jsonb,
-  archived_cells jsonb NOT NULL DEFAULT '[]'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -412,8 +385,6 @@ VALUES
   ('austins_cms_wos', 'Austins CMS WOs', '[]'::jsonb)
 ON CONFLICT (sheet_key) DO UPDATE SET
   sheet_name = EXCLUDED.sheet_name;
-
-ALTER TABLE owner_cms_work_orders ADD COLUMN IF NOT EXISTS archived_cells jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_owner_cms_work_orders_sheet_key ON owner_cms_work_orders(sheet_key);
 CREATE INDEX IF NOT EXISTS idx_audit_log_project ON audit_log(project_id, created_at DESC);

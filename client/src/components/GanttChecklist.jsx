@@ -21,7 +21,7 @@ export default function GanttChecklist({ checklist, canEdit, onToggle }) {
     <section className="panel gantt-checklist-panel">
       <div className="panel-heading compact-heading">
         <div>
-          <h2>Project Check list</h2>
+          <h2>Gantt checklist</h2>
           <p>Access-control and turnover milestones for this project.</p>
         </div>
       </div>

@@ -8,6 +8,24 @@ function formatBytes(bytes) {
   return `${(number / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const acceptedBlueprintTypes = [
+  '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.dwg', '.doc', '.docx', '.xls', '.xlsx',
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/vnd.dwg',
+  'application/acad',
+  'application/x-acad',
+  'application/dwg',
+  'application/x-dwg',
+  'application/octet-stream',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+].join(',');
+
 export default function BlueprintsPanel({ blueprints, canEdit, onUpload, onDelete }) {
   const inputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
@@ -75,10 +93,11 @@ export default function BlueprintsPanel({ blueprints, canEdit, onUpload, onDelet
         tabIndex={canEdit ? 0 : -1}
       >
         <strong>{saving ? 'Uploading...' : 'Drag and drop blueprints here'}</strong>
-        <span>{canEdit ? 'PDF, image, DWG, or common drawing files' : 'You need edit access to upload files.'}</span>
+        <span>{canEdit ? 'PDF, image, DWG, Word, or Excel files' : 'You need edit access to upload files.'}</span>
         <input
           hidden
           multiple
+          accept={acceptedBlueprintTypes}
           onChange={(event) => uploadFiles(event.target.files)}
           ref={inputRef}
           type="file"

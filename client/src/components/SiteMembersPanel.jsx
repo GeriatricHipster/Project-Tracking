@@ -1,154 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 
-const siteRoles = ['owner', 'manager', 'member'];
-const SECURITY_SYSTEM_STORAGE_KEY = 'psg-assignee-systems';
-const VENDOR_STORAGE_KEY = 'psg-vendors';
-const PM_STORAGE_KEY = 'psg-pms';
-
-const securitySystemSeed = [
-  'James',
-  'James & Kyra',
-  'James & Ryan',
-  'James & Locksmiths',
-  'James & Suvam',
-  'James & Justin',
-  'James & Derick',
-  'James & Kenna',
-  'James & Justin, Suvam',
-  'Kenna',
-  'Kenna & Kyra',
-  'Kenna & Ryan',
-  'Kenna & Locksmiths',
-  'Kenna & Justin',
-  'Kenna & Suvam',
-  'Kenna & Derick',
-  'Kenna & Justin, Suvam',
-  'Derick',
-  'Derick & Kyra',
-  'Derick & Ryan',
-  'Derick & Locksmiths',
-  'Derick & Justin',
-  'Derick & Suvam',
-  'Derick & James',
-  'Derick & Kenna',
-  'Derick & Justin, Suvam',
-  'Justin',
-  'Justin & Kyra',
-  'Justin & Ryan',
-  'Justin & Locksmiths',
-  'Justin & Derick',
-  'Justin & Suvam',
-  'Justin & Kenna',
-  'Justin & James',
-  'Suvam',
-  'Suvam & Kyra',
-  'Suvam & Ryan',
-  'Suvam & Locksmiths',
-  'Suvam & Derick',
-  'Suvam & Kenna',
-  'Suvam & Justin',
-  'Suvam & James',
-  'Ryan',
-  'Kyra',
-  'Bill',
-  'Bennett',
-  'Jim',
-  'Chris'
-].sort((a, b) => a.localeCompare(b));
-
-const vendorSeed = [
-  'Accent Automatic',
-  'Beacon',
-  'Convergint',
-  'DSI',
-  'Everbase',
-  'G4S',
-  'IC&E',
-  'Ideacom',
-  'IES',
-  'Nelson Fire',
-  'OTIS',
-  'Pavion',
-  'Pye Barker',
-  'PTI (Bosch)',
-  'S101',
-  'Schindler',
-  'SMT',
-  'Stone Security',
-  'Thyssenkrupp',
-  'Utah Yamas'
-].sort((a, b) => a.localeCompare(b));
-
-const pmSeed = ['Austin', 'Kurt'].sort((a, b) => a.localeCompare(b));
+const siteRoles = ['owner', 'manager', 'member', 'vendor'];
 
 function titleCase(value) {
   return String(value || '')
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function normalizeList(values) {
-  return [...new Set((values || []).map((value) => String(value || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-}
-
-function readStoredSecuritySystems() {
-  if (typeof window === 'undefined') return [...securitySystemSeed];
-  try {
-    const raw = window.localStorage.getItem(SECURITY_SYSTEM_STORAGE_KEY);
-    if (!raw) return [...securitySystemSeed];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [...securitySystemSeed];
-    return normalizeList(parsed);
-  } catch {
-    return [...securitySystemSeed];
-  }
-}
-
-function writeStoredSecuritySystems(values) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(SECURITY_SYSTEM_STORAGE_KEY, JSON.stringify(normalizeList(values)));
-}
-
-function readStoredVendorOptions() {
-  if (typeof window === 'undefined') return [...vendorSeed];
-  try {
-    const raw = window.localStorage.getItem(VENDOR_STORAGE_KEY);
-    if (!raw) return [...vendorSeed];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [...vendorSeed];
-    return normalizeList([...vendorSeed, ...parsed]);
-  } catch {
-    return [...vendorSeed];
-  }
-}
-
-function writeStoredVendorOptions(values) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(VENDOR_STORAGE_KEY, JSON.stringify(normalizeList(values)));
-}
-
-function readStoredPmOptions() {
-  if (typeof window === 'undefined') return [...pmSeed];
-  try {
-    const raw = window.localStorage.getItem(PM_STORAGE_KEY);
-    if (!raw) return [...pmSeed];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [...pmSeed];
-    return normalizeList(parsed);
-  } catch {
-    return [...pmSeed];
-  }
-}
-
-function writeStoredPmOptions(values) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(PM_STORAGE_KEY, JSON.stringify(normalizeList(values)));
-}
-
-function notifyDropdownOptionsUpdated(storageKey) {
-  if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent('dropdown-options-updated', { detail: { storageKey } }));
 }
 
 export default function SiteMembersPanel({ currentUser, onOpenProject }) {
@@ -157,9 +15,6 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
   const [error, setError] = useState('');
   const [savingUserId, setSavingUserId] = useState(null);
   const [passwordDrafts, setPasswordDrafts] = useState({});
-  const [securitySystems, setSecuritySystems] = useState(() => readStoredSecuritySystems());
-  const [vendorOptions, setVendorOptions] = useState(() => readStoredVendorOptions());
-  const [pmOptions, setPmOptions] = useState(() => readStoredPmOptions());
 
   const currentSiteRole = currentUser?.site_role || 'member';
   const currentIsOwner = currentSiteRole === 'owner';
@@ -181,18 +36,6 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
     loadUsers();
   }, []);
 
-  useEffect(() => {
-    writeStoredSecuritySystems(securitySystems);
-  }, [securitySystems]);
-
-  useEffect(() => {
-    writeStoredVendorOptions(vendorOptions);
-  }, [vendorOptions]);
-
-  useEffect(() => {
-    writeStoredPmOptions(pmOptions);
-  }, [pmOptions]);
-
   function canChangeUser(user) {
     if (user.id === currentUser?.id) return false;
     if (currentIsOwner) return true;
@@ -205,15 +48,30 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
     return siteRoles.filter((role) => role !== 'owner');
   }
 
-  function updatePasswordDraft(userId, value) {
-    setPasswordDrafts((current) => ({ ...current, [userId]: value }));
-  }
-
   async function updateUser(user, payload) {
     setSavingUserId(user.id);
     setError('');
     try {
       await api(`/site/users/${user.id}`, { method: 'PATCH', body: payload });
+      await loadUsers();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingUserId(null);
+    }
+  }
+
+  async function changePassword(user) {
+    const password = String(passwordDrafts[user.id] || '').trim();
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
+    setSavingUserId(user.id);
+    setError('');
+    try {
+      await api(`/site/users/${user.id}/password`, { method: 'PATCH', body: { password } });
+      setPasswordDrafts((current) => ({ ...current, [user.id]: '' }));
       await loadUsers();
     } catch (err) {
       setError(err.message);
@@ -237,67 +95,13 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
     }
   }
 
-  function deleteSecuritySystemOption(option) {
-    const confirmed = window.confirm(`Delete "${option}" from the Security Systems dropdown?`);
-    if (!confirmed) return;
-    const next = normalizeList(securitySystems.filter((item) => item !== option));
-    setSecuritySystems(next);
-    writeStoredSecuritySystems(next);
-    notifyDropdownOptionsUpdated(SECURITY_SYSTEM_STORAGE_KEY);
-  }
-
-  function resetSecuritySystemOptions() {
-    const confirmed = window.confirm('Restore the Security Systems dropdown to the default list?');
-    if (!confirmed) return;
-    const next = [...securitySystemSeed];
-    setSecuritySystems(next);
-    writeStoredSecuritySystems(next);
-    notifyDropdownOptionsUpdated(SECURITY_SYSTEM_STORAGE_KEY);
-  }
-
-  function deleteVendorOption(option) {
-    const confirmed = window.confirm(`Delete "${option}" from the Vendor dropdown?`);
-    if (!confirmed) return;
-    const next = normalizeList(vendorOptions.filter((item) => item !== option));
-    setVendorOptions(next);
-    writeStoredVendorOptions(next);
-    notifyDropdownOptionsUpdated(VENDOR_STORAGE_KEY);
-  }
-
-  function resetVendorOptions() {
-    const confirmed = window.confirm('Restore the default Vendor dropdown options?');
-    if (!confirmed) return;
-    const next = [...vendorSeed];
-    setVendorOptions(next);
-    writeStoredVendorOptions(next);
-    notifyDropdownOptionsUpdated(VENDOR_STORAGE_KEY);
-  }
-
-  function deletePmOption(option) {
-    const confirmed = window.confirm(`Delete "${option}" from the PM dropdown?`);
-    if (!confirmed) return;
-    const next = normalizeList(pmOptions.filter((item) => item !== option));
-    setPmOptions(next);
-    writeStoredPmOptions(next);
-    notifyDropdownOptionsUpdated(PM_STORAGE_KEY);
-  }
-
-  function resetPmOptions() {
-    const confirmed = window.confirm('Restore the PM dropdown to the default list?');
-    if (!confirmed) return;
-    const next = [...pmSeed];
-    setPmOptions(next);
-    writeStoredPmOptions(next);
-    notifyDropdownOptionsUpdated(PM_STORAGE_KEY);
-  }
-
   return (
     <section className="dashboard-stack">
       <section className="panel">
         <div className="panel-heading">
           <div>
             <h2>Site member management</h2>
-            <p>Managers and owners can review users, revoke access, delete accounts, and change site role.</p>
+            <p>Managers and owners can review users, revoke access, delete accounts, change passwords, and change site role.</p>
           </div>
           <button className="ghost-button compact" onClick={loadUsers} type="button">Refresh users</button>
         </div>
@@ -322,6 +126,7 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
                         {siteUser.id === currentUser?.id && <span className="archive-pill">You</span>}
                       </div>
                       <p className="muted">{siteUser.email}</p>
+                      {siteUser.trade && <p className="muted">Trade: {siteUser.trade}</p>}
                       <p>{siteUser.project_count} assigned project{siteUser.project_count === 1 ? '' : 's'}</p>
                     </div>
 
@@ -337,39 +142,34 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
                         </select>
                       </label>
                       <label>
-                        Change password
+                        New password
                         <input
-                          disabled={!canChange || busy}
                           type="password"
+                          disabled={!canChange || busy}
                           value={passwordDrafts[siteUser.id] || ''}
-                          onChange={(event) => updatePasswordDraft(siteUser.id, event.target.value)}
-                          placeholder="New password"
+                          onChange={(event) => setPasswordDrafts((current) => ({ ...current, [siteUser.id]: event.target.value }))}
+                          placeholder="At least 8 characters"
                         />
                       </label>
-                      <button
-                        className={siteUser.access_revoked ? 'ghost-button compact' : 'danger-button compact'}
-                        disabled={!canChange || busy}
-                        onClick={() => updateUser(siteUser, { access_revoked: !siteUser.access_revoked })}
-                        type="button"
-                      >
-                        {siteUser.access_revoked ? 'Restore access' : 'Revoke access'}
-                      </button>
-                      <button
-                        className="primary-button compact"
-                        disabled={!canChange || busy || !String(passwordDrafts[siteUser.id] || '').trim()}
-                        onClick={() => updateUser(siteUser, { password: passwordDrafts[siteUser.id] })}
-                        type="button"
-                      >
-                        Update password
-                      </button>
-                      <button
-                        className="danger-button compact"
-                        disabled={!canChange || busy}
-                        onClick={() => deleteUser(siteUser)}
-                        type="button"
-                      >
-                        Delete user
-                      </button>
+                      <div className="row-actions">
+                        <button className="primary-button compact" disabled={!canChange || busy} onClick={() => changePassword(siteUser)} type="button">Change password</button>
+                        <button
+                          className={siteUser.access_revoked ? 'ghost-button compact' : 'danger-button compact'}
+                          disabled={!canChange || busy}
+                          onClick={() => updateUser(siteUser, { access_revoked: !siteUser.access_revoked })}
+                          type="button"
+                        >
+                          {siteUser.access_revoked ? 'Restore access' : 'Revoke access'}
+                        </button>
+                        <button
+                          className="danger-button compact"
+                          disabled={!canChange || busy}
+                          onClick={() => deleteUser(siteUser)}
+                          type="button"
+                        >
+                          Delete user
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -389,124 +189,6 @@ export default function SiteMembersPanel({ currentUser, onOpenProject }) {
           </div>
         )}
       </section>
-
-      {currentIsOwner && (
-        <>
-          <section className="panel">
-            <div className="panel-heading">
-              <div>
-                <h2>Security Systems dropdown options</h2>
-                <p>Owners can remove options that appear in both Security Systems dropdowns on task forms.</p>
-              </div>
-              <button className="ghost-button compact" onClick={resetSecuritySystemOptions} type="button">Reset defaults</button>
-            </div>
-
-            <p className="muted" style={{ marginTop: 0 }}>
-              Removing an option updates this browser&apos;s saved list. Open the task form again to see the change.
-            </p>
-
-            <div className="site-user-list">
-              {securitySystems.map((option) => (
-                <article className="site-user-card" key={option}>
-                  <div className="site-user-main">
-                    <div>
-                      <h3>{option}</h3>
-                      <p className="muted">Used by the Security Systems team member dropdowns.</p>
-                    </div>
-                    <div className="site-user-actions">
-                      <button className="danger-button compact" onClick={() => deleteSecuritySystemOption(option)} type="button">
-                        Delete option
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-              {!securitySystems.length && (
-                <div className="empty-state">
-                  <h3>No options found</h3>
-                  <p>Reset the defaults to restore the list.</p>
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-heading">
-              <div>
-                <h2>Vendor dropdown options</h2>
-                <p>Owners can remove options from the Vendor and Vendor 2 dropdowns on task forms.</p>
-              </div>
-              <button className="ghost-button compact" onClick={resetVendorOptions} type="button">Reset defaults</button>
-            </div>
-
-            <p className="muted" style={{ marginTop: 0 }}>
-              Removing an option updates this browser&apos;s saved list. Open the task form again to see the change.
-            </p>
-
-            <div className="site-user-list">
-              {vendorOptions.map((option) => (
-                <article className="site-user-card" key={option}>
-                  <div className="site-user-main">
-                    <div>
-                      <h3>{option}</h3>
-                      <p className="muted">Used by the Vendor dropdowns.</p>
-                    </div>
-                    <div className="site-user-actions">
-                      <button className="danger-button compact" onClick={() => deleteVendorOption(option)} type="button">
-                        Delete option
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-              {!vendorOptions.length && (
-                <div className="empty-state">
-                  <h3>No options found</h3>
-                  <p>Reset the defaults to restore the list.</p>
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-heading">
-              <div>
-                <h2>PM dropdown options</h2>
-                <p>Owners can remove PM options used in the task form.</p>
-              </div>
-              <button className="ghost-button compact" onClick={resetPmOptions} type="button">Reset defaults</button>
-            </div>
-
-            <p className="muted" style={{ marginTop: 0 }}>
-              Removing an option updates this browser&apos;s saved list. Open the task form again to see the change.
-            </p>
-
-            <div className="site-user-list">
-              {pmOptions.map((option) => (
-                <article className="site-user-card" key={option}>
-                  <div className="site-user-main">
-                    <div>
-                      <h3>{option}</h3>
-                      <p className="muted">Used by the PM dropdown.</p>
-                    </div>
-                    <div className="site-user-actions">
-                      <button className="danger-button compact" onClick={() => deletePmOption(option)} type="button">
-                        Delete option
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-              {!pmOptions.length && (
-                <div className="empty-state">
-                  <h3>No options found</h3>
-                  <p>Reset the defaults to restore the list.</p>
-                </div>
-              )}
-            </div>
-          </section>
-        </>
-      )}
     </section>
   );
 }

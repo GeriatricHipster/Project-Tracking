@@ -1,5 +1,5 @@
-const OWNER_CMS_ROW_COUNT = 300;
-const OWNER_CMS_COLUMN_COUNT = 20;
+const ROW_COUNT = 150;
+const COLUMN_COUNT = 20;
 
 function linesToOptions(block) {
   return String(block)
@@ -7,58 +7,6 @@ function linesToOptions(block) {
     .map((line) => line.trim())
     .filter(Boolean);
 }
-
-function isPlainObject(value) {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
-const securityOptions = linesToOptions(`
-James
-James & Kyra
-James & Ryan
-James & Locksmiths
-James & Suvam
-James & Justin
-James & Derick
-James & Kenna
-James & Justin, Suvam
-Kenna
-Kenna & Kyra
-Kenna & Ryan
-Kenna & Locksmiths
-Kenna & Justin
-Kenna & Suvam
-Kenna & Derick
-Kenna & Justin, Suvam
-Derick
-Derick & Kyra
-Derick & Ryan
-Derick & Locksmiths
-Derick & Justin
-Derick & Suvam
-Derick & James
-Derick & Kenna
-Derick & Justin, Suvam
-Justin
-Justin & Kyra
-Justin & Ryan
-Justin & Locksmiths
-Justin & Derick
-Justin & Suvam
-Justin & Kenna
-Justin & James
-Suvam
-Suvam & Kyra
-Suvam & Ryan
-Suvam & Locksmiths
-Suvam & Derick
-Suvam & Kenna
-Suvam & Justin
-Suvam & James
-Locksmiths
-Ryan
-Kyra
-`).sort((a, b) => a.localeCompare(b));
 
 export const ownerCmsColumns = [
   { key: 'wo', label: 'WO', type: 'text', width: 130, placeholder: 'WO # / work order' },
@@ -294,7 +242,7 @@ Utility Sytems
   { key: 'walk_scheduled', label: 'Walk Scheduled', type: 'date', width: 140 },
   { key: 'install_date', label: 'Install Date', type: 'date', width: 140 },
   { key: 'deadline', label: 'Deadline', type: 'date', width: 140 },
-  { key: 'bill_by_year_end', label: 'Bill by year end', type: 'select', width: 150, options: ['Yes', 'No', 'NA'] },
+  { key: 'bill_by_year_end', label: 'Bill by Year end', type: 'select', width: 150, options: ['Yes', 'No', 'NA'] },
   { key: 'category', label: 'Category', type: 'select', width: 180, options: linesToOptions(`
 COST ESTIAMTE
 CCURE
@@ -310,7 +258,53 @@ CCURE & CCTV
 `) },
   { key: 'requestor_name', label: 'Requestor Name', type: 'text', width: 180, placeholder: 'Requestor name' },
   { key: 'dm_notified', label: 'DM Notified', type: 'select', width: 120, options: ['Yes', 'No', 'NA'] },
-  { key: 'security', label: 'Security', type: 'select', width: 290, options: securityOptions },
+  { key: 'security', label: 'Security', type: 'select', width: 290, options: linesToOptions(`
+James
+James & Kyra
+James & Ryan
+James & Locksmiths
+James & Suvam
+James & Justin
+James & Derick
+James & Kenna
+James & Justin, Suvam
+Kenna
+Kenna & Kyra
+Kenna & Ryan
+Kenna & Locksmiths
+Kenna & Justin
+Kenna & Suvam
+Kenna & Derick
+Kenna & Justin, Suvam
+Derick
+Derick & Kyra
+Derick & Ryan
+Derick & Locksmiths
+Derick & Justin
+Derick & Suvam
+Derick & James
+Derick & Kenna
+Derick & Justin, Suvam
+Justin
+Justin & Kyra
+Justin & Ryan
+Justin & Locksmiths
+Justin & Derick
+Justin & Suvam
+Justin & Kenna
+Justin & James
+Suvam
+Suvam & Kyra
+Suvam & Ryan
+Suvam & Locksmiths
+Suvam & Derick
+Suvam & Kenna
+Suvam & Justin
+Suvam & James
+Locksmiths
+Ryan
+Kyra
+`) .sort((a, b) => a.localeCompare(b)) },
   { key: 'child_wo', label: 'Child WO', type: 'select', width: 110, options: ['Yes', 'No', 'NA'] },
   { key: 'vendor', label: 'Vendor', type: 'select', width: 160, options: linesToOptions(`
 AVTEC
@@ -384,59 +378,28 @@ Uploaded
   { key: 'notes', label: 'Notes', type: 'textarea', width: 420, placeholder: 'Notes' }
 ];
 
-export const ownerCmsColumnCount = OWNER_CMS_COLUMN_COUNT;
-export const ownerCmsRowCount = OWNER_CMS_ROW_COUNT;
+export const ownerCmsColumnCount = COLUMN_COUNT;
+export const ownerCmsRowCount = ROW_COUNT;
 
-export function buildBlankOwnerCmsGrid() {
-  return Array.from({ length: OWNER_CMS_ROW_COUNT }, () => Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => ''));
+export function buildBlankOwnerCmsGrid(rowCount = ROW_COUNT, columnCount = COLUMN_COUNT) {
+  return Array.from({ length: Math.max(0, rowCount) }, () => Array.from({ length: Math.max(0, columnCount) }, () => ''));
 }
 
 export function normalizeOwnerCmsGrid(cells) {
-  const grid = buildBlankOwnerCmsGrid();
+  const rowCount = Math.max(ROW_COUNT, Array.isArray(cells) ? cells.length : ROW_COUNT);
+  const grid = buildBlankOwnerCmsGrid(rowCount, COLUMN_COUNT);
   if (!Array.isArray(cells)) return grid;
 
-  for (let rowIndex = 0; rowIndex < Math.min(cells.length, OWNER_CMS_ROW_COUNT); rowIndex += 1) {
+  for (let rowIndex = 0; rowIndex < cells.length; rowIndex += 1) {
     const row = cells[rowIndex];
     if (!Array.isArray(row)) continue;
-    for (let colIndex = 0; colIndex < Math.min(row.length, OWNER_CMS_COLUMN_COUNT); colIndex += 1) {
+    if (!grid[rowIndex]) grid[rowIndex] = Array.from({ length: COLUMN_COUNT }, () => '');
+    for (let colIndex = 0; colIndex < Math.max(row.length, COLUMN_COUNT); colIndex += 1) {
+      if (colIndex >= COLUMN_COUNT) break;
       const value = row[colIndex];
       grid[rowIndex][colIndex] = value === null || value === undefined ? '' : String(value);
     }
   }
 
   return grid;
-}
-
-export function buildBlankArchivedOwnerCmsRows() {
-  return [];
-}
-
-export function normalizeOwnerCmsArchivedRows(rows) {
-  if (!Array.isArray(rows)) return [];
-
-  return rows
-    .map((row, index) => {
-      if (Array.isArray(row)) {
-        return {
-          row_number: index + 1,
-          archived_at: null,
-          cells: normalizeOwnerCmsGrid([row])[0]
-        };
-      }
-
-      if (isPlainObject(row)) {
-        return {
-          row_number: Number.isInteger(Number(row.row_number)) ? Number(row.row_number) : index + 1,
-          archived_at: row.archived_at || null,
-          cells: normalizeOwnerCmsGrid([Array.isArray(row.cells) ? row.cells : []])[0]
-        };
-      }
-
-      return {
-        row_number: index + 1,
-        archived_at: null,
-        cells: Array.from({ length: OWNER_CMS_COLUMN_COUNT }, () => '')
-      };
-    })
-    .filter((row) => row.cells.some((value) => String(value || '').trim().length > 0));
 }
