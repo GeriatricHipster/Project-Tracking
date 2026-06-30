@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { addDays, daysBetween, formatDate, maxIsoDate, minIsoDate, todayIso } from '../lib/dates';
 
 function getScale(totalDays) {
@@ -9,6 +9,7 @@ function getScale(totalDays) {
 }
 
 const zoomLevels = [0.8, 1, 1.25, 1.55, 1.9, 2.25];
+const SINGLE_CLICK_DELAY_MS = 220;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -47,10 +48,140 @@ function statusLabel(value) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export default function GanttChart({ project, tasks, dependencies, onEditTask }) {
+function quickActionPatch(action) {
+  if (action === 'complete') return { status: 'complete', percent_complete: 100 };
+  if (action === 'in_progress') return { status: 'in_progress' };
+  if (action === 'blocked') return { status: 'blocked' };
+  return {};
+}
+
+function QuickActionMenu({ task, x, y, canUpdate, onClose, onAction }) {
+  if (!task) return null;
+
+  const itemStyle = {
+    appearance: 'none',
+    width: '100%',
+    border: 'none',
+    background: 'transparent',
+    padding: '10px 12px',
+    textAlign: 'left',
+    borderRadius: 10,
+    cursor: canUpdate ? 'pointer' : 'not-allowed',
+    fontSize: 14,
+    lineHeight: 1.2,
+    color: '#0f172a'
+  };
+
+  return (
+    <div
+      role="menu"
+      aria-label={`Quick actions for ${task.name}`}
+      style={{
+        position: 'fixed',
+        left: Math.max(12, Math.min(x, window.innerWidth - 280)),
+        top: Math.max(12, Math.min(y, window.innerHeight - 320)),
+        zIndex: 2000,
+        width: 260,
+        borderRadius: 16,
+        border: '1px solid rgba(148, 163, 184, 0.28)',
+        background: 'rgba(255,255,255,0.98)',
+        boxShadow: '0 18px 40px rgba(15, 23, 42, 0.18)',
+        padding: 8,
+        backdropFilter: 'blur(14px)'
+      }}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      <div style={{ padding: '6px 10px 8px' }}>
+        <strong
+          style={{
+            display: 'block',
+            fontSize: 13,
+            color: '#0f172a',
+            marginBottom: 2,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}
+        >
+          {task.name}
+        </strong>
+        <span
+          style={{
+            display: 'block',
+            fontSize: 12,
+            color: '#64748b',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}
+        >
+          {taskMeta(task) || 'No vendor/team assigned'}
+        </span>
+      </div>
+
+      <div style={{ display: 'grid', gap: 4 }}>
+        <button type="button" style={itemStyle} onClick={() => canUpdate && onAction('complete')} disabled={!canUpdate}>
+          ✔ Mark Complete
+        </button>
+        <button type="button" style={itemStyle} onClick={() => canUpdate && onAction('in_progress')} disabled={!canUpdate}>
+          ⏸ Mark In Progress
+        </button>
+        <button type="button" style={itemStyle} onClick={() => canUpdate && onAction('blocked')} disabled={!canUpdate}>
+          🚫 Mark Blocked
+        </button>
+        <button type="button" style={itemStyle} onClick={() => canUpdate && onAction('finish_date')} disabled={!canUpdate}>
+          📅 Change Finish Date
+        </button>
+        <button type="button" style={itemStyle} onClick={() => canUpdate && onAction('reassign')} disabled={!canUpdate}>
+          👤 Reassign
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', padding: '10px 6px 2px' }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            border: '1px solid rgba(148, 163, 184, 0.35)',
+            background: '#fff',
+            borderRadius: 10,
+            padding: '8px 10px',
+            fontSize: 13,
+            cursor: 'pointer'
+          }}
+        >
+          Close
+        </button>
+      </div>
+
+      {!canUpdate && (
+        <div style={{ padding: '6px 10px 2px', fontSize: 12, color: '#64748b' }}>
+          Quick actions need an update callback from the parent.
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function GanttChart({
+  project,
+  tasks,
+  dependencies,
+  onEditTask,
+  onSelectTask,
+  onUpdateTask,
+  onTaskAction
+}) {
   const scrollRef = useRef(null);
+  const timelineRef = useRef(null);
+  const clickTimerRef = useRef(null);
+  const menuRef = useRef(null);
+
   const [zoomIndex, setZoomIndex] = useState(2);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [contextMenu, setContextMenu] = useState(null);
+
   const allStartDates = [project.start_date, ...tasks.map((task) => task.start_date)].filter(Boolean);
   const allEndDates = [project.end_date, ...tasks.map((task) => task.end_date)].filter(Boolean);
   const rangeStart = minIsoDate(allStartDates) || project.start_date || todayIso();
@@ -65,18 +196,75 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
   const headerHeight = 104;
   const chartHeight = headerHeight + Math.max(tasks.length, 1) * rowHeight + 18;
   const today = todayIso();
-  const todayOffset = today >= rangeStart && today <= rangeEnd
-    ? (daysBetween(rangeStart, today) / scale.stepDays) * scale.unitWidth
-    : null;
+  const todayOffset =
+    today >= rangeStart && today <= rangeEnd
+      ? (daysBetween(rangeStart, today) / scale.stepDays) * scale.unitWidth
+      : null;
 
-  const units = [];
-  for (let offset = 0; offset <= totalDays; offset += scale.stepDays) {
-    const date = addDays(rangeStart, offset);
-    units.push({ date, left: (offset / scale.stepDays) * scale.unitWidth });
-  }
+  const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
+  const taskIndex = useMemo(() => new Map(tasks.map((task, index) => [task.id, index])), [tasks]);
+  const timelineUnits = useMemo(() => {
+    const units = [];
+    for (let offset = 0; offset <= totalDays; offset += scale.stepDays) {
+      const date = addDays(rangeStart, offset);
+      units.push({ date, left: (offset / scale.stepDays) * scale.unitWidth });
+    }
+    return units;
+  }, [rangeStart, scale.stepDays, scale.unitWidth, totalDays]);
 
-  const taskIndex = new Map(tasks.map((task, index) => [task.id, index]));
-  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const canUpdateTasks = typeof onUpdateTask === 'function' || typeof onTaskAction === 'function';
+
+  useEffect(() => {
+    if (selectedTaskId && !taskById.has(selectedTaskId)) {
+      setSelectedTaskId(null);
+    }
+  }, [selectedTaskId, taskById]);
+
+  useEffect(() => {
+    function handleFullscreenChange() {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    function handleMouseDown(event) {
+      if (!contextMenu) return;
+      const target = event.target;
+      if (menuRef.current?.contains(target) || timelineRef.current?.contains(target)) return;
+      setContextMenu(null);
+    }
+
+    function handleEscape(event) {
+      if (event.key === 'Escape') setContextMenu(null);
+    }
+
+    function handleScroll() {
+      setContextMenu(null);
+    }
+
+    if (contextMenu) {
+      document.addEventListener('mousedown', handleMouseDown, true);
+      document.addEventListener('keydown', handleEscape, true);
+      document.addEventListener('scroll', handleScroll, true);
+      window.addEventListener('resize', handleScroll);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown, true);
+      document.removeEventListener('keydown', handleEscape, true);
+      document.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [contextMenu]);
+
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) window.clearTimeout(clickTimerRef.current);
+    };
+  }, []);
 
   function getTaskPosition(task) {
     const taskStart = task.start_date || rangeStart;
@@ -132,13 +320,87 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
     }
   }
 
-  useEffect(() => {
-    function handleChange() {
-      setIsFullscreen(Boolean(document.fullscreenElement));
+  function focusTask(task) {
+    setSelectedTaskId(task.id);
+    onSelectTask?.(task);
+
+    const position = getTaskPosition(task);
+    const container = scrollRef.current;
+    if (!container) return;
+
+    const maxLeft = Math.max(0, chartWidth - container.clientWidth);
+    const target = clamp(position.left + position.width / 2 - container.clientWidth / 2, 0, maxLeft);
+    container.scrollTo({ left: target, behavior: 'smooth' });
+  }
+
+  function openEditor(task) {
+    setSelectedTaskId(task.id);
+    onSelectTask?.(task);
+    onEditTask?.(task);
+  }
+
+  function queueSingleClick(task) {
+    if (clickTimerRef.current) window.clearTimeout(clickTimerRef.current);
+    clickTimerRef.current = window.setTimeout(() => {
+      focusTask(task);
+      clickTimerRef.current = null;
+    }, SINGLE_CLICK_DELAY_MS);
+  }
+
+  function handleDoubleClick(task) {
+    if (clickTimerRef.current) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
     }
-    document.addEventListener('fullscreenchange', handleChange);
-    return () => document.removeEventListener('fullscreenchange', handleChange);
-  }, []);
+    openEditor(task);
+  }
+
+  function handleContextMenu(event, task) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (clickTimerRef.current) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    setSelectedTaskId(task.id);
+    onSelectTask?.(task);
+    setContextMenu({ x: event.clientX, y: event.clientY, taskId: task.id });
+  }
+
+  function applyTaskUpdate(task, updates) {
+    const nextUpdates = { ...updates };
+    if (typeof onUpdateTask === 'function') {
+      onUpdateTask(task.id, nextUpdates, task);
+      return;
+    }
+    if (typeof onTaskAction === 'function') {
+      onTaskAction(task, nextUpdates);
+    }
+  }
+
+  function handleQuickAction(action) {
+    const task = taskById.get(contextMenu?.taskId);
+    if (!task) return;
+
+    if (action === 'finish_date') {
+      const nextValue = window.prompt('Enter the new finish date (YYYY-MM-DD):', task.end_date || '');
+      if (!nextValue) return;
+      applyTaskUpdate(task, { end_date: nextValue });
+      setContextMenu(null);
+      return;
+    }
+
+    if (action === 'reassign') {
+      const nextValue = window.prompt('Enter the new assignee name or email:', task.assigned_to_name || '');
+      if (!nextValue) return;
+      applyTaskUpdate(task, { assigned_to: nextValue });
+      setContextMenu(null);
+      return;
+    }
+
+    applyTaskUpdate(task, quickActionPatch(action));
+    setContextMenu(null);
+  }
 
   function exportGanttPdf() {
     const printWindow = window.open('', '_blank', 'width=1200,height=850');
@@ -157,53 +419,72 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
       const date = addDays(rangeStart, offset);
       ticks.push({ date, percent: clamp((offset / totalDays) * 100, 0, 100) });
     }
-    if (!ticks.some((tick) => tick.date === rangeEnd)) {
-      ticks.push({ date: rangeEnd, percent: 100 });
-    }
+    if (!ticks.some((tick) => tick.date === rangeEnd)) ticks.push({ date: rangeEnd, percent: 100 });
 
-    const headerTicks = ticks.map((tick) => `
+    const headerTicks = ticks
+      .map(
+        (tick) => `
       <div class="print-tick" style="left:${tick.percent}%">
         <strong>${escapeHtml(tick.date.slice(5))}</strong>
         <span>${escapeHtml(tick.date.slice(0, 4))}</span>
       </div>
-    `).join('');
+    `
+      )
+      .join('');
 
-    const gridLines = ticks.map((tick) => `
+    const gridLines = ticks
+      .map(
+        (tick) => `
       <div class="print-grid-line vertical" style="left:${tick.percent}%;height:${printHeight}px"></div>
-    `).join('');
+    `
+      )
+      .join('');
 
     const labelRows = printableTasks.length
-      ? printableTasks.map((task) => `
+      ? printableTasks
+          .map(
+            (task) => `
           <div class="print-label-row" style="height:${printRowHeight}px">
             <strong>${escapeHtml(task.name)}</strong>
             <span>${escapeHtml(taskMeta(task) || 'No vendor/team assigned')}</span>
           </div>
-        `).join('')
+        `
+          )
+          .join('')
       : `<div class="print-label-row" style="height:${printRowHeight}px"><strong>No tasks yet</strong><span>Add tasks before exporting.</span></div>`;
 
-    const rowLines = Array.from({ length: Math.max(printableTasks.length, 1) }, (_, index) => `
+    const rowLines = Array.from(
+      { length: Math.max(printableTasks.length, 1) },
+      (_, index) => `
       <div class="print-grid-line horizontal" style="top:${printHeaderHeight + index * printRowHeight}px"></div>
-    `).join('');
+    `
+    ).join('');
 
-    const bars = printableTasks.map((task, index) => {
-      const startOffset = clamp(daysBetween(rangeStart, task.start_date), 0, totalDays);
-      const duration = Math.max(1, daysBetween(task.start_date, task.end_date) + 1);
-      const left = clamp((startOffset / totalDays) * 100, 0, 100);
-      const width = clamp((duration / totalDays) * 100, 1.5, 100 - left);
-      const top = printHeaderHeight + index * printRowHeight + 9;
-      const color = safeColor(task.color);
-      return `
+    const bars = printableTasks
+      .map((task, index) => {
+        const startOffset = clamp(daysBetween(rangeStart, task.start_date), 0, totalDays);
+        const duration = Math.max(1, daysBetween(task.start_date, task.end_date) + 1);
+        const left = clamp((startOffset / totalDays) * 100, 0, 100);
+        const width = clamp((duration / totalDays) * 100, 1.5, 100 - left);
+        const top = printHeaderHeight + index * printRowHeight + 9;
+        const color = safeColor(task.color);
+        return `
         <div class="print-bar" style="left:${left}%;top:${top}px;width:${width}%;background:${color}">
           <span class="print-progress" style="width:${clamp(Number(task.percent_complete || 0), 0, 100)}%"></span>
           <span class="print-bar-label">${escapeHtml(task.name)} · ${escapeHtml(statusLabel(task.status))} · ${escapeHtml(task.percent_complete || 0)}%</span>
         </div>
       `;
-    }).join('');
+      })
+      .join('');
 
-    const todayPercent = today >= rangeStart && today <= rangeEnd
-      ? clamp((daysBetween(rangeStart, today) / totalDays) * 100, 0, 100)
-      : null;
-    const todayLine = todayPercent === null ? '' : `
+    const todayPercent =
+      today >= rangeStart && today <= rangeEnd
+        ? clamp((daysBetween(rangeStart, today) / totalDays) * 100, 0, 100)
+        : null;
+    const todayLine =
+      todayPercent === null
+        ? ''
+        : `
       <div class="print-today-line" style="left:${todayPercent}%"><span>Today</span></div>
     `;
 
@@ -288,33 +569,95 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
     printWindow.document.close();
   }
 
+  function taskButtonStyles(task, isLabel) {
+    const selected = selectedTaskId === task.id || contextMenu?.taskId === task.id;
+    if (!selected) return {};
+
+    return isLabel
+      ? {
+          outline: '2px solid rgba(37, 99, 235, 0.35)',
+          backgroundColor: 'rgba(37, 99, 235, 0.08)',
+          boxShadow: 'inset 0 0 0 1px rgba(37, 99, 235, 0.15)',
+          transform: 'translateX(1px)'
+        }
+      : {
+          outline: '2px solid rgba(37, 99, 235, 0.35)',
+          boxShadow: '0 0 0 3px rgba(37, 99, 235, 0.18), 0 10px 22px rgba(15, 23, 42, 0.18)',
+          transform: 'translateY(-1px)'
+        };
+  }
+
   return (
     <section className={`panel gantt-panel expanded-gantt-panel ${isFullscreen ? 'gantt-fullscreen' : ''}`}>
       <div className="panel-heading gantt-heading">
-        <button className="ghost-button compact gantt-fullscreen-button" onClick={toggleFullscreen} type="button">{isFullscreen ? 'Exit full screen' : 'Full screen'}</button>
+        <button className="ghost-button compact gantt-fullscreen-button" onClick={toggleFullscreen} type="button">
+          {isFullscreen ? 'Exit full screen' : 'Full screen'}
+        </button>
         <div>
           <h2>Gantt chart</h2>
-          <p>{formatDate(rangeStart)} to {formatDate(rangeEnd)} · scale: {scale.label} · zoom: {Math.round(zoom * 100)}%</p>
+          <p>
+            {formatDate(rangeStart)} to {formatDate(rangeEnd)} · scale: {scale.label} · zoom:{' '}
+            {Math.round(zoom * 100)}%
+          </p>
         </div>
         <div className="gantt-toolbar" aria-label="Gantt navigation controls">
-          <button className="ghost-button compact" onClick={scrollToStart} type="button">Start</button>
-          <button className="ghost-button compact" onClick={() => scrollByDays(-30)} type="button">Prev 30 days</button>
-          <button className="ghost-button compact" onClick={scrollToToday} disabled={todayOffset === null} type="button">Today</button>
-          <button className="ghost-button compact" onClick={() => scrollByDays(30)} type="button">Next 30 days</button>
-          <button className="ghost-button compact" onClick={zoomOut} disabled={zoomIndex === 0} type="button">Zoom out</button>
-          <button className="ghost-button compact" onClick={resetZoom} type="button">Reset zoom</button>
-          <button className="ghost-button compact" onClick={zoomIn} disabled={zoomIndex === zoomLevels.length - 1} type="button">Zoom in</button>
-          <button className="primary-button compact" onClick={exportGanttPdf} type="button">Export PDF</button>
+          <button className="ghost-button compact" onClick={scrollToStart} type="button">
+            Start
+          </button>
+          <button className="ghost-button compact" onClick={() => scrollByDays(-30)} type="button">
+            Prev 30 days
+          </button>
+          <button className="ghost-button compact" onClick={scrollToToday} disabled={todayOffset === null} type="button">
+            Today
+          </button>
+          <button className="ghost-button compact" onClick={() => scrollByDays(30)} type="button">
+            Next 30 days
+          </button>
+          <button className="ghost-button compact" onClick={zoomOut} disabled={zoomIndex === 0} type="button">
+            Zoom out
+          </button>
+          <button className="ghost-button compact" onClick={resetZoom} type="button">
+            Reset zoom
+          </button>
+          <button
+            className="ghost-button compact"
+            onClick={zoomIn}
+            disabled={zoomIndex === zoomLevels.length - 1}
+            type="button"
+          >
+            Zoom in
+          </button>
+          <button className="primary-button compact" onClick={exportGanttPdf} type="button">
+            Export PDF
+          </button>
         </div>
       </div>
 
-      <p className="gantt-navigation-help">Use the buttons or horizontal scroll bar to move through the schedule. Click a task name or bar to edit it. Export PDF opens a printable Gantt view.</p>
+      <p className="gantt-navigation-help">
+        Single-click scrolls to and highlights a task. Double-click opens the task editor. Right-click shows quick
+        actions for experienced users.
+      </p>
 
       <div className="gantt-shell expanded-gantt-shell">
         <div className="gantt-label-column" style={{ paddingTop: headerHeight }}>
           {tasks.length === 0 && <div className="gantt-empty-label">No tasks yet</div>}
           {tasks.map((task) => (
-            <button className="gantt-label-row expanded" key={task.id} onClick={() => onEditTask?.(task)} type="button">
+            <button
+              key={task.id}
+              className="gantt-label-row expanded"
+              type="button"
+              onClick={() => queueSingleClick(task)}
+              onDoubleClick={() => handleDoubleClick(task)}
+              onContextMenu={(event) => handleContextMenu(event, task)}
+              style={{
+                ...taskButtonStyles(task, true),
+                cursor: 'pointer',
+                borderRadius: 12,
+                transition: 'transform 120ms ease, box-shadow 120ms ease, outline 120ms ease, background-color 120ms ease',
+                userSelect: 'none'
+              }}
+              title="Single-click to highlight, double-click to edit, right-click for quick actions"
+            >
               <span className={`status-dot status-${task.status}`} />
               <span className="gantt-label-text">
                 <strong>{task.name}</strong>
@@ -324,10 +667,10 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
           ))}
         </div>
 
-        <div className="gantt-scroll expanded-gantt-scroll" ref={scrollRef} role="region" aria-label="Gantt timeline" tabIndex="0">
-          <div className="gantt-canvas" style={{ width: chartWidth, height: chartHeight }}>
+        <div className="gantt-scroll expanded-gantt-scroll" ref={scrollRef} role="region" aria-label="Gantt timeline" tabIndex={0}>
+          <div className="gantt-canvas" ref={timelineRef} style={{ width: chartWidth, height: chartHeight }}>
             <div className="gantt-header-row expanded">
-              {units.map((unit) => (
+              {timelineUnits.map((unit) => (
                 <div className="gantt-header-unit" style={{ left: unit.left, width: scale.unitWidth }} key={unit.date}>
                   <strong>{unit.date.slice(5)}</strong>
                   <span>{unit.date.slice(0, 4)}</span>
@@ -335,7 +678,7 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
               ))}
             </div>
 
-            {units.map((unit) => (
+            {timelineUnits.map((unit) => (
               <div className="gantt-grid-line vertical" style={{ left: unit.left, height: chartHeight }} key={`line-${unit.date}`} />
             ))}
 
@@ -371,20 +714,24 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
 
             {tasks.map((task) => {
               const position = getTaskPosition(task);
-              const top = position.y - 21;
               return (
                 <button
-                  className={`gantt-bar expanded status-bg-${task.status}`}
                   key={task.id}
+                  className={`gantt-bar expanded status-bg-${task.status}`}
+                  type="button"
+                  onClick={() => queueSingleClick(task)}
+                  onDoubleClick={() => handleDoubleClick(task)}
+                  onContextMenu={(event) => handleContextMenu(event, task)}
                   style={{
                     left: position.left,
-                    top,
+                    top: position.y - 21,
                     width: position.width,
-                    backgroundColor: task.color || '#2563eb'
+                    backgroundColor: task.color || '#2563eb',
+                    cursor: 'pointer',
+                    transition: 'transform 120ms ease, box-shadow 120ms ease, outline 120ms ease, background-color 120ms ease',
+                    ...taskButtonStyles(task, false)
                   }}
-                  onClick={() => onEditTask?.(task)}
                   title={`${task.name}: ${formatDate(task.start_date)} to ${formatDate(task.end_date)} · ${taskMeta(task) || 'No team/vendor assigned'} · ${task.percent_complete}% complete`}
-                  type="button"
                 >
                   <span className="gantt-progress" style={{ width: `${task.percent_complete}%` }} />
                   <span className="gantt-bar-label">{task.name}</span>
@@ -394,6 +741,15 @@ export default function GanttChart({ project, tasks, dependencies, onEditTask })
           </div>
         </div>
       </div>
+
+      <QuickActionMenu
+        task={taskById.get(contextMenu?.taskId)}
+        x={contextMenu?.x || 0}
+        y={contextMenu?.y || 0}
+        canUpdate={canUpdateTasks}
+        onClose={() => setContextMenu(null)}
+        onAction={handleQuickAction}
+      />
     </section>
   );
 }
