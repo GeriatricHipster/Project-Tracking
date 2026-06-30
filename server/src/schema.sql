@@ -37,7 +37,6 @@ ALTER TABLE users DROP CONSTRAINT IF EXISTS users_access_status_check;
 UPDATE users
 SET site_role = CASE
   WHEN site_role IN ('owner', 'manager') THEN site_role
-  WHEN site_role = 'vendor' THEN 'vendor'
   ELSE 'member'
 END;
 

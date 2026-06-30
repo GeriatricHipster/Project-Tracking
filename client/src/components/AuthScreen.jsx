@@ -2,21 +2,10 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 
 const userTradeOptions = ['CCure Team', 'Camera Team', 'Lock Smith', 'Vendor', 'PM', 'Manger', 'Supervisor'];
-const accountRoleOptions = [
-  { value: 'vendor', label: 'Vendor' },
-  { value: 'member', label: 'Member' }
-];
 
 export default function AuthScreen({ onAuth }) {
   const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({
-    name: '',
-    email: 'admin@demo.com',
-    password: 'Construction123!',
-    rememberMe: true,
-    trade: '',
-    siteRole: 'vendor'
-  });
+  const [form, setForm] = useState({ name: '', email: 'admin@demo.com', password: 'Construction123!', rememberMe: true, trade: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -38,7 +27,7 @@ export default function AuthScreen({ onAuth }) {
     setLoading(true);
     try {
       const payload = mode === 'register'
-        ? { name: form.name, email: form.email, password: form.password, trade: form.trade || null, site_role: form.siteRole }
+        ? { name: form.name, email: form.email, password: form.password, trade: form.trade || null, site_role: form.trade === 'Vendor' ? 'vendor' : 'member' }
         : { email: form.email, password: form.password };
       const data = await api(`/auth/${mode}`, { method: 'POST', body: payload, token: null });
       if (typeof window !== 'undefined') {
@@ -74,14 +63,6 @@ export default function AuthScreen({ onAuth }) {
               <label>
                 Name
                 <input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Jane Project Manager" />
-              </label>
-              <label>
-                Account type
-                <select value={form.siteRole} onChange={(event) => updateField('siteRole', event.target.value)}>
-                  {accountRoleOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
               </label>
               <label>
                 Trade

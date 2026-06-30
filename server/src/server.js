@@ -51,7 +51,6 @@ const trades = new Set(['CCure', 'Cameras', 'CCure & Cameras', 'Lock Smiths']);
 const securityTeamMembers = new Set(['Bill', 'Bennett', 'Chris', 'Derick', 'Jim', 'James', 'Justin', 'Kenna', 'Kyra', 'Ryan', 'Suvam']);
 const projectManagers = new Set(['Austin', 'Kurt']);
 const siteRoles = new Set(['owner', 'manager', 'member', 'vendor']);
-const registrationSiteRoles = new Set(['member', 'vendor']);
 const userTradeOptions = new Set(['CCure Team', 'Camera Team', 'Lock Smith', 'Vendor', 'PM', 'Manger', 'Supervisor']);
 const dependencyTypes = new Set(['FS', 'SS', 'FF', 'SF']);
 const managerSiteRoles = new Set(['owner', 'manager']);
@@ -110,14 +109,10 @@ const blueprintUpload = multer({
       'application/x-acad',
       'application/dwg',
       'application/x-dwg',
-      'application/octet-stream',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      'application/octet-stream'
     ]);
     if (!allowedTypes.has(file.mimetype)) {
-      callback(httpError(400, 'Blueprint uploads must be PDF, image, DWG, Word, Excel, or common drawing files.'));
+      callback(httpError(400, 'Blueprint uploads must be PDF, image, DWG, or common drawing files.'));
       return;
     }
     callback(null, true);
@@ -1078,9 +1073,7 @@ app.post('/api/auth/register', asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || '');
   const trade = cleanText(req.body.trade);
-  const requestedSiteRole = req.body.site_role === undefined || req.body.site_role === null || req.body.site_role === ''
-    ? 'member'
-    : requireEnum(req.body.site_role, registrationSiteRoles, 'site_role');
+  const requestedSiteRole = String(req.body.site_role || '').trim().toLowerCase() === 'vendor' || trade === 'Vendor' ? 'vendor' : 'member';
 
   if (!/^\S+@\S+\.\S+$/.test(email)) throw httpError(400, 'A valid email is required.');
   if (password.length < 8) throw httpError(400, 'Password must be at least 8 characters.');
@@ -2242,7 +2235,7 @@ app.post('/api/tasks/:taskId/comments', requireAuth, asyncHandler(async (req, re
   const comment = await tx(async (client) => {
     const task = await selectTaskById(client, taskId);
     if (!task) throw httpError(404, 'Task not found.');
-    await requireProjectMembership(task.project_id, req.user.id, 'viewer', client);
+    await requireProjectMembership(task.project_id, req.user.id, 'editor', client);
 
     const result = await client.query(
       `INSERT INTO task_comments (task_id, user_id, body)
