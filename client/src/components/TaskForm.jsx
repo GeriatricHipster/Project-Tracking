@@ -267,7 +267,7 @@ function CustomizableSelect({
   );
 }
 
-export default function TaskForm({ project, members, tasks, editingTask, canEdit, onSave, onCancel }) {
+export default function TaskForm({ project, tasks, editingTask, canEdit, onSave, onCancel }) {
   const [form, setForm] = useState(blankTask(project));
   const [checklistItems, setChecklistItems] = useState([]);
   const [newChecklistText, setNewChecklistText] = useState('');
@@ -473,42 +473,47 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
 
   return (
     <section className="panel task-form-panel">
-      <div className="panel-heading">
-        <div>
-          <h2 className="ui-red-title">{editingTask ? 'Edit task' : 'Add task'}</h2>
-          <p>
-            {canEdit
-              ? 'Update dates, vendor, status, responsibility, and progress.'
-              : 'Viewer access is read-only except for project notes.'}
-          </p>
-        </div>
-        {editingTask && (
-          <button className="ghost-button" onClick={onCancel} type="button">
-            Cancel edit
-          </button>
-        )}
-      </div>
-
-      <div className="task-form-tabs">
-        <button type="button" style={tabButtonStyle(activeTab === 'details')} onClick={() => setActiveTab('details')}>
-          Details
-        </button>
-        <button
-          type="button"
-          style={tabButtonStyle(activeTab === 'checklist')}
-          onClick={() => setActiveTab('checklist')}
-        >
-          Checklist
-        </button>
-      </div>
-
       <form className="stack task-form-shell" onSubmit={submit}>
+        <div className="panel-heading">
+          <button className="primary-button compact" disabled={!canEdit || saving} type="submit">
+            {saving ? 'Saving...' : editingTask ? 'Update task' : 'Create task'}
+          </button>
+
+          <div>
+            <h2>{editingTask ? 'Edit task' : 'Add task'}</h2>
+            <p>
+              {canEdit
+                ? 'Update dates, vendor, status, responsibility, and progress.'
+                : 'Viewer access is read-only except for project notes.'}
+            </p>
+          </div>
+
+          {editingTask && (
+            <button className="ghost-button" onClick={onCancel} type="button">
+              Cancel edit
+            </button>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          <button type="button" style={tabButtonStyle(activeTab === 'details')} onClick={() => setActiveTab('details')}>
+            Details
+          </button>
+          <button
+            type="button"
+            style={tabButtonStyle(activeTab === 'checklist')}
+            onClick={() => setActiveTab('checklist')}
+          >
+            Checklist
+          </button>
+        </div>
+
         {activeTab === 'details' && (
           <>
             <section className="panel task-section">
               <div className="panel-heading">
                 <div>
-                  <h3 className="ui-red-title">Task basics</h3>
+                  <h3>Task basics</h3>
                   <p>Core task details and the main vendor fields.</p>
                 </div>
               </div>
@@ -607,7 +612,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             <section className="panel task-section">
               <div className="panel-heading">
                 <div>
-                  <h3 className="ui-red-title">People</h3>
+                  <h3>People</h3>
                   <p>Assign the team members and the PM for this task.</p>
                 </div>
               </div>
@@ -688,7 +693,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             <section className="panel task-section">
               <div className="panel-heading">
                 <div>
-                  <h3 className="ui-red-title">Schedule</h3>
+                  <h3>Schedule</h3>
                   <p>Set the dates for this task.</p>
                 </div>
               </div>
@@ -718,7 +723,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             <section className="panel task-section">
               <div className="panel-heading">
                 <div>
-                  <h3 className="ui-red-title">Tracking</h3>
+                  <h3>Tracking</h3>
                   <p>Status, priority, and progress settings.</p>
                 </div>
               </div>
@@ -790,25 +795,6 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
                 </label>
               </div>
             </section>
-
-            <section className="panel task-section">
-              <div className="panel-heading">
-                <div>
-                  <h3 className="ui-red-title">Notes</h3>
-                  <p>Add the scope, details, and anything else the team should know.</p>
-                </div>
-              </div>
-
-              <label>
-                Description
-                <textarea
-                  disabled={!canEdit}
-                  value={form.description}
-                  onChange={(event) => updateField('description', event.target.value)}
-                  placeholder="Scope, constraints, notes, inspection needs"
-                />
-              </label>
-            </section>
           </>
         )}
 
@@ -816,7 +802,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
           <section className="panel task-section">
             <div className="panel-heading">
               <div>
-                <h3 className="ui-red-title">Checklist</h3>
+                <h3>Checklist</h3>
                 <p>Add as many sub tasks as you need, then mark each one complete with a click.</p>
               </div>
             </div>
@@ -916,11 +902,13 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
 
         {error && <p className="error-box">{error}</p>}
 
-        <div className="task-form-actions">
-          <button className="primary-button" disabled={!canEdit || saving}>
-            {saving ? 'Saving...' : editingTask ? 'Update task' : 'Create task'}
-          </button>
-        </div>
+        {editingTask && (
+          <div className="task-form-actions" style={{ justifyContent: 'flex-end' }}>
+            <button className="ghost-button" onClick={onCancel} type="button">
+              Cancel edit
+            </button>
+          </div>
+        )}
       </form>
     </section>
   );
