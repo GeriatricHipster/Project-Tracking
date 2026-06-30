@@ -202,11 +202,7 @@ function normalizeChecklistItems(value) {
       if (typeof item === 'string') {
         const text = item.trim();
         if (!text) return null;
-        return {
-          id: `${makeChecklistId()}-${index}`,
-          text,
-          done: false
-        };
+        return { id: `${makeChecklistId()}-${index}`, text, done: false };
       }
 
       if (!item || typeof item !== 'object') return null;
@@ -824,12 +820,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
               </div>
             </div>
 
-            <div
-              className="stack"
-              style={{
-                gap: 12
-              }}
-            >
+            <div className="stack" style={{ gap: 12 }}>
               <label>
                 Add checklist item
                 <div className="inline-custom-entry">
