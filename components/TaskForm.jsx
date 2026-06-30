@@ -550,6 +550,14 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
           </div>
         </section>
 
+        <section className="task-form-section">
+          <div className="task-form-section-header">
+            <div>
+              <h3>Notes</h3>
+              <p>Add the scope, details, and anything else the team should know.</p>
+            </div>
+          </div>
+          
           <label>
             Description
             <textarea disabled={!canEdit} value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Scope, constraints, notes, inspection needs" />
