@@ -3163,4 +3163,34 @@ html[data-theme='dark'] .project-assignment-card:hover,
 html[data-theme='dark'] .assignment-user-card:hover {
   color: #ffffff !important;
 }
+
+  .task-mode-tabs {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.task-mode-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 120px;
+  padding: 0.8rem 1.15rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.10);
+  color: #ffffff;
+  font-weight: 800;
+  opacity: 1;
+  visibility: visible;
+}
+
+.task-mode-tabs button.active {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #ffffff;
+}
+
+.task-mode-tabs button:disabled {
+  opacity: 1;
 }
