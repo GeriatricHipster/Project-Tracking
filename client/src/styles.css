@@ -3021,8 +3021,9 @@ html[data-theme='dark'] .cms-grid-shell.fullscreen .cms-grid-wrap {
   .select-with-button {
     grid-template-columns: 1fr;
   }
+}
 
-  html[data-theme='dark'] .panel,
+html[data-theme='dark'] .panel,
 html[data-theme='dark'] .project-card,
 html[data-theme='dark'] .assignment-card,
 html[data-theme='dark'] .calendar-project-card,
