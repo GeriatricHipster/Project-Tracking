@@ -474,11 +474,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
             <input disabled={!canEdit} type="number" value={form.sort_order} onChange={(event) => updateField('sort_order', event.target.value)} placeholder="Auto" />
           </label>
         </div>
-
-        <label>
-          Description
-          <textarea disabled={!canEdit} value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Scope, constraints, notes, inspection needs" />
-        </label>
+        
 
         <div className="two-col">
           <label>
