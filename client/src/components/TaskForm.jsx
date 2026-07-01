@@ -320,7 +320,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       <div className="panel-heading">
         <div>
           <h2>{editingTask ? 'Edit task' : 'Add task'}</h2>
-          <p>{canEdit ? 'Update task details, responsibility, and progress.' : 'Viewer access is read-only except for project notes.'}</p>
+          <p>{canEdit ? 'Update task details, responsibility, and progress.' : 'Viewer access is read-only except for project notes and checlist.'}</p>
         </div>
         {editingTask && <button className="ghost-button" onClick={onCancel} type="button">Cancel edit</button>}
       </div>
