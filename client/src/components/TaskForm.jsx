@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+
 import { addDays, todayIso } from '../lib/dates';
 
 const statusOptions = [
@@ -123,11 +124,14 @@ const locksmithSeed = ['Bill', 'Bennett', 'Chris', 'Jim'].sort((a, b) => a.local
 
 function readStoredList(key, fallback) {
   if (typeof window === 'undefined') return fallback;
+
   try {
     const raw = window.localStorage.getItem(key);
     if (!raw) return fallback;
+
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return fallback;
+
     return [...new Set(parsed.map((value) => String(value).trim()).filter(Boolean))].sort((a, b) =>
       a.localeCompare(b)
     );
@@ -159,6 +163,7 @@ function usePersistentList(storageKey, seed) {
 
 function blankTask(project) {
   const start = project?.start_date || todayIso();
+
   return {
     task_name_choice: '',
     task_name_custom: '',
@@ -197,6 +202,7 @@ function makeChecklistId() {
 
 function normalizeChecklistItems(value) {
   if (!Array.isArray(value)) return [];
+
   return value
     .map((item, index) => {
       if (typeof item === 'string') {
@@ -219,6 +225,18 @@ function normalizeChecklistItems(value) {
     .filter(Boolean);
 }
 
+function selectedOrCustom(value, options) {
+  const cleaned = String(value || '').trim();
+  if (!cleaned) return { choice: '', custom: '' };
+  if (options.includes(cleaned)) return { choice: cleaned, custom: '' };
+  return { choice: '__custom__', custom: cleaned };
+}
+
+function resolveCustom(value, customValue) {
+  if (value === '__custom__') return String(customValue || '').trim() || null;
+  return value || null;
+}
+
 function CustomizableSelect({
   label,
   value,
@@ -235,10 +253,10 @@ function CustomizableSelect({
   return (
     <label>
       {label}
-      <select disabled={disabled} value={value} onChange={(event) => onChange(event.target.value)}>
+      <select disabled={disabled} value={value || ''} onChange={(event) => onChange(event.target.value)}>
         <option value="">{placeholder}</option>
         {options.map((option) => (
-          <option key={option} value={option}>
+          <option value={option} key={option}>
             {option}
           </option>
         ))}
@@ -249,7 +267,7 @@ function CustomizableSelect({
         <div className="inline-custom-entry">
           <input
             disabled={disabled}
-            value={customValue}
+            value={customValue || ''}
             onChange={(event) => onCustomChange(event.target.value)}
             placeholder={`Add custom ${label.toLowerCase()}`}
           />
@@ -267,12 +285,13 @@ function CustomizableSelect({
   );
 }
 
-export default function TaskForm({ project, members, tasks, editingTask, canEdit, onSave, onCancel }) {
+export default function TaskForm({ project, members, tasks, editingTask, canEdit, onSave, onDelete, onCancel }) {
   const [form, setForm] = useState(blankTask(project));
   const [checklistItems, setChecklistItems] = useState([]);
   const [newChecklistText, setNewChecklistText] = useState('');
   const [activeTab, setActiveTab] = useState('details');
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
 
   const [assigneeSystemOptions, addAssigneeSystemOption] = usePersistentList(
@@ -287,35 +306,35 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
 
   useEffect(() => {
     if (editingTask) {
-      setForm((current) => ({
-        ...current,
+      const trade = selectedOrCustom(editingTask.trade, tradeOptions);
+      const vendor = selectedOrCustom(editingTask.vendor, vendorOptions);
+      const vendorSecondary = selectedOrCustom(editingTask.vendor_secondary, vendorOptions);
+      const assignedTo = selectedOrCustom(editingTask.assigned_to, assigneeSystemOptions);
+      const assigneeSecondary = selectedOrCustom(editingTask.assignee_secondary, assigneeSystemOptions);
+      const assigneeTertiary = selectedOrCustom(editingTask.assignee_tertiary, locksmithOptions);
+      const assigneeQuaternary = selectedOrCustom(editingTask.assignee_quaternary, otherAssigneeOptions);
+      const pm = selectedOrCustom(editingTask.pm, pmOptions);
+
+      setForm({
         task_name_choice: taskNameOptions.includes(editingTask.name || '') ? editingTask.name : 'Other',
-        task_name_custom: taskNameOptions.includes(editingTask.name || '') ? '' : (editingTask.name || ''),
+        task_name_custom: taskNameOptions.includes(editingTask.name || '') ? '' : editingTask.name || '',
         description: editingTask.description || '',
-        trade: tradeOptions.includes(editingTask.trade || '') ? editingTask.trade : (editingTask.trade ? '__custom__' : ''),
-        trade_custom: tradeOptions.includes(editingTask.trade || '') ? '' : (editingTask.trade || ''),
-        vendor: vendorOptions.includes(editingTask.vendor || '') ? editingTask.vendor : (editingTask.vendor ? '__custom__' : ''),
-        vendor_custom: vendorOptions.includes(editingTask.vendor || '') ? '' : (editingTask.vendor || ''),
-        vendor_secondary: vendorOptions.includes(editingTask.vendor_secondary || '')
-          ? editingTask.vendor_secondary
-          : (editingTask.vendor_secondary ? '__custom__' : ''),
-        vendor_secondary_custom: vendorOptions.includes(editingTask.vendor_secondary || '')
-          ? ''
-          : (editingTask.vendor_secondary || ''),
-        assigned_to: editingTask.assigned_to || '',
-        assignee_system_custom: '',
-        assignee_secondary: editingTask.assignee_secondary || '',
-        assignee_secondary_custom: '',
-        assignee_tertiary: editingTask.assignee_tertiary || '',
-        assignee_tertiary_custom: '',
-        assignee_quaternary: otherAssigneeOptions.includes(editingTask.assignee_quaternary || '')
-          ? editingTask.assignee_quaternary
-          : (editingTask.assignee_quaternary ? '__custom__' : ''),
-        assignee_quaternary_custom: otherAssigneeOptions.includes(editingTask.assignee_quaternary || '')
-          ? ''
-          : (editingTask.assignee_quaternary || ''),
-        pm: pmOptions.includes(editingTask.pm || '') ? editingTask.pm : (editingTask.pm ? '__custom__' : ''),
-        pm_custom: pmOptions.includes(editingTask.pm || '') ? '' : (editingTask.pm || ''),
+        trade: trade.choice,
+        trade_custom: trade.custom,
+        vendor: vendor.choice,
+        vendor_custom: vendor.custom,
+        vendor_secondary: vendorSecondary.choice,
+        vendor_secondary_custom: vendorSecondary.custom,
+        assigned_to: assignedTo.choice,
+        assignee_system_custom: assignedTo.custom,
+        assignee_secondary: assigneeSecondary.choice,
+        assignee_secondary_custom: assigneeSecondary.custom,
+        assignee_tertiary: assigneeTertiary.choice,
+        assignee_tertiary_custom: assigneeTertiary.custom,
+        assignee_quaternary: assigneeQuaternary.choice,
+        assignee_quaternary_custom: assigneeQuaternary.custom,
+        pm: pm.choice,
+        pm_custom: pm.custom,
         parent_task_id: editingTask.parent_task_id || '',
         status: editingTask.status || '',
         priority: editingTask.priority || '',
@@ -324,11 +343,9 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         percent_complete: editingTask.percent_complete || 0,
         color: editingTask.color || '#2563eb',
         sort_order: editingTask.sort_order || ''
-      }));
+      });
 
-      setChecklistItems(
-        normalizeChecklistItems(editingTask.checklist_items || editingTask.checklist || editingTask.subtasks || [])
-      );
+      setChecklistItems(normalizeChecklistItems(editingTask.checklist_items || editingTask.checklist || editingTask.subtasks || []));
       setNewChecklistText('');
       setActiveTab('details');
     } else {
@@ -337,8 +354,18 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
       setNewChecklistText('');
       setActiveTab('details');
     }
+
     setError('');
-  }, [editingTask, project, tradeOptions, vendorOptions, pmOptions, otherAssigneeOptions]);
+  }, [
+    editingTask,
+    project,
+    tradeOptions,
+    vendorOptions,
+    assigneeSystemOptions,
+    locksmithOptions,
+    pmOptions,
+    otherAssigneeOptions
+  ]);
 
   const parentTaskOptions = useMemo(
     () => tasks.filter((task) => !editingTask || task.id !== editingTask.id),
@@ -397,9 +424,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
   }
 
   function updateChecklistText(itemId, text) {
-    setChecklistItems((current) =>
-      current.map((item) => (item.id === itemId ? { ...item, text } : item))
-    );
+    setChecklistItems((current) => current.map((item) => (item.id === itemId ? { ...item, text } : item)));
   }
 
   function removeChecklistItem(itemId) {
@@ -414,27 +439,20 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     try {
       const taskName = form.task_name_choice === 'Other' ? form.task_name_custom : form.task_name_choice;
       const cleanedChecklist = checklistItems
-        .map((item) => ({
-          id: item.id,
-          text: String(item.text || '').trim(),
-          done: Boolean(item.done)
-        }))
+        .map((item) => ({ id: item.id, text: String(item.text || '').trim(), done: Boolean(item.done) }))
         .filter((item) => item.text);
 
       await onSave({
         name: taskName || '',
         description: form.description || '',
-        trade: form.trade === '__custom__' ? form.trade_custom : form.trade || null,
-        vendor: form.vendor === '__custom__' ? form.vendor_custom : form.vendor || null,
-        vendor_secondary: form.vendor_secondary === '__custom__' ? form.vendor_secondary_custom : form.vendor_secondary || null,
-        assigned_to: form.assigned_to || null,
-        assignee_secondary: form.assignee_secondary || null,
-        assignee_tertiary: form.assignee_tertiary || null,
-        assignee_quaternary:
-          form.assignee_quaternary === '__custom__'
-            ? form.assignee_quaternary_custom
-            : form.assignee_quaternary || null,
-        pm: form.pm === '__custom__' ? form.pm_custom : form.pm || null,
+        trade: resolveCustom(form.trade, form.trade_custom),
+        vendor: resolveCustom(form.vendor, form.vendor_custom),
+        vendor_secondary: resolveCustom(form.vendor_secondary, form.vendor_secondary_custom),
+        assigned_to: resolveCustom(form.assigned_to, form.assignee_system_custom),
+        assignee_secondary: resolveCustom(form.assignee_secondary, form.assignee_secondary_custom),
+        assignee_tertiary: resolveCustom(form.assignee_tertiary, form.assignee_tertiary_custom),
+        assignee_quaternary: resolveCustom(form.assignee_quaternary, form.assignee_quaternary_custom),
+        pm: resolveCustom(form.pm, form.pm_custom),
         parent_task_id: form.parent_task_id || null,
         status: form.status || 'not_started',
         priority: form.priority || 'normal',
@@ -459,11 +477,24 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     }
   }
 
+  async function handleDeleteTask() {
+    if (!editingTask || !onDelete || deleting) return;
+
+    setError('');
+    setDeleting(true);
+
+    try {
+      await onDelete(editingTask);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const tabButtonStyle = (active) => ({
     border: active ? '1px solid #7f1d1d' : '1px solid rgba(148, 163, 184, 0.85)',
-    background: active
-      ? 'linear-gradient(135deg, #dc2626, #991b1b)'
-      : 'linear-gradient(180deg, #ffffff, #e5e7eb)',
+    background: active ? 'linear-gradient(135deg, #dc2626, #991b1b)' : 'linear-gradient(180deg, #ffffff, #e5e7eb)',
     color: active ? '#ffffff' : '#111827',
     borderRadius: 999,
     padding: '10px 16px',
@@ -472,43 +503,57 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
     cursor: 'pointer',
     opacity: 1,
     textShadow: 'none',
-    boxShadow: active
-      ? '0 10px 20px rgba(220, 38, 38, 0.20)'
-      : '0 6px 14px rgba(15, 23, 42, 0.10)'
+    boxShadow: active ? '0 10px 20px rgba(220, 38, 38, 0.20)' : '0 6px 14px rgba(15, 23, 42, 0.10)'
   });
 
   return (
-    <section className="panel task-form-panel">
-      <div className="panel-heading">
-        <div>
-          <h2 className="ui-red-title">{editingTask ? 'Edit task' : 'Add task'}</h2>
-          <p>
-            {canEdit
-              ? 'Update dates, vendor, status, responsibility, and progress.'
-              : 'Viewer access is read-only except for project notes.'}
-          </p>
+    <section className="task-form-section panel">
+      <form onSubmit={submit} className="task-form">
+        <div className="panel-heading task-form-heading">
+          <div>
+            <h2>{editingTask ? 'Edit task' : 'Add task'}</h2>
+            <p>{canEdit ? 'Update dates, vendor, status, responsibility, and progress.' : 'Viewer access is read-only except for project notes.'}</p>
+          </div>
+
+          {editingTask && (
+            <div className="task-form-top-actions">
+              {canEdit && onDelete && (
+                <button
+                  className="danger-button compact delete-task-button"
+                  disabled={saving || deleting}
+                  onClick={handleDeleteTask}
+                  type="button"
+                >
+                  {deleting ? 'Deleting...' : 'Delete Task'}
+                </button>
+              )}
+
+              <button className="ghost-button compact" disabled={saving || deleting} onClick={onCancel} type="button">
+                Cancel edit
+              </button>
+            </div>
+          )}
         </div>
-        {editingTask && (
-          <button className="ghost-button" onClick={onCancel} type="button">
-            Cancel edit
+
+        <div className="task-form-tabs" role="tablist" aria-label="Task form sections">
+          <button
+            aria-pressed={activeTab === 'details'}
+            onClick={() => setActiveTab('details')}
+            style={tabButtonStyle(activeTab === 'details')}
+            type="button"
+          >
+            Details
           </button>
-        )}
-      </div>
+          <button
+            aria-pressed={activeTab === 'checklist'}
+            onClick={() => setActiveTab('checklist')}
+            style={tabButtonStyle(activeTab === 'checklist')}
+            type="button"
+          >
+            Checklist
+          </button>
+        </div>
 
-      <div className="task-form-tabs">
-        <button type="button" style={tabButtonStyle(activeTab === 'details')} onClick={() => setActiveTab('details')}>
-          Details
-        </button>
-        <button
-          type="button"
-          style={tabButtonStyle(activeTab === 'checklist')}
-          onClick={() => setActiveTab('checklist')}
-        >
-          Checklist
-        </button>
-      </div>
-
-      <form className="stack task-form-shell" onSubmit={submit}>
         {activeTab === 'details' && (
           <>
             <section className="panel task-section">
@@ -539,20 +584,22 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
               {form.task_name_choice === 'Other' && (
                 <label>
                   Custom task name
-                  <textarea
-                    disabled={!canEdit}
-                    value={form.task_name_custom}
-                    onChange={(event) => updateField('task_name_custom', event.target.value)}
-                    placeholder="Enter a custom task name"
-                  />
-                  <button
-                    className="ghost-button compact"
-                    disabled={!canEdit || !String(form.task_name_custom || '').trim()}
-                    onClick={addCustomTaskName}
-                    type="button"
-                  >
-                    Use custom task name
-                  </button>
+                  <div className="inline-custom-entry">
+                    <input
+                      disabled={!canEdit}
+                      value={form.task_name_custom}
+                      onChange={(event) => updateField('task_name_custom', event.target.value)}
+                      placeholder="Enter a custom task name"
+                    />
+                    <button
+                      className="ghost-button compact"
+                      disabled={!canEdit || !String(form.task_name_custom || '').trim()}
+                      onClick={addCustomTaskName}
+                      type="button"
+                    >
+                      Use custom task name
+                    </button>
+                  </div>
                 </label>
               )}
 
@@ -623,7 +670,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
                   label="Security Systems Team Member"
                   value={form.assigned_to}
                   options={assigneeSystemOptions}
-                  customValue={form.assignee_system_custom || ''}
+                  customValue={form.assignee_system_custom}
                   disabled={!canEdit}
                   onChange={(value) => updateField('assigned_to', value)}
                   onCustomChange={(value) => updateField('assignee_system_custom', value)}
@@ -639,7 +686,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
                   label="Security Systems Team Member"
                   value={form.assignee_secondary}
                   options={assigneeSystemOptions}
-                  customValue={form.assignee_secondary_custom || ''}
+                  customValue={form.assignee_secondary_custom}
                   disabled={!canEdit}
                   onChange={(value) => updateField('assignee_secondary', value)}
                   onCustomChange={(value) => updateField('assignee_secondary_custom', value)}
@@ -655,7 +702,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
                   label="Lock Smiths"
                   value={form.assignee_tertiary}
                   options={locksmithOptions}
-                  customValue={form.assignee_tertiary_custom || ''}
+                  customValue={form.assignee_tertiary_custom}
                   disabled={!canEdit}
                   onChange={(value) => updateField('assignee_tertiary', value)}
                   onCustomChange={(value) => updateField('assignee_tertiary_custom', value)}
@@ -683,7 +730,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
                 label="PM"
                 value={form.pm}
                 options={pmOptions}
-                customValue={form.pm_custom || ''}
+                customValue={form.pm_custom}
                 disabled={!canEdit}
                 onChange={(value) => updateField('pm', value)}
                 onCustomChange={(value) => updateField('pm_custom', value)}
@@ -709,6 +756,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
                     onChange={(event) => updateField('start_date', event.target.value)}
                   />
                 </label>
+
                 <label>
                   Finish
                   <input
@@ -865,6 +913,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
                 {checklistItems.map((item) => (
                   <div
                     key={item.id}
+                    className="checklist-edit-item"
                     style={{
                       display: 'grid',
                       gridTemplateColumns: '44px minmax(0, 1fr) auto',
@@ -923,7 +972,7 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
         {error && <p className="error-box">{error}</p>}
 
         <div className="task-form-actions">
-          <button className="primary-button" disabled={!canEdit || saving}>
+          <button className="primary-button" disabled={!canEdit || saving || deleting}>
             {saving ? 'Saving...' : editingTask ? 'Update task' : 'Create task'}
           </button>
         </div>
