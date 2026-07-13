@@ -4258,3 +4258,157 @@ html[data-theme='dark'] .danger-button.delete-task-button {
     justify-content: flex-start;
   }
 }
+
+.site-banner {
+  width: 100% !important;
+  min-height: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+  border-radius: 18px !important;
+  background: #030303 !important;
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.38),
+    0 0 0 1px rgba(239, 68, 68, 0.18) !important;
+}
+
+.site-banner.compact {
+  min-height: 0 !important;
+}
+
+.site-banner img {
+  width: 100% !important;
+  height: auto !important;
+  display: block !important;
+  object-fit: contain !important;
+  object-position: center center !important;
+  background: #030303 !important;
+}
+
+/* Full-app background image.
+   The image itself is intentionally faint/transparent, and these overlays keep text readable. */
+html,
+body {
+  min-height: 100% !important;
+}
+
+body {
+  background-color: #030303 !important;
+}
+
+#root {
+  position: relative !important;
+  min-height: 100vh !important;
+  isolation: isolate !important;
+  background: #030303 !important;
+}
+
+#root::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 18% 8%, rgba(var(--bt-accent-rgb, 239, 68, 68), 0.14), transparent 28rem),
+    radial-gradient(circle at 82% 14%, rgba(var(--bt-accent-rgb, 239, 68, 68), 0.10), transparent 30rem),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.20), rgba(0, 0, 0, 0.56)),
+    url('/app-background.png?v=20260713-pss-faint-bg-v1');
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat;
+  background-position: left top, right top, center center, center center;
+  background-size: auto, auto, cover, cover;
+  background-attachment: fixed, fixed, fixed, fixed;
+}
+
+#root > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Let the new background show around the interface instead of being hidden by page wrappers. */
+.app,
+.app-shell,
+.app-container,
+.auth-page,
+.auth-shell,
+.dashboard-page,
+.dashboard-shell,
+.project-page,
+.project-view,
+.page,
+.page-shell,
+main {
+  background: transparent !important;
+}
+
+/* Keep cards and panels readable over the faint background. */
+html[data-theme='dark'] .panel,
+html[data-theme='dark'] .project-card,
+html[data-theme='dark'] .task-form-section,
+html[data-theme='dark'] .task-section,
+html[data-theme='dark'] .dependency-item,
+html[data-theme='dark'] .member-item,
+html[data-theme='dark'] .activity-item,
+html[data-theme='dark'] .blueprint-item,
+html[data-theme='dark'] .project-note-entry,
+html[data-theme='dark'] .empty-state,
+html[data-theme='dark'] .modal,
+html[data-theme='dark'] .dialog,
+html[data-theme='dark'] .dropdown-menu,
+html[data-theme='dark'] .background-menu-panel {
+  background-color: rgba(5, 5, 8, 0.88) !important;
+  backdrop-filter: blur(10px) saturate(115%);
+}
+
+html[data-theme='light'] .panel,
+html[data-theme='light'] .project-card,
+html[data-theme='light'] .task-form-section,
+html[data-theme='light'] .task-section,
+html[data-theme='light'] .dependency-item,
+html[data-theme='light'] .member-item,
+html[data-theme='light'] .activity-item,
+html[data-theme='light'] .blueprint-item,
+html[data-theme='light'] .project-note-entry,
+html[data-theme='light'] .empty-state,
+html[data-theme='light'] .modal,
+html[data-theme='light'] .dialog,
+html[data-theme='light'] .dropdown-menu,
+html[data-theme='light'] .background-menu-panel {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(10px) saturate(105%);
+}
+
+/* Keep the selected accent/background color visible with the new page background. */
+html[data-theme='dark'] .primary-button,
+html[data-theme='dark'] .project-notes-toggle.active,
+html[data-theme='dark'] .task-form-tabs button[aria-pressed='true'] {
+  box-shadow:
+    0 0 0 1px rgba(var(--bt-accent-rgb, 239, 68, 68), 0.44),
+    0 18px 40px rgba(var(--bt-accent-rgb, 239, 68, 68), 0.34),
+    0 0 30px rgba(var(--bt-accent-rgb, 239, 68, 68), 0.22) !important;
+}
+
+html[data-theme='dark'] .panel,
+html[data-theme='dark'] .project-card,
+html[data-theme='dark'] .task-form-section,
+html[data-theme='dark'] .blueprint-panel-main,
+html[data-theme='dark'] .project-update-notes-panel {
+  border-color: rgba(var(--bt-accent-rgb, 239, 68, 68), 0.34) !important;
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.48),
+    0 0 0 1px rgba(var(--bt-accent-rgb, 239, 68, 68), 0.12),
+    0 0 42px rgba(var(--bt-accent-rgb, 239, 68, 68), 0.10) !important;
+}
+
+@media (max-width: 760px) {
+  .site-banner {
+    border-radius: 14px !important;
+  }
+
+  #root::before {
+    background-size: auto, auto, cover, auto 100%;
+
+ background-position: left top, right top, center center, center center;
+  }
+}
