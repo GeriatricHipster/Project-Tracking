@@ -283,6 +283,7 @@ export default function ProjectView({ projectId, user, onBack }) {
             editingTask={editingTask}
             canEdit={canEdit}
             onSave={saveTask}
+            onDelete={deleteTask}
             onCancel={() => setEditingTask(null)}
           />
 
