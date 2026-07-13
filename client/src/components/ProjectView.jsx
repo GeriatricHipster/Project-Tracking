@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+
 import { api, getToken } from '../lib/api';
 import { createProjectSocket } from '../lib/socket';
 import { formatDate } from '../lib/dates';
@@ -32,6 +33,7 @@ export default function ProjectView({ projectId, user, onBack }) {
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [editingTask, setEditingTask] = useState(null);
+  const [showProjectNotes, setShowProjectNotes] = useState(false);
 
   const projectRole = data?.project?.role || 'viewer';
   const canEdit = roleRank[projectRole] >= roleRank.editor;
@@ -41,9 +43,11 @@ export default function ProjectView({ projectId, user, onBack }) {
   async function loadProject({ quiet = false } = {}) {
     if (!quiet) setLoading(true);
     setError('');
+
     try {
       const payload = await api(`/projects/${projectId}`);
       setData(payload);
+
       if (editingTask) {
         const refreshed = payload.tasks.find((task) => task.id === editingTask.id);
         setEditingTask(refreshed || null);
@@ -56,6 +60,7 @@ export default function ProjectView({ projectId, user, onBack }) {
   }
 
   useEffect(() => {
+    setShowProjectNotes(false);
     loadProject();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
@@ -88,8 +93,12 @@ export default function ProjectView({ projectId, user, onBack }) {
     return [...(data?.tasks || [])].sort((a, b) => {
       const sortA = Number(a.sort_order ?? 0);
       const sortB = Number(b.sort_order ?? 0);
+
       if (sortA !== sortB) return sortA - sortB;
-      if ((a.start_date || '') !== (b.start_date || '')) return String(a.start_date || '').localeCompare(String(b.start_date || ''));
+      if ((a.start_date || '') !== (b.start_date || '')) {
+        return String(a.start_date || '').localeCompare(String(b.start_date || ''));
+      }
+
       return Number(a.id || 0) - Number(b.id || 0);
     });
   }, [data]);
@@ -100,6 +109,7 @@ export default function ProjectView({ projectId, user, onBack }) {
     } else {
       await api(`/projects/${projectId}/tasks`, { method: 'POST', body: payload });
     }
+
     setEditingTask(null);
     await loadProject({ quiet: true });
   }
@@ -107,7 +117,9 @@ export default function ProjectView({ projectId, user, onBack }) {
   async function deleteTask(task) {
     const confirmed = window.confirm(`Delete task "${task.name}"? This also removes its dependencies and comments.`);
     if (!confirmed) return;
+
     await api(`/tasks/${task.id}`, { method: 'DELETE' });
+
     if (editingTask?.id === task.id) setEditingTask(null);
     await loadProject({ quiet: true });
   }
@@ -129,7 +141,11 @@ export default function ProjectView({ projectId, user, onBack }) {
   }
 
   async function updateMember(member, role) {
-    const result = await api(`/projects/${projectId}/members/${member.user_id}`, { method: 'PATCH', body: { role } });
+    const result = await api(`/projects/${projectId}/members/${member.user_id}`, {
+      method: 'PATCH',
+      body: { role }
+    });
+
     await loadProject({ quiet: true });
     return result;
   }
@@ -137,6 +153,7 @@ export default function ProjectView({ projectId, user, onBack }) {
   async function removeMember(member) {
     const confirmed = window.confirm(`Remove ${member.name} from this project?`);
     if (!confirmed) return;
+
     await api(`/projects/${projectId}/members/${member.user_id}`, { method: 'DELETE' });
     await loadProject({ quiet: true });
   }
@@ -146,6 +163,7 @@ export default function ProjectView({ projectId, user, onBack }) {
       method: 'PATCH',
       body: { is_checked: isChecked }
     });
+
     await loadProject({ quiet: true });
   }
 
@@ -176,7 +194,6 @@ export default function ProjectView({ projectId, user, onBack }) {
     await loadProject({ quiet: true });
   }
 
-
   if (loading && !data) {
     return (
       <main className="app-page">
@@ -197,13 +214,23 @@ export default function ProjectView({ projectId, user, onBack }) {
     );
   }
 
-  const { project, members = [], dependencies = [], checklist = [], blueprints = [], audit = [] } = data || {};
+  const {
+    project,
+    members = [],
+    dependencies = [],
+    checklist = [],
+    blueprints = [],
+    audit = [],
+    notes_entries: noteEntries = []
+  } = data || {};
 
   return (
     <main className="app-page project-view">
       <SiteBanner />
+
       <header className="project-header panel">
         <button className="ghost-button" onClick={onBack} type="button">Back to projects</button>
+
         <div className="project-title-block">
           <div className="project-title-row">
             <h1>{project.name}</h1>
@@ -211,14 +238,39 @@ export default function ProjectView({ projectId, user, onBack }) {
             {project.project_status === 'completed' && <span className="status-pill status-completed">Completed</span>}
             {project.project_status === 'archived' && <span className="status-pill status-archived">Archived</span>}
           </div>
+
           <p>{project.location || 'No location set'} · {formatDate(project.start_date)} to {formatDate(project.end_date)}</p>
           {project.description && <p className="project-description">{project.description}</p>}
         </div>
-        <button className="ghost-button" onClick={() => loadProject({ quiet: true })} type="button">Refresh</button>
+
+        <div className="project-header-actions">
+          <button
+            className={`ghost-button project-notes-toggle ${showProjectNotes ? 'active' : ''}`}
+            onClick={() => setShowProjectNotes((current) => !current)}
+            type="button"
+          >
+            Project Update Notes{noteEntries.length ? ` (${noteEntries.length})` : ''}
+          </button>
+
+          <button className="ghost-button" onClick={() => loadProject({ quiet: true })} type="button">Refresh</button>
+        </div>
       </header>
 
       {toast && <div className="toast">{toast}</div>}
       {error && <div className="error-box">{error}</div>}
+
+      {showProjectNotes && (
+        <div className="project-notes-drawer">
+          <ProjectNotesPanel
+            project={project}
+            entries={noteEntries}
+            canEdit={canEditNotes}
+            onCreateEntry={addProjectNote}
+            onUpdateEntry={updateProjectNote}
+            onDeleteEntry={deleteProjectNote}
+          />
+        </div>
+      )}
 
       <GanttChart project={project} tasks={orderedTasks} dependencies={dependencies} onEditTask={setEditingTask} />
 
@@ -233,7 +285,15 @@ export default function ProjectView({ projectId, user, onBack }) {
             onSave={saveTask}
             onCancel={() => setEditingTask(null)}
           />
-          <ProjectNotesPanel project={project} entries={data?.notes_entries || []} canEdit={canEditNotes} onCreateEntry={addProjectNote} onUpdateEntry={updateProjectNote} onDeleteEntry={deleteProjectNote} />
+
+          <BlueprintsPanel
+            blueprints={blueprints || []}
+            canEdit={canEdit}
+            onUpload={uploadBlueprint}
+            onDelete={deleteBlueprint}
+            variant="main"
+          />
+
           <TaskTable tasks={orderedTasks} canEdit={canEdit} onEdit={setEditingTask} onDelete={deleteTask} />
         </div>
 
@@ -245,12 +305,7 @@ export default function ProjectView({ projectId, user, onBack }) {
             onAddDependency={addDependency}
             onDeleteDependency={deleteDependency}
           />
-          <BlueprintsPanel
-            blueprints={blueprints || []}
-            canEdit={canEdit}
-            onUpload={uploadBlueprint}
-            onDelete={deleteBlueprint}
-          />
+
           <MembersPanel
             currentUser={user}
             projectRole={project.role}
@@ -260,6 +315,7 @@ export default function ProjectView({ projectId, user, onBack }) {
             onUpdateMember={updateMember}
             onRemoveMember={removeMember}
           />
+
           <ActivityPanel audit={audit} />
         </aside>
       </section>
