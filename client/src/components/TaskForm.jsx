@@ -460,15 +460,21 @@ export default function TaskForm({ project, members, tasks, editingTask, canEdit
   }
 
   const tabButtonStyle = (active) => ({
-    border: active ? '1px solid #7f1d1d' : '1px solid rgba(148, 163, 184, 0.55)',
-    background: active ? 'linear-gradient(135deg, #dc2626, #991b1b)' : '#ffffff',
+    border: active ? '1px solid #7f1d1d' : '1px solid rgba(148, 163, 184, 0.85)',
+    background: active
+      ? 'linear-gradient(135deg, #dc2626, #991b1b)'
+      : 'linear-gradient(180deg, #ffffff, #e5e7eb)',
     color: active ? '#ffffff' : '#111827',
     borderRadius: 999,
-    padding: '10px 14px',
+    padding: '10px 16px',
     fontSize: 13,
     fontWeight: 800,
     cursor: 'pointer',
-    boxShadow: active ? '0 10px 20px rgba(220, 38, 38, 0.20)' : '0 6px 14px rgba(15, 23, 42, 0.08)'
+    opacity: 1,
+    textShadow: 'none',
+    boxShadow: active
+      ? '0 10px 20px rgba(220, 38, 38, 0.20)'
+      : '0 6px 14px rgba(15, 23, 42, 0.10)'
   });
 
   return (
