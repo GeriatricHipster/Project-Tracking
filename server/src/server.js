@@ -101,9 +101,20 @@ const blueprintUpload = multer({
   fileFilter(req, file, callback) {
     const allowedTypes = new Set([
       'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'text/csv',
+      'text/plain',
       'image/png',
       'image/jpeg',
       'image/webp',
+      'image/gif',
+      'image/bmp',
+      'image/tiff',
       'image/vnd.dwg',
       'application/acad',
       'application/x-acad',
@@ -111,10 +122,35 @@ const blueprintUpload = multer({
       'application/x-dwg',
       'application/octet-stream'
     ]);
-    if (!allowedTypes.has(file.mimetype)) {
-      callback(httpError(400, 'Blueprint uploads must be PDF, image, DWG, or common drawing files.'));
+
+    const allowedExtensions = new Set([
+      '.pdf',
+      '.doc',
+      '.docx',
+      '.xls',
+      '.xlsx',
+      '.csv',
+      '.jpg',
+      '.jpeg',
+      '.png',
+      '.webp',
+      '.gif',
+      '.bmp',
+      '.tif',
+      '.tiff',
+      '.dwg',
+      '.txt',
+      '.ppt',
+      '.pptx'
+    ]);
+
+    const extension = path.extname(file.originalname || '').toLowerCase();
+
+    if (!allowedTypes.has(file.mimetype) && !allowedExtensions.has(extension)) {
+      callback(httpError(400, 'Project file uploads must be PDF, Word, Excel, CSV, image, PowerPoint, DWG, text, or common drawing files.'));
       return;
     }
+
     callback(null, true);
   }
 });
