@@ -3996,3 +3996,4 @@ html[data-theme='dark'] .task-form-tabs button[style*='linear-gradient'] {
   .task-context-menu {
     max-width: calc(100vw - 20px);
   }
+}
