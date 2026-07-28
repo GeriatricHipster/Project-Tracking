@@ -27,7 +27,7 @@ function titleCase(value) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export default function ProjectView({ projectId, user, onBack }) {
+export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -252,7 +252,17 @@ export default function ProjectView({ projectId, user, onBack }) {
             Project Update Notes{noteEntries.length ? ` (${noteEntries.length})` : ''}
           </button>
 
-          <button className="ghost-button" onClick={() => loadProject({ quiet: true })} type="button">Refresh</button>
+         <button
+  className="ghost-button compact back-to-top-button"
+  onClick={onBackToTop}
+  type="button"
+>
+  Back to top
+</button>
+
+<button className="ghost-button compact" onClick={loadProject} type="button">
+  Refresh
+</button>
         </div>
       </header>
 
