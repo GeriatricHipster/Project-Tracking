@@ -38,7 +38,9 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
   const projectRole = data?.project?.role || 'viewer';
   const canEdit = roleRank[projectRole] >= roleRank.editor;
   const canManage = roleRank[projectRole] >= roleRank.manager;
-  const canEditNotes = projectRole !== 'portfolio_viewer' && roleRank[projectRole] >= roleRank.viewer;
+  const canEditNotes =
+    projectRole !== 'portfolio_viewer' &&
+    roleRank[projectRole] >= roleRank.viewer;
 
   async function loadProject({ quiet = false } = {}) {
     if (!quiet) setLoading(true);
@@ -49,7 +51,9 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
       setData(payload);
 
       if (editingTask) {
-        const refreshed = (payload.tasks || []).find((task) => task.id === editingTask.id);
+        const refreshed = (payload.tasks || []).find(
+          (task) => task.id === editingTask.id
+        );
         setEditingTask(refreshed || null);
       }
     } catch (err) {
@@ -112,7 +116,9 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
       if (sortA !== sortB) return sortA - sortB;
 
       if ((a.start_date || '') !== (b.start_date || '')) {
-        return String(a.start_date || '').localeCompare(String(b.start_date || ''));
+        return String(a.start_date || '').localeCompare(
+          String(b.start_date || '')
+        );
       }
 
       return Number(a.id || 0) - Number(b.id || 0);
@@ -182,10 +188,13 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
   }
 
   async function updateMember(member, role) {
-    const result = await api(`/projects/${projectId}/members/${member.user_id}`, {
-      method: 'PATCH',
-      body: { role }
-    });
+    const result = await api(
+      `/projects/${projectId}/members/${member.user_id}`,
+      {
+        method: 'PATCH',
+        body: { role }
+      }
+    );
 
     await loadProject({ quiet: true });
     return result;
