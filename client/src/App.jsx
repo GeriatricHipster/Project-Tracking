@@ -254,18 +254,20 @@ export default function App() {
 
   if (selectedProjectId) {
     return (
-      <>
-        {floatingControls}
-        <ProjectView
-          projectId={selectedProjectId}
-          user={user}
-          onBack={() => {
-            setSelectedProjectId(null);
-            loadProjects();
-          }}
-          onBackToTop={scrollToTop}
-        />
-      </>
+     <>
+  {floatingControls}
+
+  <GlobalBackToTop />
+
+  <ProjectView
+    projectId={selectedProjectId}
+    user={user}
+    onBack={() => {
+      setSelectedProjectId(null);
+      loadProjects();
+    }}
+  />
+</>
     );
   }
 
