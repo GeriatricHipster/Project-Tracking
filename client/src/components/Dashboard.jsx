@@ -142,6 +142,7 @@ export default function Dashboard({
   onUpdateProject,
   onDeleteProject,
   onRefresh,
+  onBackToTop,
   onLogout
 }) {
   const start = todayIso();
