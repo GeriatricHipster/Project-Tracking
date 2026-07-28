@@ -59,6 +59,20 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
     }
   }
 
+  function handleBackToTop() {
+    if (typeof onBackToTop === 'function') {
+      onBackToTop();
+      return;
+    }
+
+    if (typeof window !== 'undefined') {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    }
+  }
+
   useEffect(() => {
     setShowProjectNotes(false);
     loadProject();
@@ -85,6 +99,7 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
 
   useEffect(() => {
     if (!toast) return undefined;
+
     const timer = window.setTimeout(() => setToast(''), 4000);
     return () => window.clearTimeout(timer);
   }, [toast]);
@@ -95,6 +110,7 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
       const sortB = Number(b.sort_order ?? 0);
 
       if (sortA !== sortB) return sortA - sortB;
+
       if ((a.start_date || '') !== (b.start_date || '')) {
         return String(a.start_date || '').localeCompare(String(b.start_date || ''));
       }
@@ -105,9 +121,15 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
 
   async function saveTask(payload) {
     if (editingTask) {
-      await api(`/tasks/${editingTask.id}`, { method: 'PATCH', body: payload });
+      await api(`/tasks/${editingTask.id}`, {
+        method: 'PATCH',
+        body: payload
+      });
     } else {
-      await api(`/projects/${projectId}/tasks`, { method: 'POST', body: payload });
+      await api(`/projects/${projectId}/tasks`, {
+        method: 'POST',
+        body: payload
+      });
     }
 
     setEditingTask(null);
@@ -115,27 +137,46 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
   }
 
   async function deleteTask(task) {
-    const confirmed = window.confirm(`Delete task "${task.name}"? This also removes its dependencies and comments.`);
+    const confirmed = window.confirm(
+      `Delete task "${task.name}"? This also removes its dependencies and comments.`
+    );
+
     if (!confirmed) return;
 
-    await api(`/tasks/${task.id}`, { method: 'DELETE' });
+    await api(`/tasks/${task.id}`, {
+      method: 'DELETE'
+    });
 
-    if (editingTask?.id === task.id) setEditingTask(null);
+    if (editingTask?.id === task.id) {
+      setEditingTask(null);
+    }
+
     await loadProject({ quiet: true });
   }
 
   async function addDependency(payload) {
-    await api(`/projects/${projectId}/dependencies`, { method: 'POST', body: payload });
+    await api(`/projects/${projectId}/dependencies`, {
+      method: 'POST',
+      body: payload
+    });
+
     await loadProject({ quiet: true });
   }
 
   async function deleteDependency(dependency) {
-    await api(`/dependencies/${dependency.id}`, { method: 'DELETE' });
+    await api(`/dependencies/${dependency.id}`, {
+      method: 'DELETE'
+    });
+
     await loadProject({ quiet: true });
   }
 
   async function addMember(payload) {
-    const result = await api(`/projects/${projectId}/members`, { method: 'POST', body: payload });
+    const result = await api(`/projects/${projectId}/members`, {
+      method: 'POST',
+      body: payload
+    });
+
     await loadProject({ quiet: true });
     return result;
   }
@@ -152,9 +193,13 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
 
   async function removeMember(member) {
     const confirmed = window.confirm(`Remove ${member.name} from this project?`);
+
     if (!confirmed) return;
 
-    await api(`/projects/${projectId}/members/${member.user_id}`, { method: 'DELETE' });
+    await api(`/projects/${projectId}/members/${member.user_id}`, {
+      method: 'DELETE'
+    });
+
     await loadProject({ quiet: true });
   }
 
@@ -170,27 +215,46 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
   async function uploadBlueprint(file) {
     const formData = new FormData();
     formData.append('blueprint', file);
-    await api(`/projects/${projectId}/blueprints`, { method: 'POST', body: formData });
+
+    await api(`/projects/${projectId}/blueprints`, {
+      method: 'POST',
+      body: formData
+    });
+
     await loadProject({ quiet: true });
   }
 
   async function deleteBlueprint(blueprint) {
-    await api(`/blueprints/${blueprint.id}`, { method: 'DELETE' });
+    await api(`/blueprints/${blueprint.id}`, {
+      method: 'DELETE'
+    });
+
     await loadProject({ quiet: true });
   }
 
   async function addProjectNote(body) {
-    await api(`/projects/${projectId}/notes`, { method: 'POST', body: { body } });
+    await api(`/projects/${projectId}/notes`, {
+      method: 'POST',
+      body: { body }
+    });
+
     await loadProject({ quiet: true });
   }
 
   async function updateProjectNote(noteId, body) {
-    await api(`/projects/${projectId}/notes/${noteId}`, { method: 'PATCH', body: { body } });
+    await api(`/projects/${projectId}/notes/${noteId}`, {
+      method: 'PATCH',
+      body: { body }
+    });
+
     await loadProject({ quiet: true });
   }
 
   async function deleteProjectNote(noteId) {
-    await api(`/projects/${projectId}/notes/${noteId}`, { method: 'DELETE' });
+    await api(`/projects/${projectId}/notes/${noteId}`, {
+      method: 'DELETE'
+    });
+
     await loadProject({ quiet: true });
   }
 
@@ -198,8 +262,14 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
     return (
       <main className="app-page">
         <SiteBanner />
-        <button className="ghost-button" onClick={onBack} type="button">Back to projects</button>
-        <div className="panel loading-panel">Loading project...</div>
+
+        <button className="ghost-button" onClick={onBack} type="button">
+          Back to projects
+        </button>
+
+        <div className="panel loading-panel">
+          Loading project...
+        </div>
       </main>
     );
   }
@@ -208,8 +278,14 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
     return (
       <main className="app-page">
         <SiteBanner />
-        <button className="ghost-button" onClick={onBack} type="button">Back to projects</button>
-        <div className="error-box">{error}</div>
+
+        <button className="ghost-button" onClick={onBack} type="button">
+          Back to projects
+        </button>
+
+        <div className="error-box">
+          {error}
+        </div>
       </main>
     );
   }
@@ -229,18 +305,40 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
       <SiteBanner />
 
       <header className="project-header panel">
-        <button className="ghost-button" onClick={onBack} type="button">Back to projects</button>
+        <button className="ghost-button" onClick={onBack} type="button">
+          Back to projects
+        </button>
 
         <div className="project-title-block">
           <div className="project-title-row">
             <h1>{project.name}</h1>
-            <span className={`role-pill role-${project.role}`}>{titleCase(project.role)}</span>
-            {project.project_status === 'completed' && <span className="status-pill status-completed">Completed</span>}
-            {project.project_status === 'archived' && <span className="status-pill status-archived">Archived</span>}
+
+            <span className={`role-pill role-${project.role}`}>
+              {titleCase(project.role)}
+            </span>
+
+            {project.project_status === 'completed' && (
+              <span className="status-pill status-completed">
+                Completed
+              </span>
+            )}
+
+            {project.project_status === 'archived' && (
+              <span className="status-pill status-archived">
+                Archived
+              </span>
+            )}
           </div>
 
-          <p>{project.location || 'No location set'} · {formatDate(project.start_date)} to {formatDate(project.end_date)}</p>
-          {project.description && <p className="project-description">{project.description}</p>}
+          <p>
+            {project.location || 'No location set'} · {formatDate(project.start_date)} to {formatDate(project.end_date)}
+          </p>
+
+          {project.description && (
+            <p className="project-description">
+              {project.description}
+            </p>
+          )}
         </div>
 
         <div className="project-header-actions">
@@ -252,30 +350,35 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
             Project Update Notes{noteEntries.length ? ` (${noteEntries.length})` : ''}
           </button>
 
-<button
-  className="ghost-button compact back-to-top-button"
-  onClick={onBackToTop}
-  type="button"
->
-  Back to top
-</button>
+          <button
+            className="ghost-button compact back-to-top-button"
+            onClick={handleBackToTop}
+            type="button"
+          >
+            Back to top
+          </button>
 
-<button className="ghost-button compact" onClick={loadProject} type="button">
-  Refresh
-</button>
->
-        
-  Back to top
-</button>
-
-<button className="ghost-button compact" onClick={loadProject} type="button">
-  Refresh
-</button>
+          <button
+            className="ghost-button compact"
+            onClick={() => loadProject()}
+            type="button"
+          >
+            Refresh
+          </button>
         </div>
       </header>
 
-      {toast && <div className="toast">{toast}</div>}
-      {error && <div className="error-box">{error}</div>}
+      {toast && (
+        <div className="toast">
+          {toast}
+        </div>
+      )}
+
+      {error && (
+        <div className="error-box">
+          {error}
+        </div>
+      )}
 
       {showProjectNotes && (
         <div className="project-notes-drawer">
@@ -290,7 +393,12 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
         </div>
       )}
 
-      <GanttChart project={project} tasks={orderedTasks} dependencies={dependencies} onEditTask={setEditingTask} />
+      <GanttChart
+        project={project}
+        tasks={orderedTasks}
+        dependencies={dependencies}
+        onEditTask={setEditingTask}
+      />
 
       <section className="project-workspace">
         <div className="workspace-main">
@@ -303,6 +411,8 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
             onSave={saveTask}
             onDelete={deleteTask}
             onCancel={() => setEditingTask(null)}
+            checklist={checklist}
+            onUpdateChecklistItem={updateChecklistItem}
           />
 
           <BlueprintsPanel
@@ -313,7 +423,12 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
             variant="main"
           />
 
-          <TaskTable tasks={orderedTasks} canEdit={canEdit} onEdit={setEditingTask} onDelete={deleteTask} />
+          <TaskTable
+            tasks={orderedTasks}
+            canEdit={canEdit}
+            onEdit={setEditingTask}
+            onDelete={deleteTask}
+          />
         </div>
 
         <aside className="workspace-side">
