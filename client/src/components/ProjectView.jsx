@@ -49,7 +49,7 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
       setData(payload);
 
       if (editingTask) {
-        const refreshed = payload.tasks.find((task) => task.id === editingTask.id);
+        const refreshed = (payload.tasks || []).find((task) => task.id === editingTask.id);
         setEditingTask(refreshed || null);
       }
     } catch (err) {
@@ -300,6 +300,22 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
     notes_entries: noteEntries = []
   } = data || {};
 
+  if (!project) {
+    return (
+      <main className="app-page">
+        <SiteBanner />
+
+        <button className="ghost-button" onClick={onBack} type="button">
+          Back to projects
+        </button>
+
+        <div className="error-box">
+          Project data could not be loaded. Go back to the project list and reopen the project.
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="app-page project-view">
       <SiteBanner />
@@ -331,7 +347,7 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
           </div>
 
           <p>
-            {project.location || 'No location set'} · {formatDate(project.start_date)} to {formatDate(project.end_date)}
+            {project.location || 'No location set'} - {formatDate(project.start_date)} to {formatDate(project.end_date)}
           </p>
 
           {project.description && (
@@ -341,7 +357,7 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
           )}
         </div>
 
-                <div className="project-header-actions">
+        <div className="project-header-actions">
           <button
             className={`ghost-button project-notes-toggle ${showProjectNotes ? 'active' : ''}`}
             onClick={() => setShowProjectNotes((current) => !current)}
@@ -352,19 +368,7 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
 
           <button
             className="ghost-button compact back-to-top-button"
-            onClick={() => {
-              if (typeof onBackToTop === 'function') {
-                onBackToTop();
-                return;
-              }
-
-              if (typeof window !== 'undefined') {
-                window.scrollTo({
-                  top: 0,
-                  behavior: 'smooth'
-                });
-              }
-            }}
+            onClick={handleBackToTop}
             type="button"
           >
             Back to top
@@ -378,6 +382,7 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
             Refresh
           </button>
         </div>
+      </header>
 
       {toast && (
         <div className="toast">
