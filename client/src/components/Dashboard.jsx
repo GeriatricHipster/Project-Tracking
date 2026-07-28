@@ -713,6 +713,14 @@ export default function Dashboard({
   Back to top
 </button>
 
+          <button
+  className="ghost-button compact back-to-top-button"
+  onClick={onBackToTop}
+  type="button"
+>
+  Back to top
+</button>
+          
 <button className="ghost-button compact" onClick={onRefresh} type="button">
   Refresh
 </button>
