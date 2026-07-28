@@ -705,7 +705,17 @@ export default function Dashboard({
           </div>
         </div>
         <div className="topbar-actions">
-          <button className="ghost-button" onClick={onRefresh} type="button">Refresh</button>
+          <button
+  className="ghost-button compact back-to-top-button"
+  onClick={onBackToTop}
+  type="button"
+>
+  Back to top
+</button>
+
+<button className="ghost-button compact" onClick={onRefresh} type="button">
+  Refresh
+</button>
           <button className="ghost-button" onClick={onLogout} type="button">Logout</button>
         </div>
       </header>
