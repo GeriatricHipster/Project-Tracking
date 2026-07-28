@@ -697,27 +697,34 @@ export default function Dashboard({
   return (
     <main className="app-page">
       <SiteBanner />
+
       <header className="topbar">
         <div className="brand-lockup small">
           <span className="brand-mark">PSG</span>
           <div>
             <strong>PSG and SS Tracking</strong>
-            <span>{user?.name} · {titleCase(user?.site_role || 'member')}</span>
-          </div>
-        </div>
-      <header className="topbar">
-        <div className="brand-lockup small">
-          <span className="brand-mark">PSG</span>
-          <div>
-            <strong>PSG and SS Tracking</strong>
-            <span>{user?.name} · {titleCase(user?.site_role || 'member')}</span>
+            <span>
+              {user?.name} · {titleCase(user?.site_role || 'member')}
+            </span>
           </div>
         </div>
 
         <div className="topbar-actions">
           <button
             className="ghost-button compact back-to-top-button"
-            onClick={onBackToTop}
+            onClick={() => {
+              if (typeof onBackToTop === 'function') {
+                onBackToTop();
+                return;
+              }
+
+              if (typeof window !== 'undefined') {
+                window.scrollTo({
+                  top: 0,
+                  behavior: 'smooth'
+                });
+              }
+            }}
             type="button"
           >
             Back to top
@@ -750,7 +757,13 @@ export default function Dashboard({
             placeholder="Search by Work Order #, Building, PM, or member"
           />
         </label>
-        <button className="ghost-button compact" onClick={() => setSearchTerm('')} disabled={!searchTerm} type="button">
+
+        <button
+          className="ghost-button compact"
+          onClick={() => setSearchTerm('')}
+          disabled={!searchTerm}
+          type="button"
+        >
           Clear
         </button>
       </section>
@@ -768,15 +781,32 @@ export default function Dashboard({
         ))}
       </nav>
 
-      {activeTab !== 'projects' && activeTab !== 'completed' && error && <p className="error-box dashboard-error">{error}</p>}
+      {activeTab !== 'projects' && activeTab !== 'completed' && error && (
+        <p className="error-box dashboard-error">
+          {error}
+        </p>
+      )}
+
       {activeTab === 'projects' && renderProjectsTab()}
       {activeTab === 'completed' && renderCompletedTab()}
       {activeTab === 'archive' && renderArchiveTab()}
       {activeTab === 'assignments' && renderAssignmentsTab()}
       {activeTab === 'calendar' && renderCalendarTab()}
-      {activeTab === 'site-members' && canManageSite && <SiteMembersPanel currentUser={user} onOpenProject={onOpenProject} />}
-      {activeTab === 'owner-cms' && canAccessOwnerCms && <OwnerCmsWosPanel user={user} />}
-      {activeTab === 'markup-calculator' && canAccessOwnerCms && <MarkupCalculatorPanel />}
+
+      {activeTab === 'site-members' && canManageSite && (
+        <SiteMembersPanel
+          currentUser={user}
+          onOpenProject={onOpenProject}
+        />
+      )}
+
+      {activeTab === 'owner-cms' && canAccessOwnerCms && (
+        <OwnerCmsWosPanel user={user} />
+      )}
+
+      {activeTab === 'markup-calculator' && canAccessOwnerCms && (
+        <MarkupCalculatorPanel />
+      )}
     </main>
   );
 }
