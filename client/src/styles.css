@@ -4781,7 +4781,7 @@ html[data-theme='light'] .site-banner {
 /* Project page placement: keeps it near the Refresh button location */
 .project-header-actions .back-to-top-button {
   top: 5.35rem !important;
-  right: 8.25rem !important;
+  right: 7.20rem !important;
 }
 
 /* Dashboard placement: accounts for Refresh + Logout */
