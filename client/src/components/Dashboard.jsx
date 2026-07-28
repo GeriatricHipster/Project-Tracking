@@ -705,27 +705,39 @@ export default function Dashboard({
             <span>{user?.name} · {titleCase(user?.site_role || 'member')}</span>
           </div>
         </div>
+      <header className="topbar">
+        <div className="brand-lockup small">
+          <span className="brand-mark">PSG</span>
+          <div>
+            <strong>PSG and SS Tracking</strong>
+            <span>{user?.name} · {titleCase(user?.site_role || 'member')}</span>
+          </div>
+        </div>
+
         <div className="topbar-actions">
           <button
-  className="ghost-button compact back-to-top-button"
-  onClick={onBackToTop}
-  type="button"
->
-  Back to top
-</button>
+            className="ghost-button compact back-to-top-button"
+            onClick={onBackToTop}
+            type="button"
+          >
+            Back to top
+          </button>
 
           <button
-  className="ghost-button compact back-to-top-button"
-  onClick={onBackToTop}
-  type="button"
->
-  Back to top
-</button>
-          
-<button className="ghost-button compact" onClick={onRefresh} type="button">
-  Refresh
-</button>
-          <button className="ghost-button" onClick={onLogout} type="button">Logout</button>
+            className="ghost-button compact"
+            onClick={onRefresh}
+            type="button"
+          >
+            Refresh
+          </button>
+
+          <button
+            className="ghost-button"
+            onClick={onLogout}
+            type="button"
+          >
+            Logout
+          </button>
         </div>
       </header>
 
