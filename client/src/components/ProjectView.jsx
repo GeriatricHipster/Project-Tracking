@@ -252,10 +252,17 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
             Project Update Notes{noteEntries.length ? ` (${noteEntries.length})` : ''}
           </button>
 
-         <button
+<button
   className="ghost-button compact back-to-top-button"
   onClick={onBackToTop}
   type="button"
+>
+  Back to top
+</button>
+
+<button className="ghost-button compact" onClick={/* keep your existing Refresh function */} type="button">
+  Refresh
+</button>
 >
   Back to top
 </button>
