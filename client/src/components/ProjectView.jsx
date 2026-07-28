@@ -341,7 +341,7 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
           )}
         </div>
 
-        <div className="project-header-actions">
+                <div className="project-header-actions">
           <button
             className={`ghost-button project-notes-toggle ${showProjectNotes ? 'active' : ''}`}
             onClick={() => setShowProjectNotes((current) => !current)}
@@ -352,7 +352,19 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
 
           <button
             className="ghost-button compact back-to-top-button"
-            onClick={handleBackToTop}
+            onClick={() => {
+              if (typeof onBackToTop === 'function') {
+                onBackToTop();
+                return;
+              }
+
+              if (typeof window !== 'undefined') {
+                window.scrollTo({
+                  top: 0,
+                  behavior: 'smooth'
+                });
+              }
+            }}
             type="button"
           >
             Back to top
@@ -366,7 +378,6 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
             Refresh
           </button>
         </div>
-      </header>
 
       {toast && (
         <div className="toast">
