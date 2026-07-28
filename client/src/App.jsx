@@ -164,6 +164,34 @@ export default function App() {
     });
   }
 
+  function GlobalBackToTop() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    function onScroll() {
+      setVisible(window.scrollY > 250);
+    }
+
+    window.addEventListener("scroll", onScroll);
+    onScroll();
+
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <button
+      className="global-back-to-top"
+      onClick={scrollToTop}
+      type="button"
+      title="Back to top"
+    >
+      ↑ Top
+    </button>
+  );
+}
+  
   function logout() {
     setToken(null);
     setTokenState(null);
@@ -243,19 +271,19 @@ export default function App() {
 
   return (
     <>
-      {floatingControls}
-      <Dashboard
-        user={user}
-        projects={projects}
-        loading={loadingProjects}
-        onOpenProject={setSelectedProjectId}
-        onCreateProject={createProject}
-        onUpdateProject={updateProject}
-        onDeleteProject={deleteProject}
-        onRefresh={loadProjects}
-        onBackToTop={scrollToTop}
-        onLogout={logout}
-      />
-    </>
-  );
-}
+  {floatingControls}
+
+  <GlobalBackToTop />
+
+  <Dashboard
+    user={user}
+    projects={projects}
+    loading={loadingProjects}
+    onOpenProject={setSelectedProjectId}
+    onCreateProject={createProject}
+    onUpdateProject={updateProject}
+    onDeleteProject={deleteProject}
+    onRefresh={loadProjects}
+    onLogout={logout}
+  />
+</>
