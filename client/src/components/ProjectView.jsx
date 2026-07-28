@@ -264,6 +264,7 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
   Refresh
 </button>
 >
+        
   Back to top
 </button>
 
