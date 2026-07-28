@@ -4778,16 +4778,21 @@ html[data-theme='light'] .site-banner {
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.24) !important;
 }
 
-/* Project page placement: keeps it near the Refresh button location */
-.project-header-actions .back-to-top-button {
-  top: 7.50rem !important;
-  right: 2.25rem !important;
-}
+.global-back-to-top {
+    position: fixed;
 
-/* Dashboard placement: accounts for Refresh + Logout */
-.topbar-actions .back-to-top-button {
-  top: 7.50rem !important;
-  right: 2.25rem !important;
+    top: 7.50rem;
+    right: 2.25rem;
+
+    z-index: 5000;
+
+    padding: .55rem .9rem;
+
+    border-radius: 12px;
+
+    font-weight: 800;
+
+    white-space: nowrap;
 }
 
 /* Mobile/tablet: move it lower and to the right so it does not cover content */
