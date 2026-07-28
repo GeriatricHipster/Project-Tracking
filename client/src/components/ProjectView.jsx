@@ -260,7 +260,7 @@ export default function ProjectView({ projectId, user, onBack, onBackToTop }) {
   Back to top
 </button>
 
-<button className="ghost-button compact" onClick={/* keep your existing Refresh function */} type="button">
+<button className="ghost-button compact" onClick={loadProject} type="button">
   Refresh
 </button>
 >
