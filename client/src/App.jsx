@@ -230,10 +230,12 @@ export default function App() {
   );
 
   if (booting) {
-    return (
-      <>
-        {floatingControls}
-        <main className="app-page">
+  return (
+    <>
+      {floatingControls}
+      <GlobalBackToTop />
+
+      <main className="app-page">
           <SiteBanner />
           <div className="panel loading-panel">
             Starting PSG and SS Tracking...
@@ -244,17 +246,19 @@ export default function App() {
   }
 
   if (!token || !user) {
-    return (
-      <>
-        {floatingControls}
-        <AuthScreen onAuth={handleAuth} />
-      </>
-    );
-  }
+  return (
+    <>
+      {floatingControls}
+      <GlobalBackToTop />
+
+      <AuthScreen onAuth={handleAuth} />
+    </>
+  );
+}
 
   if (selectedProjectId) {
     return (
-     <>
+    <>
   {floatingControls}
 
   <GlobalBackToTop />
@@ -272,7 +276,7 @@ export default function App() {
   }
 
   return (
-    <>
+   <>
   {floatingControls}
 
   <GlobalBackToTop />
