@@ -31,6 +31,7 @@ export default function App() {
     if (typeof window === 'undefined') return 'light';
     return window.localStorage.getItem('psg-theme') || 'light';
   });
+
   const [background, setBackground] = useState(() => readBackgroundPreference(null));
   const [token, setTokenState] = useState(getToken());
   const [user, setUser] = useState(null);
@@ -55,6 +56,7 @@ export default function App() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.documentElement.dataset.background = background;
+
     if (user?.id) {
       window.localStorage.setItem(backgroundStorageKey(user.id), background);
     } else {
@@ -70,6 +72,7 @@ export default function App() {
   function openProjectFromUrl(nextProjects) {
     const requestedProjectId = projectIdFromUrl();
     if (!requestedProjectId) return;
+
     if (nextProjects.some((project) => project.id === requestedProjectId)) {
       setSelectedProjectId(requestedProjectId);
       window.history.replaceState(null, '', window.location.pathname);
@@ -78,6 +81,7 @@ export default function App() {
 
   async function loadProjects() {
     setLoadingProjects(true);
+
     try {
       const data = await api('/projects');
       setProjects(data.projects);
@@ -94,6 +98,7 @@ export default function App() {
   useEffect(() => {
     async function boot() {
       const storedToken = getToken();
+
       if (!storedToken) {
         setBooting(false);
         return;
@@ -103,6 +108,7 @@ export default function App() {
         const me = await api('/me');
         setUser(me.user);
         setBackground(readBackgroundPreference(me.user.id));
+
         const nextProjects = await loadProjects();
         await routeAfterAuth(nextProjects);
       } catch (error) {
@@ -112,6 +118,7 @@ export default function App() {
         setBooting(false);
       }
     }
+
     boot();
   }, []);
 
@@ -120,6 +127,7 @@ export default function App() {
     setTokenState(data.token);
     setUser(data.user);
     setBackground(readBackgroundPreference(data.user.id));
+
     const nextProjects = await loadProjects();
     await routeAfterAuth(nextProjects);
   }
@@ -146,10 +154,15 @@ export default function App() {
   function changeBackground(value) {
     setBackground(value);
   }
+
   function scrollToTop() {
-  if (typeof window === 'undefined') return;
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
+    if (typeof window === 'undefined') return;
+
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  }
 
   function logout() {
     setToken(null);
@@ -160,68 +173,78 @@ export default function App() {
   }
 
   const floatingControls = (
-  <div className="floating-controls" aria-label="Display controls">
-    <button
-      className="theme-toggle-button"
-      onClick={toggleTheme}
-      type="button"
-      aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-    >
-      {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-    </button>
-
-    <label className="background-select-wrap">
-      <span className="sr-only">Background</span>
-      <select
-        className="background-select"
-        value={background}
-        onChange={(event) => changeBackground(event.target.value)}
-        aria-label="Change app background"
+    <div className="floating-controls" aria-label="Display controls">
+      <button
+        className="theme-toggle-button"
+        onClick={toggleTheme}
+        type="button"
+        aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
       >
-        {backgroundOptions.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  </div>
-);
+        {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+      </button>
 
-const backToTopControl = (
-  <button
-    className="floating-back-to-top"
-    onClick={scrollToTop}
-    type="button"
-    aria-label="Back to top"
-  >
-    Back to top
-  </button>
-);
-
-const pageControls = (
-  <>
-    {floatingControls}
-    {backToTopControl}
-  </>
-);
+      <label className="background-select-wrap">
+        <span className="sr-only">Background</span>
+        <select
+          className="background-select"
+          value={background}
+          onChange={(event) => changeBackground(event.target.value)}
+          aria-label="Change app background"
+        >
+          {backgroundOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
 
   if (booting) {
-  return <>{pageControls}<main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main></>;
-}
+    return (
+      <>
+        {floatingControls}
+        <main className="app-page">
+          <SiteBanner />
+          <div className="panel loading-panel">
+            Starting PSG and SS Tracking...
+          </div>
+        </main>
+      </>
+    );
+  }
 
   if (!token || !user) {
-  return <>{pageControls}<AuthScreen onAuth={handleAuth} /></>;
-}
+    return (
+      <>
+        {floatingControls}
+        <AuthScreen onAuth={handleAuth} />
+      </>
+    );
+  }
 
   if (selectedProjectId) {
-  return <>{pageControls}<ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></>;
-}
+    return (
+      <>
+        {floatingControls}
+        <ProjectView
+          projectId={selectedProjectId}
+          user={user}
+          onBack={() => {
+            setSelectedProjectId(null);
+            loadProjects();
+          }}
+          onBackToTop={scrollToTop}
+        />
+      </>
+    );
+  }
 
   return (
-  <>
-    {pageControls}
-    <Dashboard
+    <>
+      {floatingControls}
+      <Dashboard
         user={user}
         projects={projects}
         loading={loadingProjects}
@@ -230,6 +253,7 @@ const pageControls = (
         onUpdateProject={updateProject}
         onDeleteProject={deleteProject}
         onRefresh={loadProjects}
+        onBackToTop={scrollToTop}
         onLogout={logout}
       />
     </>
