@@ -4761,35 +4761,11 @@ html[data-theme='light'] .site-banner {
   flex: 0 0 auto;
 }
 
-/* Keep the page action headers visible while scrolling.
-   This keeps Back to top beside Refresh without changing any working functions. */
-.topbar,
-.project-header {
-  position: sticky !important;
-  top: 6.25rem !important;
-  z-index: 850 !important;
-
-  backdrop-filter: blur(14px) saturate(120%);
-  -webkit-backdrop-filter: blur(14px) saturate(120%);
-}
-
-/* Make sure the action buttons stay in the same row when the header sticks. */
-.topbar-actions,
-.project-header-actions {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: flex-end !important;
-  gap: 0.5rem !important;
-  flex-wrap: wrap !important;
-}
-
-/* Keep Back to top acting like a normal button inside the sticky action row. */
+/* Only the Back to top button follows the page scroll.
+   The header/topbar stays normal. */
 .back-to-top-button {
-  position: static !important;
-  top: auto !important;
-  right: auto !important;
-  bottom: auto !important;
-  left: auto !important;
+  position: fixed !important;
+  z-index: 1200 !important;
 
   display: inline-flex !important;
   align-items: center !important;
@@ -4798,18 +4774,28 @@ html[data-theme='light'] .site-banner {
   width: auto !important;
   margin: 0 !important;
   white-space: nowrap !important;
-  flex: 0 0 auto !important;
+
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.24) !important;
 }
 
-/* Mobile/tablet layout support */
-@media (max-width: 960px) {
-  .topbar,
-  .project-header {
-    top: 6.75rem !important;
-  }
+/* Project page placement: keeps it near the Refresh button location */
+.project-header-actions .back-to-top-button {
+  top: 5.35rem !important;
+  right: 8.25rem !important;
+}
 
-  .topbar-actions,
-  .project-header-actions {
-    justify-content: flex-start !important;
+/* Dashboard placement: accounts for Refresh + Logout */
+.topbar-actions .back-to-top-button {
+  top: 5.35rem !important;
+  right: 14.25rem !important;
+}
+
+/* Mobile/tablet: move it lower and to the right so it does not cover content */
+@media (max-width: 900px) {
+  .project-header-actions .back-to-top-button,
+  .topbar-actions .back-to-top-button {
+    top: auto !important;
+    right: 1rem !important;
+    bottom: 1rem !important;
   }
 }
