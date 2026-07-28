@@ -4786,7 +4786,7 @@ html[data-theme='light'] .site-banner {
 
 /* Dashboard placement: accounts for Refresh + Logout */
 .topbar-actions .back-to-top-button {
-  top: 5.35rem !important;
+  top: 6.00rem !important;
   right: 8.00rem !important;
 }
 
