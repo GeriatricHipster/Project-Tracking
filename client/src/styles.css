@@ -4736,3 +4736,40 @@ html[data-theme='light'] .site-banner {
     background-position: left top, right top, center center, center center !important;
   }
 }
+
+.floating-back-to-top {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 10000;
+
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 999px;
+  background: var(--surface, #ffffff);
+  color: var(--text, #111827);
+
+  padding: 0.7rem 1rem;
+  font-weight: 800;
+  cursor: pointer;
+
+  box-shadow: var(--shadow, 0 12px 28px rgba(15, 23, 42, 0.18));
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.floating-back-to-top:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent, #ef4444);
+}
+
+.floating-back-to-top:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 700px) {
+  .floating-back-to-top {
+    right: 0.75rem;
+    bottom: 0.75rem;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.85rem;
+  }
+}
