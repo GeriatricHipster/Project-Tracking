@@ -160,42 +160,68 @@ export default function App() {
   }
 
   const floatingControls = (
-    <div className="floating-controls" aria-label="Display controls">
-      <button className="theme-toggle-button" onClick={toggleTheme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
-        {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-      </button>
-
-          <button className="ghost-button compact back-to-top-button" onClick={scrollToTop} type="button" aria-label="Back to top">
-      Back to top
+  <div className="floating-controls" aria-label="Display controls">
+    <button
+      className="theme-toggle-button"
+      onClick={toggleTheme}
+      type="button"
+      aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+    >
+      {theme === 'dark' ? 'Light mode' : 'Dark mode'}
     </button>
-      
-      <label className="background-select-wrap">
-        <span className="sr-only">Background</span>
-        <select className="background-select" value={background} onChange={(event) => changeBackground(event.target.value)} aria-label="Change app background">
-          {backgroundOptions.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
-      </label>
-    </div>
-  );
+
+    <label className="background-select-wrap">
+      <span className="sr-only">Background</span>
+      <select
+        className="background-select"
+        value={background}
+        onChange={(event) => changeBackground(event.target.value)}
+        aria-label="Change app background"
+      >
+        {backgroundOptions.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  </div>
+);
+
+const backToTopControl = (
+  <button
+    className="floating-back-to-top"
+    onClick={scrollToTop}
+    type="button"
+    aria-label="Back to top"
+  >
+    Back to top
+  </button>
+);
+
+const pageControls = (
+  <>
+    {floatingControls}
+    {backToTopControl}
+  </>
+);
 
   if (booting) {
-    return <>{floatingControls}<main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main></>;
-  }
+  return <>{pageControls}<main className="app-page"><SiteBanner /><div className="panel loading-panel">Starting PSG and SS Tracking...</div></main></>;
+}
 
   if (!token || !user) {
-    return <>{floatingControls}<AuthScreen onAuth={handleAuth} /></>;
-  }
+  return <>{pageControls}<AuthScreen onAuth={handleAuth} /></>;
+}
 
   if (selectedProjectId) {
-    return <>{floatingControls}<ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></>;
-  }
+  return <>{pageControls}<ProjectView projectId={selectedProjectId} user={user} onBack={() => { setSelectedProjectId(null); loadProjects(); }} /></>;
+}
 
   return (
-    <>
-      {floatingControls}
-      <Dashboard
+  <>
+    {pageControls}
+    <Dashboard
         user={user}
         projects={projects}
         loading={loadingProjects}
